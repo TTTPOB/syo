@@ -148,11 +148,17 @@ impl SiyuanContainer {
 
     /// Skip Drop-time cleanup. Useful when testing the cleanup logic itself.
     /// Caller is responsible for `podman rm -f` afterwards.
+    #[doc(hidden)]
     pub fn disarm_for_testing(&mut self) {
         self.disarmed = true;
     }
 }
 
+// NOTE: stop/force_remove are blocking calls. When this Drop fires from inside
+// a #[tokio::test], it stalls a tokio worker for up to STOP_TIMEOUT_SECS. We
+// accept this because Drop happens at end-of-test, the timeout is short, and
+// stable Rust has no async Drop. spawn_blocking would need a runtime handle
+// that is not reliably available here.
 impl Drop for SiyuanContainer {
     fn drop(&mut self) {
         if self.disarmed {
@@ -164,7 +170,7 @@ impl Drop for SiyuanContainer {
             tracing::warn!(?err, "podman stop failed; will force rm");
         }
         if let Err(err) = podman::force_remove(&id) {
-            tracing::warn!(?err, "podman rm -f failed");
+            tracing::error!(?err, container_id = %id, "podman rm -f failed; container may be leaked");
         }
     }
 }

@@ -168,4 +168,29 @@ mod tests {
         ## Hello
         "###);
     }
+
+    #[test]
+    fn renders_empty_doc_with_header_only() {
+        let bundle = DocBundle {
+            schema: DocBundle::SCHEMA.into(),
+            doc: DocMeta {
+                id: BlockId::parse("20260501000001-doc0001").unwrap(),
+                notebook_id: NotebookId::parse("20260501000000-nb00001").unwrap(),
+                hpath: "/Empty".into(),
+                title: "Empty".into(),
+            },
+            page: PageInfo {
+                page: 1,
+                page_size: 50,
+                total_blocks: 0,
+                total_pages: 1,
+            },
+            blocks: vec![],
+        };
+        let md = render_doc(&bundle);
+        insta::assert_snapshot!(md, @r###"
+        <!-- sy:doc id=20260501000001-doc0001 hpath="/Empty" page=1 of 1 -->
+
+        "###);
+    }
 }

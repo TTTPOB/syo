@@ -976,10 +976,13 @@ async fn rejects_wrong_token() {
         .await
         .expect("HTTP request");
 
-    let body = resp.text().await.unwrap_or_default();
+    // SiYuan v3.6.5+ returns HTTP 401 for auth failures. Assert the status is
+    // a 4xx client-error so a future version that switches to, say, 403 still
+    // passes, while a 2xx (auth layer bypassed) or 5xx (crash) fails loudly.
     assert!(
-        body.contains("\"code\":-1"),
-        "wrong token should be rejected with code:-1; body={body}"
+        resp.status().is_client_error(),
+        "wrong token should be rejected with a 4xx; got {}",
+        resp.status()
     );
 }
 ```

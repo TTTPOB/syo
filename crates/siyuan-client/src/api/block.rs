@@ -2,14 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use siyuan_types::{BlockId, SiyuanError};
 
+use super::common::ById;
 use crate::SiyuanClient;
 
 // -------- request types --------
-
-#[derive(Debug, Serialize)]
-struct ById<'a> {
-    id: &'a BlockId,
-}
 
 #[derive(Debug, Serialize)]
 struct InsertReq<'a> {

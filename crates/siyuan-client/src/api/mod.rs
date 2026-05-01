@@ -2,6 +2,7 @@
 pub mod asset;
 pub mod attr;
 pub mod block;
+pub(crate) mod common;
 pub mod export;
 pub mod filetree;
 pub mod notebook;

@@ -4,12 +4,8 @@ use serde::Serialize;
 
 use siyuan_types::{BlockId, SiyuanError};
 
+use super::common::ById;
 use crate::SiyuanClient;
-
-#[derive(Debug, Serialize)]
-struct ById<'a> {
-    id: &'a BlockId,
-}
 
 #[derive(Debug, Serialize)]
 struct SetAttrsReq<'a> {

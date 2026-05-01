@@ -921,7 +921,7 @@ pub use position::Position;
 
 Run: `cargo test -p siyuan-types`
 
-Expected: 全部通过（id + block + position + error 加起来 ~14 个）。
+Expected: 全部通过（id 6 + block 4 + position 3 + error 2 = 15 个）。
 
 - [ ] **Step 5: 提交**
 

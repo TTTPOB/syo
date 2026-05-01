@@ -100,4 +100,43 @@ mod tests {
         World.
         "###);
     }
+
+    #[test]
+    fn renders_superblock_with_fence() {
+        let bundle = DocBundle {
+            schema: DocBundle::SCHEMA.into(),
+            doc: DocMeta {
+                id: BlockId::parse("20260501000001-doc0001").unwrap(),
+                notebook_id: NotebookId::parse("20260501000000-nb00001").unwrap(),
+                hpath: "/Demo".into(),
+                title: "Demo".into(),
+            },
+            page: PageInfo {
+                page: 1,
+                page_size: 50,
+                total_blocks: 2,
+                total_pages: 1,
+            },
+            blocks: vec![
+                mk_block("20260501000001-doc0001", BlockType::Document, ""),
+                mk_block(
+                    "20260501000010-sb00001",
+                    BlockType::SuperBlock,
+                    "# Hello superblock",
+                ),
+            ],
+        };
+        let md = render_doc(&bundle);
+        insta::assert_snapshot!(md, @r###"
+        <!-- sy:doc id=20260501000001-doc0001 hpath="/Demo" page=1 of 1 -->
+
+        <!-- sy:block id=20260501000001-doc0001 type=d subtype= -->
+
+
+        <!-- sy:block id=20260501000010-sb00001 type=s subtype= -->
+        :::sy-superblock id=20260501000010-sb00001
+        # Hello superblock
+        :::
+        "###);
+    }
 }

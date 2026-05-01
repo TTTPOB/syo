@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 use siyuan_client::SiyuanClient;
 use siyuan_types::BlockId;
@@ -94,18 +95,24 @@ pub async fn relations_for(
                     target_id: tgt,
                     anchor: r.content,
                 });
+        } else {
+            warn!(block_id = %r.block_id, def_block_id = %r.def_block_id, "skipping ref row with invalid id");
         }
     }
 
     for r in incoming {
         if let Ok(id) = BlockId::parse(&r.def_block_id) {
             map.entry(id).or_default().incoming_refs_count = r.n as usize;
+        } else {
+            warn!(def_block_id = %r.def_block_id, "skipping incoming row with invalid block id");
         }
     }
 
     for r in tags {
         if let Ok(id) = BlockId::parse(&r.block_id) {
             map.entry(id).or_default().tags.push(r.content);
+        } else {
+            warn!(block_id = %r.block_id, "skipping tag row with invalid block id");
         }
     }
 

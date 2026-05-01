@@ -98,4 +98,5 @@ fn init_tracing() {
         )
         .with_target(false)
         .try_init();
+    // try_init fails only when a global subscriber is already set (e.g., in tests).
 }

@@ -26,3 +26,4 @@ anyhow = { workspace = true }
 siyuan-testkit = { workspace = true }
 insta = { workspace = true }
 reqwest = { workspace = true }
+tempfile = { workspace = true }

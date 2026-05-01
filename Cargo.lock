@@ -1267,6 +1267,7 @@ dependencies = [
  "siyuan-render",
  "siyuan-testkit",
  "siyuan-types",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",

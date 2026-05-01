@@ -11,10 +11,12 @@ use crate::SiyuanClient;
 pub struct UploadResult {
     /// Map from original filename -> kernel-stored relative path (e.g.
     /// `assets/foo-20260501093000-abcdefg.png`).
+    // Kernel 3.6.5 sends `null` when there are no successes; treat null == empty.
     #[serde(default, rename = "succMap")]
-    pub succ_map: std::collections::BTreeMap<String, String>,
+    pub succ_map: Option<std::collections::BTreeMap<String, String>>,
+    // Kernel 3.6.5 sends `null` when there are no failures; treat null == empty.
     #[serde(default, rename = "errFiles")]
-    pub err_files: Vec<String>,
+    pub err_files: Option<Vec<String>>,
 }
 
 impl SiyuanClient {
@@ -52,14 +54,16 @@ impl SiyuanClient {
             .await
             .map_err(|e| SiyuanError::Http(e.to_string()))?;
         let upload: UploadResult = self.decode_envelope(&body)?;
-        if !upload.err_files.is_empty() {
+        let err_files = upload.err_files.unwrap_or_default();
+        if !err_files.is_empty() {
             return Err(SiyuanError::Api {
                 code: -1,
-                msg: format!("upload failed for: {:?}", upload.err_files),
+                msg: format!("upload failed for: {:?}", err_files),
             });
         }
         upload
             .succ_map
+            .unwrap_or_default()
             .get(&filename)
             .cloned()
             .ok_or_else(|| SiyuanError::Parse(format!("succMap missing entry for {filename}")))

@@ -13,7 +13,7 @@ use crate::response::SiyuanResponse;
 pub struct SiyuanClient {
     base_url: Url,
     token: String,
-    http: reqwest::Client,
+    pub(crate) http: reqwest::Client,
 }
 
 impl SiyuanClient {

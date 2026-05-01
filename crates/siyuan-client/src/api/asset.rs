@@ -38,7 +38,8 @@ impl SiyuanClient {
             .join("api/asset/upload")
             .map_err(|e| SiyuanError::Parse(e.to_string()))?;
 
-        let resp = reqwest::Client::new()
+        let resp = self
+            .http
             .post(url)
             .header("Authorization", format!("Token {}", self.token()))
             .multipart(form)

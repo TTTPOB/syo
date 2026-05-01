@@ -12,7 +12,8 @@ pub struct TempWorkspace {
 }
 
 impl TempWorkspace {
-    /// Create a workspace with a freshly generated UUID-style token.
+    /// Create a workspace with an auto-generated token derived from the current
+    /// system time plus a process-local atomic counter.
     pub fn new() -> Result<Self> {
         let token = generate_token();
         Self::with_token(token)
@@ -59,13 +60,18 @@ fn write_conf_json(workspace: &Path, token: &str) -> Result<()> {
 }
 
 fn generate_token() -> String {
-    // Deterministic-style format: timestamp-random8. No external uuid dep.
+    // Format: tk-<unix_nanos_hex>-<seq_counter_hex>.
+    // The atomic counter guarantees uniqueness even when two calls land in the
+    // same OS clock tick (some hypervisors expose only us-granularity clocks).
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("tk-{now:x}")
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("tk-{now:x}-{seq:x}")
 }
 
 #[cfg(test)]
@@ -97,5 +103,15 @@ mod tests {
             ws.path().to_path_buf()
         };
         assert!(!path.exists(), "tempdir should be removed when TempWorkspace drops");
+    }
+
+    #[test]
+    fn into_persistent_keeps_workspace_on_disk() {
+        let path = {
+            let ws = TempWorkspace::new().unwrap();
+            ws.into_persistent()
+        };
+        assert!(path.exists(), "persisted workspace should still exist after drop");
+        std::fs::remove_dir_all(&path).expect("manual cleanup");
     }
 }

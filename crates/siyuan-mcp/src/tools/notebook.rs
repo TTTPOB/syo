@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use siyuan_client::SiyuanClient;
 use siyuan_types::NotebookId;
 
-use super::util::{ensure_object, required_string, siyuan_to_mcp};
+use super::util::{ensure_object, required_string, siyuan_to_mcp, with_hint};
 
 fn parse_notebook_id(s: &str) -> Result<NotebookId, McpError> {
     NotebookId::parse(s)
@@ -58,12 +58,20 @@ pub async fn rename(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
         .rename_notebook(&id, &name)
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Notebook renamed at the kernel. The change is reflected immediately in siyuan_notebook_ls. \
+         SQL-indexed reads may briefly show the old name for ~100–500 ms.",
+    ))
 }
 
 pub async fn remove(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let id = parse_notebook_id(&required_string(&map, "id")?)?;
     client.remove_notebook(&id).await.map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Notebook permanently removed, including all its documents. This action is irreversible. \
+         The notebook will no longer appear in siyuan_notebook_ls.",
+    ))
 }

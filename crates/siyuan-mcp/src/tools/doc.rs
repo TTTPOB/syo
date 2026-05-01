@@ -5,7 +5,9 @@ use siyuan_client::SiyuanClient;
 use siyuan_model::pagination::PageRequest;
 use siyuan_types::BlockId;
 
-use super::util::{anyhow_to_mcp, ensure_object, optional_u64, required_string, siyuan_to_mcp};
+use super::util::{
+    anyhow_to_mcp, ensure_object, optional_u64, required_string, siyuan_to_mcp, with_hint,
+};
 
 pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
@@ -24,6 +26,9 @@ pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
         .await
         .map_err(anyhow_to_mcp)?;
 
+    let total_pages = bundle.page.total_pages;
+    let current_page = bundle.page.page;
+
     let content = match format {
         "json" => siyuan_render::json_bundle::render_bundle(&bundle, false)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?,
@@ -32,7 +37,22 @@ pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
         _ => siyuan_render::agent_md::render_doc(&bundle),
     };
 
-    Ok(json!({ "format": format, "content": content }))
+    let payload = json!({ "format": format, "content": content });
+
+    // Only add pagination hint when there are more pages to fetch.
+    if total_pages > 1 {
+        Ok(with_hint(
+            payload,
+            &format!(
+                "Pagination: this is page {current_page} of {total_pages}. \
+                 Call again with page={} to fetch the next page. \
+                 Use format=json for structured access to block metadata.",
+                current_page + 1
+            ),
+        ))
+    } else {
+        Ok(payload)
+    }
 }
 
 pub async fn get_block(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -62,5 +82,10 @@ pub async fn create_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
         .await
         .map_err(siyuan_to_mcp)?;
 
-    Ok(json!({ "id": new_id }))
+    Ok(with_hint(
+        json!({ "id": new_id }),
+        "Mutation completed at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) may \
+         briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
+         retry once. The returned id is the new document's root block id.",
+    ))
 }

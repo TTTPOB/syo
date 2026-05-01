@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use siyuan_client::SiyuanClient;
 
-use super::util::{ensure_object, required_string, siyuan_to_mcp};
+use super::util::{ensure_object, required_string, siyuan_to_mcp, with_hint};
 
 pub async fn upload(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
@@ -15,5 +15,10 @@ pub async fn upload(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
         .upload_asset(Path::new(&file_path))
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "asset_path": asset_path }))
+    Ok(with_hint(
+        json!({ "asset_path": asset_path }),
+        "Asset stored at the returned path. To embed it, insert a markdown image like \
+         `![alt](<asset_path>)` via siyuan_insert_block, or include it in siyuan_create_doc \
+         markdown. The path is kernel-relative and usable directly in SiYuan markdown.",
+    ))
 }

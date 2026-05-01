@@ -106,7 +106,7 @@ fn mcp_initialize_and_tools_list() {
         tools.len()
     );
 
-    // Verify all tools have the siyuan_ prefix and unique names.
+    // Verify all tools have the siyuan_ prefix, unique names, and substantive descriptions.
     let mut seen_names = std::collections::HashSet::new();
     for tool in tools {
         let name = tool["name"].as_str().expect("tool name must be a string");
@@ -117,6 +117,19 @@ fn mcp_initialize_and_tools_list() {
         assert!(
             seen_names.insert(name.to_owned()),
             "duplicate tool name: {name}"
+        );
+
+        // Enforce that no tool ships with a stub description.
+        // 200 chars is conservative — all enriched descriptions are well above that.
+        let description = tool["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("tool {name} must have a string description"));
+        assert!(
+            description.len() >= 200,
+            "tool {name} description is too short ({} chars < 200); \
+             add a multi-sentence description covering what it does, when to use it, \
+             and any caveats",
+            description.len()
         );
     }
 

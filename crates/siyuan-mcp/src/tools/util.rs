@@ -83,3 +83,9 @@ pub fn object_field(map: &Map<String, Value>, key: &str) -> Result<Map<String, V
         None => Err(McpError::invalid_params(format!("missing `{key}`"), None)),
     }
 }
+
+// Wrap a response payload with an agent-readable hint explaining post-call expectations.
+// Tools that do NOT need a hint should return the bare payload directly.
+pub fn with_hint(payload: Value, hint: &str) -> Value {
+    serde_json::json!({ "data": payload, "_hint": hint })
+}

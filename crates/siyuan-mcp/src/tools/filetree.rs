@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use siyuan_client::SiyuanClient;
 use siyuan_types::{BlockId, NotebookId};
 
-use super::util::{ensure_object, required_string, siyuan_to_mcp, string_array};
+use super::util::{ensure_object, required_string, siyuan_to_mcp, string_array, with_hint};
 
 fn parse_notebook_id(s: &str) -> Result<NotebookId, McpError> {
     NotebookId::parse(s)
@@ -46,7 +46,11 @@ pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
         .rename_doc(&notebook, &path, &title)
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Filesystem-level mutation: document title updated. siyuan_doc_hpath_by_id reflects the \
+         new title immediately. Use the storage .sy path for any follow-up calls requiring path.",
+    ))
 }
 
 pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -59,7 +63,12 @@ pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpEr
         .move_docs(&from_paths, &to_notebook, &to_path)
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Filesystem-level mutation: documents moved to the target notebook/path. \
+         siyuan_doc_resolve and siyuan_doc_hpath_by_id reflect the change immediately. \
+         Use the storage .sy path for follow-up calls.",
+    ))
 }
 
 pub async fn remove_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -71,5 +80,9 @@ pub async fn remove_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
         .remove_doc(&notebook, &path)
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Filesystem-level mutation: document permanently removed including all child blocks. \
+         This action is irreversible. siyuan_doc_resolve will no longer find this path.",
+    ))
 }

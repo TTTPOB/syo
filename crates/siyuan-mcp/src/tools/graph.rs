@@ -5,7 +5,9 @@ use siyuan_client::SiyuanClient;
 use siyuan_model::graph::Direction;
 use siyuan_types::BlockId;
 
-use super::util::{anyhow_to_mcp, ensure_object, optional_string, optional_u64, required_string};
+use super::util::{
+    anyhow_to_mcp, ensure_object, optional_string, optional_u64, required_string, with_hint,
+};
 
 pub async fn neighborhood(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
@@ -25,7 +27,19 @@ pub async fn neighborhood(client: &SiyuanClient, args: Value) -> Result<Value, M
         .await
         .map_err(anyhow_to_mcp)?;
 
-    serde_json::to_value(graph)
-        .map_err(|e| McpError::internal_error(e.to_string(), None))
-        .map(|v| json!(v))
+    let truncated = graph.truncated;
+    let graph_val =
+        serde_json::to_value(graph).map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+    let hint = if truncated {
+        "Graph traversal hit the per-call node/edge limit (500 nodes / 1000 edges) — \
+         `truncated` is true. The result is a partial view. Narrow the search by reducing \
+         depth, switching to a single direction (outgoing or incoming), or querying a \
+         more specific center block. Alternatively, use siyuan_sql to query the refs table \
+         directly for unbounded results."
+    } else {
+        "Graph is complete within the requested depth and direction. `truncated` is false."
+    };
+
+    Ok(with_hint(json!(graph_val), hint))
 }

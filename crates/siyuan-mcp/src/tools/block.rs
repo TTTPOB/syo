@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use siyuan_client::SiyuanClient;
 use siyuan_types::BlockId;
 
-use super::util::{ensure_object, optional_string, required_string, siyuan_to_mcp};
+use super::util::{ensure_object, optional_string, required_string, siyuan_to_mcp, with_hint};
 
 fn parse_block_id(s: &str) -> Result<BlockId, McpError> {
     BlockId::parse(s).map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))
@@ -19,7 +19,12 @@ pub async fn update_block(client: &SiyuanClient, args: Value) -> Result<Value, M
         .update_block_markdown(&id, &markdown)
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Mutation completed at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) may \
+         briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
+         retry once.",
+    ))
 }
 
 pub async fn insert_block(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -61,7 +66,12 @@ pub async fn insert_block(client: &SiyuanClient, args: Value) -> Result<Value, M
         )
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "id": new_id }))
+    Ok(with_hint(
+        json!({ "id": new_id }),
+        "Block inserted at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) may \
+         briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
+         retry once. The returned id is the new block's id.",
+    ))
 }
 
 pub async fn append_block(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -73,7 +83,12 @@ pub async fn append_block(client: &SiyuanClient, args: Value) -> Result<Value, M
         .append_block_markdown(&markdown, &parent_id)
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "id": new_id }))
+    Ok(with_hint(
+        json!({ "id": new_id }),
+        "Block appended at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) may \
+         briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
+         retry once. The returned id is the new block's id.",
+    ))
 }
 
 pub async fn prepend_block(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -85,7 +100,12 @@ pub async fn prepend_block(client: &SiyuanClient, args: Value) -> Result<Value, 
         .prepend_block_markdown(&markdown, &parent_id)
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "id": new_id }))
+    Ok(with_hint(
+        json!({ "id": new_id }),
+        "Block prepended at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) may \
+         briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
+         retry once. The returned id is the new block's id.",
+    ))
 }
 
 pub async fn move_block(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -115,7 +135,11 @@ pub async fn move_block(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
         .move_block(&id, previous_id.as_ref(), parent_id.as_ref())
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Block moved at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) may briefly \
+         show stale state for ~100–500 ms; if a follow-up read returns unexpected data, retry once.",
+    ))
 }
 
 pub async fn delete_block(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -123,5 +147,9 @@ pub async fn delete_block(client: &SiyuanClient, args: Value) -> Result<Value, M
     let id = parse_block_id(&required_string(&map, "id")?)?;
 
     client.delete_block(&id).await.map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Block permanently deleted at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) \
+         may briefly show stale state for ~100–500 ms after deletion.",
+    ))
 }

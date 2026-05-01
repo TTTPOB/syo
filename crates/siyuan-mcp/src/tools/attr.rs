@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use siyuan_client::SiyuanClient;
 use siyuan_types::BlockId;
 
-use super::util::{ensure_object, object_field, required_string, siyuan_to_mcp};
+use super::util::{ensure_object, object_field, required_string, siyuan_to_mcp, with_hint};
 
 pub async fn get_attrs(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
@@ -38,5 +38,10 @@ pub async fn set_attrs(client: &SiyuanClient, args: Value) -> Result<Value, McpE
         .set_block_attrs(&id, &attrs)
         .await
         .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Attribute mutation completed at the kernel. Only the listed keys are modified; existing \
+         keys not in this request are left intact (kernel semantics). Custom keys must start with \
+         `custom-`. SQL-indexed reads may briefly show stale state for ~100–500 ms.",
+    ))
 }

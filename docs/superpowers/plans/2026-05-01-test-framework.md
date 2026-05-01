@@ -701,7 +701,7 @@ git commit -m "feat(testkit): poll /api/system/version for readiness"
 
 **Background:** 把前面的部件粘起来：分配端口 → 建 workspace → 拼 podman run 参数 → 启动 → 健康检查 → 暴露 base_url/token。Drop 时强制 `podman rm -f`，即使测试 panic 也保证清理。
 
-镜像版本通过 env `SIYUAN_TEST_IMAGE` 控制，默认 `b3log/siyuan:latest`（README 里建议用户 pin）。
+镜像版本通过 env `SIYUAN_TEST_IMAGE` 控制，默认 `docker.io/b3log/siyuan:latest`（全限定名以兼容 podman 默认无 unqualified-search registry 的环境；README 里建议用户 pin 具体版本）。
 
 - [ ] **Step 1: 写实现**
 
@@ -718,7 +718,7 @@ use crate::podman;
 use crate::port::allocate_loopback_port;
 use crate::workspace::TempWorkspace;
 
-const DEFAULT_IMAGE: &str = "b3log/siyuan:latest";
+const DEFAULT_IMAGE: &str = "docker.io/b3log/siyuan:latest";
 const DEFAULT_READY_TIMEOUT: Duration = Duration::from_secs(60);
 const STOP_TIMEOUT_SECS: u32 = 5;
 

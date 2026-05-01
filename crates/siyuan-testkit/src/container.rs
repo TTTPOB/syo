@@ -8,7 +8,7 @@ use crate::podman;
 use crate::port::allocate_loopback_port;
 use crate::workspace::TempWorkspace;
 
-const DEFAULT_IMAGE: &str = "b3log/siyuan:latest";
+const DEFAULT_IMAGE: &str = "docker.io/b3log/siyuan:latest";
 const DEFAULT_READY_TIMEOUT: Duration = Duration::from_secs(60);
 const STOP_TIMEOUT_SECS: u32 = 5;
 

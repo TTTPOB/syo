@@ -66,7 +66,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 thiserror = "2"
-insta = { version = "1", features = ["yaml", "json"] }
+insta = { version = "1", features = ["yaml", "json", "redactions"] }
 regex = "1"
 once_cell = "1"
 camino = "1"

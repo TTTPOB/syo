@@ -80,3 +80,28 @@ history instead. Append-only; ordered by review point.
   Decision: deferred. Plan uses `pub`; semantically equivalent inside the
   crate; rename can happen in a later cleanup pass if a public API surface
   is ever defined.
+
+## Task 7 — SiyuanContainer
+
+- **Code review Minor: `to_string_lossy` on workspace path.**
+  Reviewer suggested `.to_str().context(...)?.to_string()` to fail loudly
+  on non-UTF-8 tempdir paths.
+  Decision: deferred. tempfile prefix is ASCII; only `$TMPDIR` could
+  introduce non-UTF-8, and that's vanishingly rare on Linux. If it ever
+  bites, the resulting podman error will be obvious.
+
+- **Code review Minor: spawn_blocking closure block-as-argument style.**
+  Reviewer suggested hoisting `let id = container.container_id.clone();`
+  out of the spawn_blocking call.
+  Decision: deferred. Cosmetic; the block scopes the temporary clone to
+  the closure which is arguably more readable.
+
+- **Code review Minor: add `port()` accessor.**
+  Reviewer suggested storing port and exposing it.
+  Decision: deferred. Out of plan scope. base_url() carries the port; if
+  needed, callers can parse it. Add later if we get a real consumer.
+
+- **Code review Minor: document `access_auth_code` default uniqueness.**
+  Reviewer noted the bare "testkit" default could clash across containers.
+  Decision: deferred. Only matters for UI access; tests use the API token,
+  which IS unique per workspace. Document if a UI test scenario surfaces.

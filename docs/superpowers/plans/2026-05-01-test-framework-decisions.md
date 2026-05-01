@@ -46,3 +46,37 @@ history instead. Append-only; ordered by review point.
   Reviewer suggested a `\n--- stderr ---\n` separator.
   Decision: skipped. SiYuan's kernel writes through a single Go log writer
   so streams are already interleaved; a separator would be misleading.
+
+## Task 6 — health check
+
+- **Code review Important: `code == 21` (auth rejected) keeps retrying until
+  timeout.** Reviewer recommended fail-fast on code 21.
+  Decision: deferred. SiYuan's kernel startup sequence is not fully mapped —
+  the kernel could plausibly return non-zero codes briefly during warmup
+  before auth is fully initialised. Failing fast on code 21 risks aborting
+  on a transient state. The 60s outer timeout in container.rs (Task 7)
+  bounds the worst case, and the dump-logs path on timeout already gives a
+  clear diagnostic. If Task 8 shows that auth state stabilises fast enough
+  to make fail-fast safe, revisit.
+
+- **Code review Important: `unwrap_or("unknown")` masks malformed `data`.**
+  Reviewer suggested bailing on missing-or-non-string `data` field.
+  Decision: deferred. Plan explicitly uses unwrap_or. SiYuan's kernel
+  always emits `data` in this endpoint; if it ever doesn't we want the
+  successful boot to still proceed and surface the issue downstream,
+  not block startup on a tracing artifact.
+
+- **Code review Minor: `unwrap_or(-1)` sentinel undocumented.**
+  Reviewer suggested an inline comment naming -1 as the sentinel.
+  Decision: deferred. Cosmetic; the bail message includes the body which
+  makes context obvious in failure logs.
+
+- **Code review Minor: timeouts and intervals are hardcoded, not tunable.**
+  Reviewer noted future reuse outside container startup might want overrides.
+  Decision: deferred. Out of scope for this plan; the only consumer is
+  container.rs.
+
+- **Code review Minor: `wait_for_ready` could be `pub(crate)` instead of `pub`.**
+  Decision: deferred. Plan uses `pub`; semantically equivalent inside the
+  crate; rename can happen in a later cleanup pass if a public API surface
+  is ever defined.

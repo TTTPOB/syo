@@ -19,6 +19,9 @@ struct Row {
     markdown: String,
 }
 
+const TAG_SEARCH_LIMIT: usize = 200;
+const TAG_PREVIEW_LEN: usize = 160;
+
 /// List every distinct tag string in the workspace (sorted).
 pub async fn list_tags(client: &SiyuanClient) -> Result<Vec<String>> {
     #[derive(Debug, Deserialize)]
@@ -41,7 +44,7 @@ pub async fn search_by_tag(client: &SiyuanClient, tag: &str) -> Result<Vec<TagBl
          JOIN spans s ON s.block_id = b.id
          WHERE s.type LIKE '%tag%' AND s.content = '{escaped}'
          ORDER BY b.updated DESC
-         LIMIT 200"
+         LIMIT {TAG_SEARCH_LIMIT}"
     );
     let rows: Vec<Row> = client.sql_typed(&stmt).await.context("search by tag")?;
     rows.into_iter()
@@ -49,7 +52,7 @@ pub async fn search_by_tag(client: &SiyuanClient, tag: &str) -> Result<Vec<TagBl
             Ok(TagBlockHit {
                 block_id: BlockId::parse(&r.block_id).context("parsing block id")?,
                 root_id: BlockId::parse(&r.root_id).context("parsing root id")?,
-                markdown_preview: truncate(r.markdown.as_str(), 160),
+                markdown_preview: truncate(r.markdown.as_str(), TAG_PREVIEW_LEN),
             })
         })
         .collect()
@@ -75,10 +78,10 @@ mod tests {
 
     #[test]
     fn truncate_long_ascii() {
-        let s = "a".repeat(200);
-        let out = truncate(&s, 160);
+        let s = "a".repeat(TAG_SEARCH_LIMIT);
+        let out = truncate(&s, TAG_PREVIEW_LEN);
         assert!(out.ends_with('…'));
-        assert!(out.chars().count() <= 161); // 160 chars + '…'
+        assert!(out.chars().count() <= TAG_PREVIEW_LEN + 1); // preview chars + '…'
     }
 
     #[test]

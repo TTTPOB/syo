@@ -95,12 +95,54 @@ fn mcp_initialize_and_tools_list() {
         "tools/list must not return error"
     );
 
-    let tools = &list_resp["result"]["tools"];
-    assert!(tools.is_array(), "tools must be an array");
-    assert_eq!(
-        tools.as_array().unwrap().len(),
-        0,
-        "tool list must be empty in skeleton"
+    let tools = list_resp["result"]["tools"]
+        .as_array()
+        .expect("tools must be an array");
+
+    // Verify minimum tool count.
+    assert!(
+        tools.len() >= 25,
+        "expected >= 25 tools, got {}",
+        tools.len()
+    );
+
+    // Verify all tools have the siyuan_ prefix and unique names.
+    let mut seen_names = std::collections::HashSet::new();
+    for tool in tools {
+        let name = tool["name"].as_str().expect("tool name must be a string");
+        assert!(
+            name.starts_with("siyuan_"),
+            "tool {name} must start with 'siyuan_'"
+        );
+        assert!(
+            seen_names.insert(name.to_owned()),
+            "duplicate tool name: {name}"
+        );
+    }
+
+    // --- tools/call dispatch smoke test ---
+    // siyuan_status against port 1 must return an error (no kernel), proving dispatch works.
+    let call_req = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "siyuan_status",
+            "arguments": {}
+        }
+    });
+
+    let call_resp = rpc(stdin, &mut stdout, &call_req);
+    // The call hits port 1 and fails at the HTTP layer, so MCP returns an error.
+    let has_error = !call_resp["error"].is_null()
+        || call_resp["result"]["isError"].as_bool().unwrap_or(false)
+        || call_resp["result"]["content"]
+            .as_array()
+            .map(|a| !a.is_empty())
+            .unwrap_or(false);
+    assert!(
+        has_error,
+        "call to unreachable kernel must produce an error or error content: {call_resp}"
     );
 
     // Terminate the child cleanly.

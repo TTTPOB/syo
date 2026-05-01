@@ -2,16 +2,11 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use clap::Parser;
-use rmcp::{
-    ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
-    model::{
-        CallToolRequestParams, CallToolResult, Implementation, ListToolsResult,
-        PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
-    },
-    service::RequestContext,
-    transport::stdio,
-};
 use tracing::warn;
+
+mod registry;
+mod server;
+mod tools;
 
 /// Args parsed from the command line / environment.
 #[derive(Parser, Debug)]
@@ -25,61 +20,10 @@ struct Args {
     #[arg(long, env = "SIYUAN_TOKEN")]
     token: Option<String>,
 
-    /// HTTP request timeout in milliseconds.
+    /// HTTP request timeout in milliseconds (reserved for future use).
     #[arg(long, env = "SIYUAN_TIMEOUT_MS", default_value_t = 30000)]
     timeout_ms: u64,
 }
-
-// ---------------------------------------------------------------------------
-// Server implementation
-// ---------------------------------------------------------------------------
-
-/// MCP server that wraps the SiYuan HTTP client.
-/// The tool list is empty in this skeleton; tools are added in Task 9.
-struct SiyuanMcpServer {
-    _client: Arc<siyuan_client::SiyuanClient>,
-    tools: Vec<Tool>,
-}
-
-impl SiyuanMcpServer {
-    fn new(client: siyuan_client::SiyuanClient) -> Self {
-        Self {
-            _client: Arc::new(client),
-            tools: vec![],
-        }
-    }
-}
-
-impl ServerHandler for SiyuanMcpServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("siyuan-mcp", env!("CARGO_PKG_VERSION")))
-    }
-
-    async fn list_tools(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult::with_all_items(self.tools.clone()))
-    }
-
-    async fn call_tool(
-        &self,
-        request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, McpError> {
-        // No tools are registered yet; reject every call.
-        Err(McpError::invalid_params(
-            format!("unknown tool: {}", request.name),
-            None,
-        ))
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -94,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
         .try_init();
 
     let args = Args::parse();
+    let _ = args.timeout_ms; // reserved; reqwest uses its own default for now
 
     if args.token.is_none() {
         warn!("--token / SIYUAN_TOKEN not set; API calls requiring auth will fail");
@@ -103,13 +48,9 @@ async fn main() -> anyhow::Result<()> {
         siyuan_client::SiyuanClient::new(&args.base_url, args.token.as_deref().unwrap_or(""))
             .with_context(|| format!("failed to build SiyuanClient for {}", args.base_url))?;
 
-    let server = SiyuanMcpServer::new(client);
+    let client = Arc::new(client);
+    let (tools, handlers) = registry::build(Arc::clone(&client));
+    let srv = server::SiyuanMcpServer::new(client, tools, handlers);
 
-    let ct = server
-        .serve(stdio())
-        .await
-        .context("failed to start MCP stdio transport")?;
-    ct.waiting().await?;
-
-    Ok(())
+    srv.run().await
 }

@@ -66,3 +66,27 @@ async fn rejects_wrong_token() {
         resp.status()
     );
 }
+
+#[tokio::test]
+#[ignore = "starts a real podman container; opt-in"]
+async fn container_is_removed_after_drop() {
+    init_tracing();
+
+    let id = {
+        let sy = SiyuanContainer::start().await.expect("siyuan should start");
+        sy.container_id().to_string()
+    };
+
+    // Give podman a beat to finish the rm
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let out = std::process::Command::new("podman")
+        .args(["ps", "-a", "--filter", &format!("id={id}"), "--format", "{{.ID}}"])
+        .output()
+        .expect("podman ps");
+    let listed = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        listed.trim().is_empty(),
+        "container {id} should be gone, but podman ps shows: {listed}"
+    );
+}

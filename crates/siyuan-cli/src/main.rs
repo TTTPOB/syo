@@ -32,6 +32,14 @@ enum Cmd {
     MoveBlock(commands::move_block::MoveBlockArgs),
     DeleteBlock(commands::delete_block::DeleteBlockArgs),
     SetAttrs(commands::set_attrs::SetAttrsArgs),
+    Notebook {
+        #[command(subcommand)]
+        cmd: commands::notebook::NotebookCmd,
+    },
+    Doc {
+        #[command(subcommand)]
+        cmd: commands::doc::DocCmd,
+    },
 }
 
 #[tokio::main]
@@ -56,6 +64,8 @@ async fn main() -> anyhow::Result<()> {
         Cmd::MoveBlock(a) => commands::move_block::run(&client, a).await?,
         Cmd::DeleteBlock(a) => commands::delete_block::run(&client, a).await?,
         Cmd::SetAttrs(a) => commands::set_attrs::run(&client, a).await?,
+        Cmd::Notebook { cmd } => commands::notebook::run(&client, cmd).await?,
+        Cmd::Doc { cmd } => commands::doc::run(&client, cmd).await?,
     }
     Ok(())
 }

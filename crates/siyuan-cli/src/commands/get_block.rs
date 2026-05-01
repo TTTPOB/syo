@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Args;
 use serde::Serialize;
+use tracing::warn;
 
 use siyuan_client::SiyuanClient;
 use siyuan_types::BlockId;
@@ -26,7 +27,13 @@ struct BlockView {
 pub async fn run(client: &SiyuanClient, args: GetBlockArgs) -> Result<()> {
     let id = BlockId::parse(args.id).context("--id is not a valid block id")?;
     let kr = client.get_block_kramdown(&id).await?;
-    let attrs = client.get_block_attrs(&id).await.unwrap_or_default();
+    let attrs = match client.get_block_attrs(&id).await {
+        Ok(a) => a,
+        Err(e) => {
+            warn!(%id, %e, "failed to fetch block attrs, continuing with empty attrs");
+            std::collections::BTreeMap::new()
+        }
+    };
 
     let view = BlockView {
         id: kr.id.to_string(),

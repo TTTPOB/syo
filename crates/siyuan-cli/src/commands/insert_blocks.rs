@@ -112,7 +112,7 @@ async fn resolve_section_end(client: &SiyuanClient, heading_id: &BlockId) -> Res
     if root.ty != "h" {
         bail!("--anchor for append_section must be a heading block");
     }
-    let root_id = BlockId::parse(&root.root_id).map_err(|e| anyhow::anyhow!(e))?;
+    let root_id = BlockId::parse(&root.root_id).context("parsing root id")?;
 
     // For simplicity load the whole doc; v1 docs are bounded by 50/page but we
     // need full range for section detection. Issue a single-page big request.

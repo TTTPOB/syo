@@ -64,14 +64,14 @@ pub async fn load_doc(
     let mut nodes: Vec<BlockNode> = Vec::with_capacity(rows.len());
     let mut doc_meta: Option<(NotebookId, String)> = None;
     for r in &rows {
-        let id = BlockId::parse(&r.id).map_err(|e| anyhow::anyhow!(e))?;
-        let root_id = BlockId::parse(&r.root_id).map_err(|e| anyhow::anyhow!(e))?;
+        let id = BlockId::parse(&r.id).context("parsing block id")?;
+        let root_id = BlockId::parse(&r.root_id).context("parsing root id")?;
         let parent_id = if r.parent_id.is_empty() {
             None
         } else {
-            Some(BlockId::parse(&r.parent_id).map_err(|e| anyhow::anyhow!(e))?)
+            Some(BlockId::parse(&r.parent_id).context("parsing parent id")?)
         };
-        let notebook_id = NotebookId::parse(&r.box_).map_err(|e| anyhow::anyhow!(e))?;
+        let notebook_id = NotebookId::parse(&r.box_).context("parsing notebook id")?;
         let block_type = BlockType::from_kernel(&r.block_type);
         let role = BlockRole::for_block_type(block_type);
 

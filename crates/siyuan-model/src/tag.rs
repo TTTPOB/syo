@@ -47,8 +47,8 @@ pub async fn search_by_tag(client: &SiyuanClient, tag: &str) -> Result<Vec<TagBl
     rows.into_iter()
         .map(|r| {
             Ok(TagBlockHit {
-                block_id: BlockId::parse(&r.block_id).map_err(|e| anyhow::anyhow!(e))?,
-                root_id: BlockId::parse(&r.root_id).map_err(|e| anyhow::anyhow!(e))?,
+                block_id: BlockId::parse(&r.block_id).context("parsing block id")?,
+                root_id: BlockId::parse(&r.root_id).context("parsing root id")?,
                 markdown_preview: truncate(r.markdown.as_str(), 160),
             })
         })

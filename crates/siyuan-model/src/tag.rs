@@ -56,9 +56,43 @@ pub async fn search_by_tag(client: &SiyuanClient, tag: &str) -> Result<Vec<TagBl
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..max])
+        let out: String = s.chars().take(max).collect();
+        format!("{out}…")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_short_string_unchanged() {
+        assert_eq!(truncate("hello", 10), "hello");
+    }
+
+    #[test]
+    fn truncate_long_ascii() {
+        let s = "a".repeat(200);
+        let out = truncate(&s, 160);
+        assert!(out.ends_with('…'));
+        assert!(out.chars().count() <= 161); // 160 chars + '…'
+    }
+
+    #[test]
+    fn truncate_cjk_no_panic() {
+        let s = "中".repeat(200);
+        let out = truncate(&s, 100);
+        assert!(out.ends_with('…'));
+        assert!(out.chars().count() <= 101);
+    }
+
+    #[test]
+    fn truncate_emoji_no_panic() {
+        let s = "😀".repeat(50);
+        let out = truncate(&s, 10);
+        assert!(out.ends_with('…'));
     }
 }

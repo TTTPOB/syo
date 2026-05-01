@@ -113,7 +113,7 @@ pub async fn neighborhood(
                 }
             }
         }
-        if matches!(direction, Direction::Incoming | Direction::Both) {
+        if matches!(direction, Direction::Incoming | Direction::Both) && edges.len() < EDGE_LIMIT {
             let rows: Vec<EdgeRow> = client
                 .sql_typed(&format!(
                     "SELECT block_id, def_block_id, content FROM refs WHERE def_block_id IN ({id_list})"

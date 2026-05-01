@@ -29,6 +29,9 @@ enum Cmd {
     CreateDoc(commands::create_doc::CreateDocArgs),
     UpdateBlock(commands::update_block::UpdateBlockArgs),
     InsertBlocks(commands::insert_blocks::InsertBlocksArgs),
+    MoveBlock(commands::move_block::MoveBlockArgs),
+    DeleteBlock(commands::delete_block::DeleteBlockArgs),
+    SetAttrs(commands::set_attrs::SetAttrsArgs),
 }
 
 #[tokio::main]
@@ -50,6 +53,9 @@ async fn main() -> anyhow::Result<()> {
         Cmd::CreateDoc(a) => commands::create_doc::run(&client, a).await?,
         Cmd::UpdateBlock(a) => commands::update_block::run(&client, a).await?,
         Cmd::InsertBlocks(a) => commands::insert_blocks::run(&client, a).await?,
+        Cmd::MoveBlock(a) => commands::move_block::run(&client, a).await?,
+        Cmd::DeleteBlock(a) => commands::delete_block::run(&client, a).await?,
+        Cmd::SetAttrs(a) => commands::set_attrs::run(&client, a).await?,
     }
     Ok(())
 }

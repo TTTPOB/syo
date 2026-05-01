@@ -162,10 +162,11 @@ pub async fn neighborhood(
     let mut node_map: BTreeMap<BlockId, GraphNode> = BTreeMap::new();
     for r in rows {
         if let (Ok(id), Ok(root)) = (BlockId::parse(&r.id), BlockId::parse(&r.root_id)) {
-            let preview = if r.markdown.len() <= 100 {
+            let preview = if r.markdown.chars().count() <= 100 {
                 r.markdown
             } else {
-                format!("{}…", &r.markdown[..100])
+                let out: String = r.markdown.chars().take(100).collect();
+                format!("{out}…")
             };
             node_map.insert(
                 id.clone(),
@@ -194,4 +195,22 @@ pub async fn neighborhood(
         edges,
         truncated,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn markdown_preview_cjk_safe() {
+        // Construct a minimal GraphNode via the neighborhood path would need a
+        // mock client, so we test the inline truncation logic directly.
+        let md = "中".repeat(200);
+        let preview = if md.chars().count() <= 100 {
+            md
+        } else {
+            let out: String = md.chars().take(100).collect();
+            format!("{out}…")
+        };
+        assert!(preview.ends_with('…'));
+        assert!(preview.chars().count() <= 101);
+    }
 }

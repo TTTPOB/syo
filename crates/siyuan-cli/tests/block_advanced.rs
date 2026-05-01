@@ -452,26 +452,12 @@ async fn move_block_to_different_parent() {
         .expect("paragraph block exists")
         .clone();
 
-    // kernel quirk: /api/block/moveBlock returns {"code":0,"data":null}.
-    // siyuan-client::move_block calls self.post::<_, Vec<Transaction>>() which
-    // calls into_result() and errors when data is null. This is a client bug:
-    // the kernel succeeds (move happens!) but the client returns a parse error.
-    // The move IS reflected in the SQL index even though the client errors.
-    let result = f
-        .client
+    f.client
         .move_block(&goals_para.id, None, Some(&targets.id))
-        .await;
-    assert!(
-        result.is_err(),
-        "move_block should return Err due to null-data client bug; got Ok"
-    );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("no data field"),
-        "unexpected error kind (expected null-data parse error): {err_msg}"
-    );
+        .await
+        .expect("move_block should succeed");
 
-    // Despite the client error, the kernel DID execute the move; verify it.
+    // Verify the move is reflected in the SQL index.
     let client = &f.client;
     let doc_id = &f.doc_id;
     let goals_id = goals.id.clone();
@@ -537,20 +523,13 @@ async fn move_block_within_same_parent() {
     let first_id = goals.section_children[0].clone();
     let second_id = goals.section_children[1].clone();
 
-    // kernel quirk: same null-data client bug as move_block_to_different_parent.
-    // Move first to after second; despite the client error the kernel executes it.
-    let result = f.client.move_block(&first_id, Some(&second_id), None).await;
-    assert!(
-        result.is_err(),
-        "move_block should return Err due to null-data client bug; got Ok"
-    );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("no data field"),
-        "unexpected error kind: {err_msg}"
-    );
+    // Move first to after second; verify second_id is now first under Goals.
+    f.client
+        .move_block(&first_id, Some(&second_id), None)
+        .await
+        .expect("move_block should succeed");
 
-    // The kernel DID reorder; verify second_id is now first under Goals.
+    // Verify the reorder is reflected in the SQL index.
     let client = &f.client;
     let doc_id = &f.doc_id;
     let goals_id = goals.id.clone();

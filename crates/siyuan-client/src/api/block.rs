@@ -199,8 +199,10 @@ impl SiyuanClient {
         previous_id: Option<&BlockId>,
         parent_id: Option<&BlockId>,
     ) -> Result<(), SiyuanError> {
-        let _: Vec<Transaction> = self
-            .post(
+        // /api/block/moveBlock returns {"code":0,"data":null} on success;
+        // use post_envelope + into_result_or_unit to tolerate the null data field.
+        let _: serde_json::Value = self
+            .post_envelope(
                 "/api/block/moveBlock",
                 &MoveReq {
                     id,
@@ -208,7 +210,9 @@ impl SiyuanClient {
                     parent_id,
                 },
             )
-            .await?;
+            .await?
+            .into_result_or_unit()?
+            .unwrap_or(serde_json::Value::Null);
         Ok(())
     }
 }

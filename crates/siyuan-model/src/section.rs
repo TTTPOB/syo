@@ -1,47 +1,26 @@
 use siyuan_types::{BlockNode, BlockType};
 
-/// Compute heading sections by walking the DFS-ordered block list. For each
-/// heading h_n at level L, the section spans subsequent siblings until the next
-/// heading whose level is <= L (or end of doc).
+/// Compute heading sections. In SiYuan's block tree, a heading's content is
+/// stored as its direct structural children (parent_id == heading.id), so
+/// section_children simply mirrors those direct children ordered by sort.
 pub fn populate_section_children(blocks: &mut [BlockNode]) {
-    // First, snapshot heading positions and levels.
-    let mut headings: Vec<(usize, u8)> = Vec::new(); // (index, level)
-    for (i, b) in blocks.iter().enumerate() {
-        if b.block_type == BlockType::Heading {
-            let level = parse_heading_level(b.subtype.as_deref());
-            headings.push((i, level));
-        }
-    }
+    // Snapshot heading indices so we can mutate the slice afterwards.
+    let heading_indices: Vec<usize> = blocks
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| b.block_type == BlockType::Heading)
+        .map(|(i, _)| i)
+        .collect();
 
-    // For each heading, walk forward to find section end among the same parent.
-    for (h_idx, level) in headings.iter().copied() {
-        let parent = blocks[h_idx].parent_id.clone();
-        let mut section: Vec<_> = Vec::new();
-        for b in blocks.iter().skip(h_idx + 1) {
-            if b.parent_id != parent {
-                continue;
-            }
-            if b.block_type == BlockType::Heading {
-                let other = parse_heading_level(b.subtype.as_deref());
-                if other <= level {
-                    break;
-                }
-            }
-            section.push(b.id.clone());
-        }
+    for h_idx in heading_indices {
+        let heading_id = blocks[h_idx].id.clone();
+        // Collect ids of blocks that are direct children of this heading.
+        let section: Vec<_> = blocks
+            .iter()
+            .filter(|b| b.parent_id.as_ref() == Some(&heading_id))
+            .map(|b| b.id.clone())
+            .collect();
         blocks[h_idx].section_children = section;
-    }
-}
-
-fn parse_heading_level(subtype: Option<&str>) -> u8 {
-    match subtype {
-        Some("h1") => 1,
-        Some("h2") => 2,
-        Some("h3") => 3,
-        Some("h4") => 4,
-        Some("h5") => 5,
-        Some("h6") => 6,
-        _ => 6, // unknown → deepest, so it gets absorbed by anything
     }
 }
 
@@ -80,40 +59,34 @@ mod tests {
     }
 
     #[test]
-    fn h2_section_stops_at_next_h2() {
+    fn h2_section_contains_its_direct_children() {
+        // In SiYuan's actual tree, paragraphs are children of the heading
+        // (parent_id == heading.id), not siblings.
         let root = "20260501000001-doc0001";
+        let h2a_id = "20260501000010-h2aaaaa";
+        let h2b_id = "20260501000040-h2bbbbb";
         let mut blocks = vec![
-            mk(
-                "20260501000010-h2aaaaa",
-                Some(root),
-                root,
-                BlockType::Heading,
-                Some("h2"),
-            ),
+            mk(h2a_id, Some(root), root, BlockType::Heading, Some("h2")),
+            // paragraphs are children of h2a
             mk(
                 "20260501000020-paaaaaa",
-                Some(root),
+                Some(h2a_id),
                 root,
                 BlockType::Paragraph,
                 None,
             ),
             mk(
                 "20260501000030-paaaaab",
-                Some(root),
+                Some(h2a_id),
                 root,
                 BlockType::Paragraph,
                 None,
             ),
-            mk(
-                "20260501000040-h2bbbbb",
-                Some(root),
-                root,
-                BlockType::Heading,
-                Some("h2"),
-            ),
+            mk(h2b_id, Some(root), root, BlockType::Heading, Some("h2")),
+            // paragraph child of h2b
             mk(
                 "20260501000050-paaaaac",
-                Some(root),
+                Some(h2b_id),
                 root,
                 BlockType::Paragraph,
                 None,
@@ -129,29 +102,29 @@ mod tests {
             h2a_section,
             vec!["20260501000020-paaaaaa", "20260501000030-paaaaab"]
         );
+        // h2b's section contains only its own child
+        let h2b_section: Vec<_> = blocks[3]
+            .section_children
+            .iter()
+            .map(|id| id.as_str().to_owned())
+            .collect();
+        assert_eq!(h2b_section, vec!["20260501000050-paaaaac"]);
     }
 
     #[test]
-    fn h2_section_includes_h3_inside_it() {
+    fn h2_section_includes_nested_h3() {
+        // h3 and its paragraph are children of h2; h3's paragraph is child of h3.
         let root = "20260501000001-doc0001";
+        let h2a_id = "20260501000010-h2aaaaa";
+        let h3a_id = "20260501000020-h3aaaaa";
         let mut blocks = vec![
-            mk(
-                "20260501000010-h2aaaaa",
-                Some(root),
-                root,
-                BlockType::Heading,
-                Some("h2"),
-            ),
-            mk(
-                "20260501000020-h3aaaaa",
-                Some(root),
-                root,
-                BlockType::Heading,
-                Some("h3"),
-            ),
+            mk(h2a_id, Some(root), root, BlockType::Heading, Some("h2")),
+            // h3 is a direct child of h2
+            mk(h3a_id, Some(h2a_id), root, BlockType::Heading, Some("h3")),
+            // paragraph is a child of h3
             mk(
                 "20260501000030-paaaaab",
-                Some(root),
+                Some(h3a_id),
                 root,
                 BlockType::Paragraph,
                 None,
@@ -165,14 +138,19 @@ mod tests {
             ),
         ];
         populate_section_children(&mut blocks);
+        // h2's direct children include only h3 (paragraph is child of h3, not h2)
         let ids: Vec<_> = blocks[0]
             .section_children
             .iter()
             .map(|id| id.as_str().to_owned())
             .collect();
-        assert_eq!(
-            ids,
-            vec!["20260501000020-h3aaaaa", "20260501000030-paaaaab"]
-        );
+        assert_eq!(ids, vec!["20260501000020-h3aaaaa"]);
+        // h3's section contains its paragraph
+        let h3_ids: Vec<_> = blocks[1]
+            .section_children
+            .iter()
+            .map(|id| id.as_str().to_owned())
+            .collect();
+        assert_eq!(h3_ids, vec!["20260501000030-paaaaab"]);
     }
 }

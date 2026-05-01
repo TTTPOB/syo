@@ -4,7 +4,9 @@
 
 mod common;
 
-use common::boot_with_seed;
+use std::time::Duration;
+
+use common::{boot_with_seed, wait_for};
 use siyuan_model::{load::load_doc, pagination::PageRequest};
 use siyuan_render::agent_md::render_doc;
 use siyuan_types::BlockId;
@@ -51,17 +53,36 @@ async fn update_block_then_reload_reflects_change() {
         .await
         .expect("update");
 
-    let reloaded = load_doc(
-        &f.client,
-        &f.doc_id,
-        PageRequest {
-            page: 1,
-            page_size: 100,
+    // Poll until SQL index reflects the update; the index converges asynchronously.
+    let target_id = target.id.clone();
+    let client = &f.client;
+    let doc_id = &f.doc_id;
+    let reloaded = wait_for(
+        || async {
+            let b = load_doc(
+                client,
+                doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 100,
+                },
+            )
+            .await?;
+            if b.blocks
+                .iter()
+                .any(|blk| blk.id == target_id && blk.markdown == "Replaced text.")
+            {
+                Ok(Some(b))
+            } else {
+                Ok(None)
+            }
         },
+        Duration::from_secs(5),
     )
     .await
-    .unwrap();
-    let updated = reloaded.blocks.iter().find(|b| b.id == target.id).unwrap();
+    .expect("timed out waiting for update to appear in SQL index");
+
+    let updated = reloaded.blocks.iter().find(|b| b.id == target_id).unwrap();
     assert_eq!(updated.markdown, "Replaced text.");
 }
 
@@ -92,16 +113,32 @@ async fn insert_blocks_after_anchor_preserves_order() {
         .await
         .expect("insert");
 
-    let reloaded = load_doc(
-        &f.client,
-        &f.doc_id,
-        PageRequest {
-            page: 1,
-            page_size: 100,
+    // Poll until all three inserted blocks appear in the SQL index.
+    let client = &f.client;
+    let doc_id = &f.doc_id;
+    let reloaded = wait_for(
+        || async {
+            let b = load_doc(
+                client,
+                doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 100,
+                },
+            )
+            .await?;
+            let count = b
+                .blocks
+                .iter()
+                .filter(|blk| blk.markdown.starts_with("Inserted "))
+                .count();
+            if count == 3 { Ok(Some(b)) } else { Ok(None) }
         },
+        Duration::from_secs(5),
     )
     .await
-    .unwrap();
+    .expect("timed out waiting for inserted blocks to appear in SQL index");
+
     let positions: Vec<_> = reloaded
         .blocks
         .iter()
@@ -157,16 +194,31 @@ async fn delete_block_removes_it() {
 
     f.client.delete_block(&target_id).await.expect("delete");
 
-    let reloaded = load_doc(
-        &f.client,
-        &f.doc_id,
-        PageRequest {
-            page: 1,
-            page_size: 100,
+    // Poll until the deletion is reflected in the SQL index.
+    let client = &f.client;
+    let doc_id = &f.doc_id;
+    let reloaded = wait_for(
+        || async {
+            let b = load_doc(
+                client,
+                doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 100,
+                },
+            )
+            .await?;
+            if !b.blocks.iter().any(|blk| blk.id == target_id) {
+                Ok(Some(b))
+            } else {
+                Ok(None)
+            }
         },
+        Duration::from_secs(5),
     )
     .await
-    .unwrap();
+    .expect("timed out waiting for deletion to appear in SQL index");
+
     assert!(
         !reloaded.blocks.iter().any(|b| b.id == target_id),
         "deleted block should not appear in reload"
@@ -176,34 +228,43 @@ async fn delete_block_removes_it() {
 #[tokio::test]
 #[ignore]
 async fn append_section_inserts_at_section_end() {
+    use siyuan_model::section::populate_section_children;
+
     let f = boot_with_seed().await.expect("boot");
-    let bundle = load_doc(
-        &f.client,
-        &f.doc_id,
-        PageRequest {
-            page: 1,
-            page_size: 100,
+
+    // Poll until the Goals section has indexed children in the SQL store.
+    let client = &f.client;
+    let doc_id = &f.doc_id;
+    // Poll until the Goals heading has indexed children; use populate_section_children
+    // (the same helper the CLI uses) to find the last child id.
+    let section_end = wait_for(
+        || async {
+            let b = load_doc(
+                client,
+                doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 100,
+                },
+            )
+            .await?;
+            let goals_heading = b
+                .blocks
+                .iter()
+                .find(|blk| blk.markdown.starts_with("## Goals"));
+            let Some(h) = goals_heading else {
+                return Ok(None);
+            };
+            let goals_id = h.id.clone();
+            let mut blocks = b.blocks.clone();
+            populate_section_children(&mut blocks);
+            let h2 = blocks.iter().find(|blk| blk.id == goals_id).unwrap();
+            Ok(h2.section_children.last().cloned())
         },
+        Duration::from_secs(5),
     )
     .await
-    .unwrap();
-
-    let goals_heading = bundle
-        .blocks
-        .iter()
-        .find(|b| b.markdown.starts_with("## Goals"))
-        .expect("seed contains Goals heading");
-
-    // Resolve section end via the same helper the cli uses.
-    use siyuan_model::section::populate_section_children;
-    let mut blocks = bundle.blocks.clone();
-    populate_section_children(&mut blocks);
-    let h = blocks.iter().find(|b| b.id == goals_heading.id).unwrap();
-    let section_end = h
-        .section_children
-        .last()
-        .expect("Goals section has content")
-        .clone();
+    .expect("timed out waiting for Goals section children to appear in SQL index");
 
     let new = "End-of-section content.";
     f.client
@@ -211,16 +272,31 @@ async fn append_section_inserts_at_section_end() {
         .await
         .expect("insert");
 
-    let reloaded = load_doc(
-        &f.client,
-        &f.doc_id,
-        PageRequest {
-            page: 1,
-            page_size: 100,
+    // Poll until the inserted block appears in the SQL index.
+    let reloaded = wait_for(
+        || async {
+            let b = load_doc(
+                &f.client,
+                &f.doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 100,
+                },
+            )
+            .await?;
+            if b.blocks
+                .iter()
+                .any(|blk| blk.markdown == "End-of-section content.")
+            {
+                Ok(Some(b))
+            } else {
+                Ok(None)
+            }
         },
+        Duration::from_secs(5),
     )
     .await
-    .unwrap();
+    .expect("timed out waiting for inserted block to appear in SQL index");
 
     // Find the new block and the next heading; new must precede next heading.
     let new_idx = reloaded

@@ -1,0 +1,28 @@
+[package]
+name = "siyuan-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "siyuan"
+path = "src/main.rs"
+
+[dependencies]
+siyuan-types = { workspace = true }
+siyuan-client = { workspace = true }
+siyuan-model = { workspace = true }
+siyuan-render = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+siyuan-testkit = { workspace = true }
+insta = { workspace = true }
+reqwest = { workspace = true }

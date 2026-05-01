@@ -10,20 +10,24 @@ repository = "https://github.com/tpob/siyuan-cli"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_with = "3"
+clap = { version = "4", features = ["derive", "env"] }
 tempfile = "3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 thiserror = "2"
 insta = { version = "1", features = ["yaml", "json", "redactions"] }
+regex = "1"
+once_cell = "1"
+camino = "1"
 
-# 临时保留旧的 binary 直到 v1 plan 把它迁走
-[package]
-name = "siyuan-cli"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
+# Path deps for in-workspace crates
+siyuan-types = { path = "crates/siyuan-types" }
+siyuan-client = { path = "crates/siyuan-client" }
+siyuan-model = { path = "crates/siyuan-model" }
+siyuan-render = { path = "crates/siyuan-render" }
+siyuan-testkit = { path = "crates/siyuan-testkit" }

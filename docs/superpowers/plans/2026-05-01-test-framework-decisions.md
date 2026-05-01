@@ -128,3 +128,27 @@ history instead. Append-only; ordered by review point.
 
 - **Code review Minor: request boilerplate duplicated.**
   Decision: deferred. Same rationale as above.
+
+## Task 9 — Drop cleanup smoke
+
+- **Code review Important: 500ms sleep may flake.**
+  Reviewer suggested polling `podman ps` in a loop instead of sleeping.
+  Decision: deferred. Drop is synchronous and completes before the sleep
+  begins; the 500ms is OS-propagation slack, not subprocess wait. If
+  flakiness appears in CI, switch to a poll loop.
+
+- **Code review Important: `id=` filter is prefix-matching.**
+  Reviewer noted theoretical ambiguity if a concurrent container shared
+  the 64-char prefix. Decision: deferred. Probability is essentially 0.
+
+- **Code review Minor: no comment that `podman::` is crate-private.**
+  Decision: deferred. Cosmetic.
+
+- **Code review Minor: workspace tempdir not verified by the smoke.**
+  Decision: deferred. Already covered by `workspace_is_cleaned_up_on_drop`
+  unit test; smoke verifies only the podman-side cleanup.
+
+- **Code review Minor: no `out.status.success()` check on `podman ps`.**
+  Decision: deferred. If podman fails the test will fail with the
+  "container should be gone" assertion (empty stdout), giving a wrong
+  but non-silent failure. Acceptable for a smoke test.

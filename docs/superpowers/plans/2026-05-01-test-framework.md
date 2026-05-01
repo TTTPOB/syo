@@ -375,7 +375,7 @@ impl TempWorkspace {
     /// Forget the TempDir without deleting it. Useful for debugging a failed
     /// integration test by inspecting the workspace contents.
     pub fn into_persistent(self) -> PathBuf {
-        self.dir.into_path()
+        self.dir.keep()
     }
 }
 

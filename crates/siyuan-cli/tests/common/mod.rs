@@ -11,9 +11,9 @@ use siyuan_model::pagination::PageRequest;
 use siyuan_testkit::SiyuanContainer;
 use siyuan_types::{BlockId, NotebookId};
 
+// Some test binaries don't read every field; keep them on the fixture for the binaries that do.
+#[allow(dead_code)]
 pub struct Fixture {
-    // Held to keep the podman container alive until Drop.
-    #[allow(dead_code)]
     pub container: SiyuanContainer,
     pub client: SiyuanClient,
     pub notebook_id: NotebookId,

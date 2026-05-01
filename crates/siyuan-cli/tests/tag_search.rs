@@ -103,10 +103,6 @@ async fn search_by_tag_returns_tagged_blocks() {
 async fn search_by_tag_handles_unknown_tag() {
     let f = boot_with_seed().await.expect("boot");
 
-    // Reference notebook_id to silence the dead_code lint for this test binary;
-    // the field is load-bearing in notebook_filetree tests.
-    let _ = &f.notebook_id;
-
     let hits = search_by_tag(&f.client, "nonexistent")
         .await
         .expect("search_by_tag should not error for missing tag");

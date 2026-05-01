@@ -24,6 +24,8 @@ struct Cli {
 enum Cmd {
     /// Print kernel version (smoke test).
     Status,
+    GetDoc(commands::get_doc::GetDocArgs),
+    GetBlock(commands::get_block::GetBlockArgs),
 }
 
 #[tokio::main]
@@ -40,6 +42,8 @@ async fn main() -> anyhow::Result<()> {
             info!(%v, "siyuan ok");
             println!("{v}");
         }
+        Cmd::GetDoc(a) => commands::get_doc::run(&client, a).await?,
+        Cmd::GetBlock(a) => commands::get_block::run(&client, a).await?,
     }
     Ok(())
 }

@@ -139,4 +139,33 @@ mod tests {
         :::
         "###);
     }
+
+    #[test]
+    fn renders_subtype_in_annotation() {
+        let mut block = mk_block("20260501000010-h2aaaaa", BlockType::Heading, "## Hello");
+        block.subtype = Some("h2".into());
+        let bundle = DocBundle {
+            schema: DocBundle::SCHEMA.into(),
+            doc: DocMeta {
+                id: BlockId::parse("20260501000001-doc0001").unwrap(),
+                notebook_id: NotebookId::parse("20260501000000-nb00001").unwrap(),
+                hpath: "/Demo".into(),
+                title: "Demo".into(),
+            },
+            page: PageInfo {
+                page: 1,
+                page_size: 50,
+                total_blocks: 1,
+                total_pages: 1,
+            },
+            blocks: vec![block],
+        };
+        let md = render_doc(&bundle);
+        insta::assert_snapshot!(md, @r###"
+        <!-- sy:doc id=20260501000001-doc0001 hpath="/Demo" page=1 of 1 -->
+
+        <!-- sy:block id=20260501000010-h2aaaaa type=h subtype=h2 -->
+        ## Hello
+        "###);
+    }
 }

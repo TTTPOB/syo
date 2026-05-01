@@ -1544,6 +1544,7 @@ dependencies = [
 name = "siyuan-render"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "serde",
  "serde_json",
  "siyuan-model",

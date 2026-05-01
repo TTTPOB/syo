@@ -1120,13 +1120,13 @@ git commit -m "test(testkit): two containers can run in parallel"
 
 **Files:**
 - Create: `crates/siyuan-testkit/tests/snapshot_setup.rs`
-- Create: `crates/siyuan-testkit/.config/insta.yaml`
+- Create: `.config/insta.yaml`
 
 **Background:** v1 plan 会大量用 insta 做端到端响应快照。这里只验证 insta 能跑、redaction 能用，给后续提供模板。
 
 - [ ] **Step 1: 配置 insta**
 
-Create `crates/siyuan-testkit/.config/insta.yaml`：
+Create `.config/insta.yaml` (workspace root, NOT inside the crate — insta only reads from `<workspace_root>/.config/insta.yaml`)：
 
 ```yaml
 review:
@@ -1178,7 +1178,7 @@ Expected: 1 passed (no diff)。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add crates/siyuan-testkit/.config crates/siyuan-testkit/tests/snapshot_setup.rs crates/siyuan-testkit/tests/snapshots/
+git add .config crates/siyuan-testkit/tests/snapshot_setup.rs crates/siyuan-testkit/tests/snapshots/
 git commit -m "test(testkit): bootstrap insta snapshot infrastructure"
 ```
 

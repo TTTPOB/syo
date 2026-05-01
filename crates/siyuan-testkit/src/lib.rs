@@ -8,7 +8,7 @@
 //! let url = sy.base_url();
 //! let token = sy.token();
 //! // ... call SiYuan HTTP API ...
-//! // sy 离开作用域时容器自动销毁
+//! // the container is destroyed when sy goes out of scope
 //! # Ok(())
 //! # }
 //! ```

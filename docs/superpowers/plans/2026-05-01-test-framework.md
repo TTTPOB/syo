@@ -165,7 +165,7 @@ insta = { workspace = true }
 //! let url = sy.base_url();
 //! let token = sy.token();
 //! // ... call SiYuan HTTP API ...
-//! // sy 离开作用域时容器自动销毁
+//! // the container is destroyed when sy goes out of scope
 //! # Ok(())
 //! # }
 //! ```
@@ -219,12 +219,12 @@ Create: `crates/siyuan-testkit/src/podman.rs`
 
 Create: `crates/siyuan-testkit/src/health.rs`
 ```rust
-// stub, populated in Task 7
+// stub, populated in Task 6
 ```
 
 Create: `crates/siyuan-testkit/src/container.rs`
 ```rust
-// stub, populated in Task 6
+// stub, populated in Task 7
 
 #[derive(Debug)]
 pub struct SiyuanContainer;

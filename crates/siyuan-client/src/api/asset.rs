@@ -23,7 +23,7 @@ impl SiyuanClient {
     /// in markdown as `![alt](assets/...)`.
     pub async fn upload_asset(&self, file_path: &Path) -> Result<String, SiyuanError> {
         let bytes = std::fs::read(file_path)
-            .map_err(|e| SiyuanError::Http(format!("read {}: {e}", file_path.display())))?;
+            .map_err(|e| SiyuanError::Parse(format!("read {}: {e}", file_path.display())))?;
         let filename = file_path
             .file_name()
             .and_then(|n| n.to_str())

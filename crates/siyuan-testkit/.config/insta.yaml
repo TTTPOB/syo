@@ -1,0 +1,5 @@
+review:
+  warn_undiscovered: true
+  warn_obsolete: true
+output:
+  format: yaml

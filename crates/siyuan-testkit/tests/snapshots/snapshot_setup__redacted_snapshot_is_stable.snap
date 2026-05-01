@@ -1,0 +1,9 @@
+---
+source: crates/siyuan-testkit/tests/snapshot_setup.rs
+expression: value
+---
+code: 0
+data:
+  container_id: "[redacted]"
+  version: v3.1.7
+msg: ""

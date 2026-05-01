@@ -1088,14 +1088,14 @@ async fn two_containers_can_run_in_parallel() {
     let client = Client::new();
     for sy in [&a, &b] {
         let resp = client
-            .post(format!("{}/api/system/version", sy.base_url()))
+            .post(format!("{}/api/notebook/lsNotebooks", sy.base_url()))
             .header("Authorization", format!("Token {}", sy.token()))
             .header("Content-Type", "application/json")
             .body("{}")
             .send()
             .await
             .expect("HTTP");
-        assert!(resp.status().is_success(), "version on {} should work", sy.base_url());
+        assert!(resp.status().is_success(), "lsNotebooks on {} should work", sy.base_url());
     }
 }
 ```

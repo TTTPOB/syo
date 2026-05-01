@@ -90,3 +90,28 @@ async fn container_is_removed_after_drop() {
         "container {id} should be gone, but podman ps shows: {listed}"
     );
 }
+
+#[tokio::test]
+#[ignore = "starts two real podman containers; opt-in"]
+async fn two_containers_can_run_in_parallel() {
+    init_tracing();
+
+    let (a, b) = tokio::try_join!(SiyuanContainer::start(), SiyuanContainer::start())
+        .expect("both containers should start");
+
+    assert_ne!(a.base_url(), b.base_url(), "base urls must differ");
+    assert_ne!(a.container_id(), b.container_id(), "ids must differ");
+
+    let client = Client::new();
+    for sy in [&a, &b] {
+        let resp = client
+            .post(format!("{}/api/notebook/lsNotebooks", sy.base_url()))
+            .header("Authorization", format!("Token {}", sy.token()))
+            .header("Content-Type", "application/json")
+            .body("{}")
+            .send()
+            .await
+            .expect("HTTP");
+        assert!(resp.status().is_success(), "lsNotebooks on {} should work", sy.base_url());
+    }
+}

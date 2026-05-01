@@ -39,6 +39,18 @@ impl SiyuanClient {
         &self.token
     }
 
+    /// Parse a raw response body as a `SiyuanResponse` envelope and
+    /// extract the `data` payload (or an `Api` error).  Shared by callers
+    /// that cannot use `post()` because they send non-JSON bodies.
+    pub(crate) fn decode_envelope<R: DeserializeOwned>(
+        &self,
+        body: &str,
+    ) -> Result<R, SiyuanError> {
+        let env: SiyuanResponse<R> =
+            serde_json::from_str(body).map_err(|e| SiyuanError::Parse(e.to_string()))?;
+        env.into_result()
+    }
+
     /// POST `<base>/<path>` with `body` as JSON, decode `data` into `R`.
     pub async fn post<B: Serialize + ?Sized, R: DeserializeOwned>(
         &self,

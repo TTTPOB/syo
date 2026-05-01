@@ -47,24 +47,11 @@ impl SiyuanClient {
             .await
             .map_err(|e| SiyuanError::Http(e.to_string()))?;
 
-        let body = resp.text().await.map_err(|e| SiyuanError::Http(e.to_string()))?;
-        let parsed: serde_json::Value =
-            serde_json::from_str(&body).map_err(|e| SiyuanError::Parse(e.to_string()))?;
-        let code = parsed.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
-        if code != 0 {
-            return Err(SiyuanError::Api {
-                code: code as i32,
-                msg: parsed
-                    .get("msg")
-                    .and_then(|m| m.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-            });
-        }
-        let upload: UploadResult = serde_json::from_value(
-            parsed.get("data").cloned().unwrap_or(serde_json::Value::Null),
-        )
-        .map_err(|e| SiyuanError::Parse(e.to_string()))?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| SiyuanError::Http(e.to_string()))?;
+        let upload: UploadResult = self.decode_envelope(&body)?;
         if !upload.err_files.is_empty() {
             return Err(SiyuanError::Api {
                 code: -1,

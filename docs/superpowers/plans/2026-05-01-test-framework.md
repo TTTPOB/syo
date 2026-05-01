@@ -73,7 +73,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 thiserror = "2"
-insta = { version = "1", features = ["yaml", "json"] }
+insta = { version = "1", features = ["yaml", "json", "redactions"] }
 
 # 临时保留旧的 binary 直到 v1 plan 把它迁走
 [package]

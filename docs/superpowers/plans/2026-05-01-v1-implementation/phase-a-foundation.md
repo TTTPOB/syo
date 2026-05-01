@@ -105,7 +105,16 @@ regex = { workspace = true }
 once_cell = { workspace = true }
 ```
 
-`crates/siyuan-types/src/lib.rs`:
+`crates/siyuan-types/src/lib.rs` — **start minimal in A1**, then activate modules as their content lands in A2–A4:
+
+```rust
+//! Core data types for the SiYuan harness.
+
+// Modules and re-exports populated in Tasks A2–A4.
+```
+
+After A2/A3/A4 the file should reach this final shape:
+
 ```rust
 //! Core data types for the SiYuan harness.
 
@@ -141,7 +150,15 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 ```
 
-`crates/siyuan-client/src/lib.rs`:
+`crates/siyuan-client/src/lib.rs` — **A1 only declares `pub mod api;`**; `client` and `response` are added in Phase B when their files exist.
+
+```rust
+//! Typed HTTP client for the SiYuan kernel.
+pub mod api;
+```
+
+Final shape after Phase B:
+
 ```rust
 //! Typed HTTP client for the SiYuan kernel.
 pub mod api;
@@ -421,16 +438,28 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: 跑测试**
+- [ ] **Step 2: 激活模块**
+
+Update `crates/siyuan-types/src/lib.rs` to add the new module and re-exports:
+
+```rust
+//! Core data types for the SiYuan harness.
+
+pub mod id;
+
+pub use id::{BlockId, NotebookId};
+```
+
+- [ ] **Step 3: 跑测试**
 
 Run: `cargo test -p siyuan-types id::`
 
 Expected: 6 passed.
 
-- [ ] **Step 3: 提交**
+- [ ] **Step 4: 提交**
 
 ```bash
-git add crates/siyuan-types/src/id.rs
+git add crates/siyuan-types/src/id.rs crates/siyuan-types/src/lib.rs
 git commit -m "feat(types): typed BlockId / NotebookId with regex validation"
 ```
 
@@ -629,16 +658,30 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: 跑测试**
+- [ ] **Step 2: 激活模块**
+
+Update `crates/siyuan-types/src/lib.rs` to expose `block`:
+
+```rust
+//! Core data types for the SiYuan harness.
+
+pub mod block;
+pub mod id;
+
+pub use block::{BlockNode, BlockRole, BlockSubtype, BlockType};
+pub use id::{BlockId, NotebookId};
+```
+
+- [ ] **Step 3: 跑测试**
 
 Run: `cargo test -p siyuan-types block::`
 
 Expected: 3 passed.
 
-- [ ] **Step 3: 提交**
+- [ ] **Step 4: 提交**
 
 ```bash
-git add crates/siyuan-types/src/block.rs
+git add crates/siyuan-types/src/block.rs crates/siyuan-types/src/lib.rs
 git commit -m "feat(types): BlockType, BlockRole, BlockNode"
 ```
 
@@ -823,16 +866,34 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: 跑测试**
+- [ ] **Step 3: 激活模块（最终形态）**
+
+Update `crates/siyuan-types/src/lib.rs` to expose every module added in A2–A4:
+
+```rust
+//! Core data types for the SiYuan harness.
+
+pub mod block;
+pub mod error;
+pub mod id;
+pub mod position;
+
+pub use block::{BlockNode, BlockRole, BlockSubtype, BlockType};
+pub use error::{ErrorKind, SiyuanError};
+pub use id::{BlockId, NotebookId};
+pub use position::Position;
+```
+
+- [ ] **Step 4: 跑测试**
 
 Run: `cargo test -p siyuan-types`
 
 Expected: 全部通过（id + block + position + error 加起来 ~14 个）。
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 5: 提交**
 
 ```bash
-git add crates/siyuan-types/src/position.rs crates/siyuan-types/src/error.rs
+git add crates/siyuan-types/src/position.rs crates/siyuan-types/src/error.rs crates/siyuan-types/src/lib.rs
 git commit -m "feat(types): Position enum and SiyuanError model"
 ```
 

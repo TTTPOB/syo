@@ -44,5 +44,10 @@ A target paragraph.
         .create_doc_with_md(&nb.id, "/IntegrationTestDoc", markdown)
         .await?;
 
-    Ok(Fixture { container, client, notebook_id: nb.id, doc_id })
+    Ok(Fixture {
+        container,
+        client,
+        notebook_id: nb.id,
+        doc_id,
+    })
 }

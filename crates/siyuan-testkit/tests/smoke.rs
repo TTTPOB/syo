@@ -31,10 +31,17 @@ async fn boots_siyuan_and_authenticates() {
         .send()
         .await
         .expect("HTTP request");
-    assert!(resp.status().is_success(), "lsNotebooks endpoint should be 200");
+    assert!(
+        resp.status().is_success(),
+        "lsNotebooks endpoint should be 200"
+    );
 
     let body: serde_json::Value = resp.json().await.expect("json");
-    assert_eq!(body["code"].as_i64(), Some(0), "api code should be 0; body={body}");
+    assert_eq!(
+        body["code"].as_i64(),
+        Some(0),
+        "api code should be 0; body={body}"
+    );
     assert!(
         body["data"]["notebooks"].is_array(),
         "lsNotebooks response should carry data.notebooks; body={body}"
@@ -81,7 +88,14 @@ async fn container_is_removed_after_drop() {
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     let out = std::process::Command::new("podman")
-        .args(["ps", "-a", "--filter", &format!("id={id}"), "--format", "{{.ID}}"])
+        .args([
+            "ps",
+            "-a",
+            "--filter",
+            &format!("id={id}"),
+            "--format",
+            "{{.ID}}",
+        ])
         .output()
         .expect("podman ps");
     let listed = String::from_utf8_lossy(&out.stdout);
@@ -113,6 +127,10 @@ async fn two_containers_can_run_in_parallel() {
             .send()
             .await
             .expect("HTTP");
-        assert!(resp.status().is_success(), "lsNotebooks on {} should work", sy.base_url());
+        assert!(
+            resp.status().is_success(),
+            "lsNotebooks on {} should work",
+            sy.base_url()
+        );
     }
 }

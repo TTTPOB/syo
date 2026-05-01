@@ -102,7 +102,10 @@ mod tests {
             let ws = TempWorkspace::new().unwrap();
             ws.path().to_path_buf()
         };
-        assert!(!path.exists(), "tempdir should be removed when TempWorkspace drops");
+        assert!(
+            !path.exists(),
+            "tempdir should be removed when TempWorkspace drops"
+        );
     }
 
     #[test]
@@ -111,7 +114,10 @@ mod tests {
             let ws = TempWorkspace::new().unwrap();
             ws.into_persistent()
         };
-        assert!(path.exists(), "persisted workspace should still exist after drop");
+        assert!(
+            path.exists(),
+            "persisted workspace should still exist after drop"
+        );
         std::fs::remove_dir_all(&path).expect("manual cleanup");
     }
 }

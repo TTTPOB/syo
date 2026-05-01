@@ -19,6 +19,7 @@ pub struct ExportedDoc {
 
 impl SiyuanClient {
     pub async fn export_md_content(&self, doc_id: &BlockId) -> Result<ExportedDoc, SiyuanError> {
-        self.post("/api/export/exportMdContent", &ExportReq { id: doc_id }).await
+        self.post("/api/export/exportMdContent", &ExportReq { id: doc_id })
+            .await
     }
 }

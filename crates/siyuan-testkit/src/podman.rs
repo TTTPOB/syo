@@ -51,7 +51,13 @@ where
 /// stderr.
 pub fn stop(container_id: &str, timeout_secs: u32) -> Result<()> {
     let out = Command::new("podman")
-        .args(["stop", "--ignore", "--time", &timeout_secs.to_string(), container_id])
+        .args([
+            "stop",
+            "--ignore",
+            "--time",
+            &timeout_secs.to_string(),
+            container_id,
+        ])
         .output()
         .context("spawning `podman stop`")?;
     if !out.status.success() {

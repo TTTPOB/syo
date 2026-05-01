@@ -19,10 +19,17 @@ pub enum SiyuanError {
     NotFound(String),
 
     #[error("path is ambiguous: {hpath:?} resolves to multiple ids: {candidates:?}")]
-    AmbiguousPath { hpath: String, candidates: Vec<BlockId> },
+    AmbiguousPath {
+        hpath: String,
+        candidates: Vec<BlockId>,
+    },
 
     #[error("operation {op:?} is not supported on block {id} of type {block_type}")]
-    UnsupportedOp { id: BlockId, block_type: String, op: String },
+    UnsupportedOp {
+        id: BlockId,
+        block_type: String,
+        op: String,
+    },
 
     #[error("SQL query unavailable (publish mode disables /api/query/sql)")]
     SqlUnavailable,
@@ -80,7 +87,10 @@ mod tests {
 
     #[test]
     fn api_error_displays_code_and_msg() {
-        let err = SiyuanError::Api { code: 21, msg: "Bad token".into() };
+        let err = SiyuanError::Api {
+            code: 21,
+            msg: "Bad token".into(),
+        };
         let s = err.to_string();
         assert!(s.contains("21"));
         assert!(s.contains("Bad token"));

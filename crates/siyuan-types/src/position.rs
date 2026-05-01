@@ -25,14 +25,12 @@ impl Position {
     /// The id this position is anchored on, regardless of variant.
     pub fn anchor_id(&self) -> &BlockId {
         match self {
-            Self::AfterBlock { block_id }
-            | Self::BeforeBlock { block_id } => block_id,
-            Self::AppendChild { container_id }
-            | Self::PrependChild { container_id } => container_id,
-            Self::AppendSection { heading_id }
-            | Self::PrependSection { heading_id } => heading_id,
-            Self::AppendDoc { doc_id }
-            | Self::PrependDoc { doc_id } => doc_id,
+            Self::AfterBlock { block_id } | Self::BeforeBlock { block_id } => block_id,
+            Self::AppendChild { container_id } | Self::PrependChild { container_id } => {
+                container_id
+            }
+            Self::AppendSection { heading_id } | Self::PrependSection { heading_id } => heading_id,
+            Self::AppendDoc { doc_id } | Self::PrependDoc { doc_id } => doc_id,
         }
     }
 }
@@ -44,7 +42,9 @@ mod tests {
     #[test]
     fn serialises_with_kind_tag() {
         let id = BlockId::parse("20260501093000-abc1234").unwrap();
-        let pos = Position::AfterBlock { block_id: id.clone() };
+        let pos = Position::AfterBlock {
+            block_id: id.clone(),
+        };
         let json = serde_json::to_string(&pos).unwrap();
         assert!(json.contains("\"kind\":\"after_block\""));
         assert!(json.contains("\"block_id\":\"20260501093000-abc1234\""));
@@ -65,7 +65,9 @@ mod tests {
     #[test]
     fn anchor_id_extracts_underlying_id() {
         let id = BlockId::parse("20260501093000-abc1234").unwrap();
-        let pos = Position::AppendChild { container_id: id.clone() };
+        let pos = Position::AppendChild {
+            container_id: id.clone(),
+        };
         assert_eq!(pos.anchor_id(), &id);
     }
 }

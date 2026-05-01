@@ -28,7 +28,8 @@ pub async fn wait_for_ready(base_url: &str, token: &str, timeout: Duration) -> R
                 if started.elapsed() >= timeout {
                     bail!(
                         "siyuan never became ready within {:?} ({} attempts). last error: {err:#}",
-                        timeout, attempt
+                        timeout,
+                        attempt
                     );
                 }
                 if attempt % 10 == 0 {

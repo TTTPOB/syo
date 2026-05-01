@@ -10,7 +10,9 @@ static BLOCK_ID_RE: Lazy<Regex> =
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum IdError {
-    #[error("invalid SiYuan block id: {0:?} (expected 14-digit timestamp + '-' + 7 lowercase alnum)")]
+    #[error(
+        "invalid SiYuan block id: {0:?} (expected 14-digit timestamp + '-' + 7 lowercase alnum)"
+    )]
     Invalid(String),
 }
 

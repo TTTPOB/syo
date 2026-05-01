@@ -101,6 +101,7 @@ async fn two_containers_can_run_in_parallel() {
 
     assert_ne!(a.base_url(), b.base_url(), "base urls must differ");
     assert_ne!(a.container_id(), b.container_id(), "ids must differ");
+    assert_ne!(a.token(), b.token(), "tokens must differ");
 
     let client = Client::new();
     for sy in [&a, &b] {

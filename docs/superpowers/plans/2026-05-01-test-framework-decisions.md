@@ -152,3 +152,22 @@ history instead. Append-only; ordered by review point.
   Decision: deferred. If podman fails the test will fail with the
   "container should be gone" assertion (empty stdout), giving a wrong
   but non-silent failure. Acceptable for a smoke test.
+
+## Task 10 — parallel containers smoke
+
+- **Code review Important: try_join! cancellation can leak a half-built
+  container.** SiyuanContainerBuilder::start() builds the SiyuanContainer
+  struct AFTER `podman run` returns; if cancellation hits between
+  spawn_blocking returning and the struct being built, no Drop fires for
+  the leaked container.
+  Decision: deferred — pre-existing architectural concern in container.rs,
+  not introduced by Task 10. Window is narrow (requires one container's
+  wait_for_ready to fail at the exact moment another container's
+  spawn_blocking is just completing). Fix would restructure
+  SiyuanContainerBuilder::start to construct SiyuanContainer immediately
+  after the id is known, before wait_for_ready. Revisit if real leaks appear.
+
+- **Code review Minor: HTTP probes are sequential despite "parallel" theme.**
+  Reviewer suggested futures::join! on the two probes.
+  Decision: deferred. Cosmetic; both containers are already running so
+  probe order doesn't affect correctness.

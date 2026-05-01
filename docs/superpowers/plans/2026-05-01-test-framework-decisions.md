@@ -105,3 +105,26 @@ history instead. Append-only; ordered by review point.
   Reviewer noted the bare "testkit" default could clash across containers.
   Decision: deferred. Only matters for UI access; tests use the API token,
   which IS unique per workspace. Document if a UI test scenario surfaces.
+
+## Task 8 — smoke test (boot + auth)
+
+- **Spike result (kept here for record):** plan changed mid-Task. Both tests
+  switched from `/api/system/version` (unauthenticated, can't validate token)
+  to `/api/notebook/lsNotebooks` (auth-enforced). conf.json schema
+  `{"api":{"token":...}}` confirmed correct against SiYuan v3.6.5.
+  Wrong-token responses are HTTP 401 with no JSON body (NOT 200 with code=-1
+  as initially guessed); the `rejects_wrong_token` assertion uses
+  `is_client_error()` to be robust against future 4xx code changes.
+
+- **Code review Minor: hardcoded 120s ready_timeout vs default 60s.**
+  Reviewer suggested a comment explaining the asymmetry.
+  Decision: deferred. The asymmetry is incidental — the auth test was given
+  more headroom for the first cold pull on a CI runner; the second test,
+  written second, didn't bother. Both work; cosmetic.
+
+- **Code review Minor: each test builds a fresh reqwest::Client.**
+  Reviewer suggested testkit-provided client or shared helper.
+  Decision: deferred. Two tests; abstraction premature. Revisit at 5+.
+
+- **Code review Minor: request boilerplate duplicated.**
+  Decision: deferred. Same rationale as above.

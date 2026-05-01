@@ -17,17 +17,17 @@ pub fn populate_section_children(blocks: &mut [BlockNode]) {
     for (h_idx, level) in headings.iter().copied() {
         let parent = blocks[h_idx].parent_id.clone();
         let mut section: Vec<_> = Vec::new();
-        for j in (h_idx + 1)..blocks.len() {
-            if blocks[j].parent_id != parent {
+        for b in blocks.iter().skip(h_idx + 1) {
+            if b.parent_id != parent {
                 continue;
             }
-            if blocks[j].block_type == BlockType::Heading {
-                let other = parse_heading_level(blocks[j].subtype.as_deref());
+            if b.block_type == BlockType::Heading {
+                let other = parse_heading_level(b.subtype.as_deref());
                 if other <= level {
                     break;
                 }
             }
-            section.push(blocks[j].id.clone());
+            section.push(b.id.clone());
         }
         blocks[h_idx].section_children = section;
     }

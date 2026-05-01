@@ -21,6 +21,6 @@ impl Config {
     }
 
     pub fn into_client(self) -> Result<SiyuanClient> {
-        Ok(SiyuanClient::new(&self.base_url, &self.token).map_err(anyhow::Error::from)?)
+        SiyuanClient::new(&self.base_url, &self.token).map_err(anyhow::Error::from)
     }
 }

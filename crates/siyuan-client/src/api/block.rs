@@ -98,7 +98,9 @@ fn first_new_id(txs: &[Transaction]) -> Result<BlockId, SiyuanError> {
             }
         }
     }
-    Err(SiyuanError::Parse("no id found in transaction operations".into()))
+    Err(SiyuanError::Parse(
+        "no id found in transaction operations".into(),
+    ))
 }
 
 // -------- methods --------
@@ -144,7 +146,11 @@ impl SiyuanClient {
         let txs: Vec<Transaction> = self
             .post(
                 "/api/block/appendBlock",
-                &AppendOrPrependReq { data_type: "markdown", data: markdown, parent_id },
+                &AppendOrPrependReq {
+                    data_type: "markdown",
+                    data: markdown,
+                    parent_id,
+                },
             )
             .await?;
         first_new_id(&txs)
@@ -158,7 +164,11 @@ impl SiyuanClient {
         let txs: Vec<Transaction> = self
             .post(
                 "/api/block/prependBlock",
-                &AppendOrPrependReq { data_type: "markdown", data: markdown, parent_id },
+                &AppendOrPrependReq {
+                    data_type: "markdown",
+                    data: markdown,
+                    parent_id,
+                },
             )
             .await?;
         first_new_id(&txs)
@@ -172,7 +182,11 @@ impl SiyuanClient {
         let _: Vec<Transaction> = self
             .post(
                 "/api/block/updateBlock",
-                &UpdateReq { id, data_type: "markdown", data: markdown },
+                &UpdateReq {
+                    id,
+                    data_type: "markdown",
+                    data: markdown,
+                },
             )
             .await?;
         Ok(())
@@ -190,7 +204,14 @@ impl SiyuanClient {
         parent_id: Option<&BlockId>,
     ) -> Result<(), SiyuanError> {
         let _: Vec<Transaction> = self
-            .post("/api/block/moveBlock", &MoveReq { id, previous_id, parent_id })
+            .post(
+                "/api/block/moveBlock",
+                &MoveReq {
+                    id,
+                    previous_id,
+                    parent_id,
+                },
+            )
             .await?;
         Ok(())
     }

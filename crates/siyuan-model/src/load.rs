@@ -23,8 +23,6 @@ struct BlockRow {
     #[serde(default)]
     hpath: String,
     #[serde(default)]
-    content: String,
-    #[serde(default)]
     markdown: String,
     #[serde(rename = "type")]
     block_type: String,
@@ -49,7 +47,7 @@ pub async fn load_doc(
 ) -> Result<DocBundle> {
     // 1. Pull every block in this doc via SQL.
     let stmt = format!(
-        r#"SELECT id, parent_id, root_id, box AS "box_", hpath, content, markdown,
+        r#"SELECT id, parent_id, root_id, box AS "box_", hpath, markdown,
                   type, subtype, ial, sort, created, updated, hash
            FROM blocks
            WHERE root_id = '{}'

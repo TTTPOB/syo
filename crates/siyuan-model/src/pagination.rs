@@ -15,6 +15,7 @@ impl Default for PageRequest {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PageOutcome<T> {
     pub items: Vec<T>,
     pub page: usize,

@@ -906,7 +906,9 @@ git commit -m "feat(testkit): SiyuanContainer lifecycle with Drop cleanup"
 **Files:**
 - Create: `crates/siyuan-testkit/tests/smoke.rs`
 
-**Background:** 这是第一个真正启动思源容器的测试。它验证：image 拉得到、容器启动、conf.json 注入的 token 生效、`/api/system/version` 返回 code=0。如果失败，最大可能性是 `conf/conf.json` 字段不被识别（known unknown），需要 spike 调整 Task 4 的 conf 结构。
+**Background:** This is the first test that really starts a SiYuan container. It verifies (a) the image is reachable, (b) the container starts, (c) the conf.json-injected API token actually authorises requests. Both tests hit `/api/notebook/lsNotebooks` because `/api/system/version` (the natural-looking choice for a "version" probe) is publicly accessible — any token, including no token, returns code=0 — so it cannot prove auth works. lsNotebooks rejects the wrong token with `code=-1`.
+
+**Spike result (2026-05-01):** The conf.json schema `{"api": {"token": "..."}}` IS the correct shape — verified empirically against SiYuan v3.6.5. No Task 4 adjustment needed.
 
 由于启动一次 SiYuan 大约需要 10–30s，这个测试默认不在 `cargo test` 跑，靠 `--ignored` 或自定义 feature 触发，避免 `cargo check` 工作流变慢。
 
@@ -918,6 +920,10 @@ git commit -m "feat(testkit): SiyuanContainer lifecycle with Drop cleanup"
 //! Smoke test: actually boot SiYuan inside Podman.
 //!
 //! Run with: `cargo test -p siyuan-testkit --test smoke -- --ignored --nocapture`
+//!
+//! Both tests hit /api/notebook/lsNotebooks because it actually enforces the
+//! token. /api/system/version, the natural-looking choice, is unauthenticated
+//! and would let any token pass.
 
 use std::time::Duration;
 
@@ -937,20 +943,20 @@ async fn boots_siyuan_and_authenticates() {
 
     let client = Client::new();
     let resp = client
-        .post(format!("{}/api/system/version", sy.base_url()))
+        .post(format!("{}/api/notebook/lsNotebooks", sy.base_url()))
         .header("Authorization", format!("Token {}", sy.token()))
         .header("Content-Type", "application/json")
         .body("{}")
         .send()
         .await
         .expect("HTTP request");
-    assert!(resp.status().is_success(), "version endpoint should be 200");
+    assert!(resp.status().is_success(), "lsNotebooks endpoint should be 200");
 
     let body: serde_json::Value = resp.json().await.expect("json");
     assert_eq!(body["code"].as_i64(), Some(0), "api code should be 0; body={body}");
     assert!(
-        body["data"].as_str().is_some(),
-        "version response should carry data; body={body}"
+        body["data"]["notebooks"].is_array(),
+        "lsNotebooks response should carry data.notebooks; body={body}"
     );
 }
 
@@ -962,7 +968,7 @@ async fn rejects_wrong_token() {
     let sy = SiyuanContainer::start().await.expect("siyuan should start");
     let client = Client::new();
     let resp = client
-        .post(format!("{}/api/system/version", sy.base_url()))
+        .post(format!("{}/api/notebook/lsNotebooks", sy.base_url()))
         .header("Authorization", "Token deliberately-wrong")
         .header("Content-Type", "application/json")
         .body("{}")
@@ -970,13 +976,10 @@ async fn rejects_wrong_token() {
         .await
         .expect("HTTP request");
 
-    let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
     assert!(
-        status == reqwest::StatusCode::UNAUTHORIZED
-            || body.contains("\"code\":-1")
-            || body.contains("\"code\":21"),
-        "wrong token should be rejected; got status={status}, body={body}"
+        body.contains("\"code\":-1"),
+        "wrong token should be rejected with code:-1; body={body}"
     );
 }
 ```
@@ -991,12 +994,9 @@ Expected: 拉取成功。如果失败（如墙），改用国内镜像源或在 
 
 Run: `cargo test -p siyuan-testkit --test smoke -- --ignored --nocapture`
 
-Expected: 2 passed in ~30–60s. 如果 `boots_siyuan_and_authenticates` 失败：
-- 看 `tracing` 输出里 `siyuan failed to become ready; dumping logs` 段，判断是否是 token 没被识别
-- 如果 token 没识别，调整 Task 4 的 `write_conf_json`，conf 结构可能要嵌套到 `system` / `editor` 等字段下，或者实际字段名不同（如 `apiToken`）
-- 把 spike 结论补回 Task 4 的实现
+Expected: 2 passed in ~30–60s. If `boots_siyuan_and_authenticates` fails, look at the `siyuan failed to become ready; dumping logs` block in stderr — most likely the kernel cannot reach SQLite/start, image is broken, or the host clock is wildly off.
 
-如果 `rejects_wrong_token` 失败但 `boots_siyuan_and_authenticates` 通过：说明思源对 wrong token 的响应码不是上面三种之一，调整断言。
+If `rejects_wrong_token` fails but `boots_siyuan_and_authenticates` passes: SiYuan may have changed its rejection format across versions; adjust the `body.contains("\"code\":-1")` assertion to match the actual response.
 
 - [ ] **Step 4: 提交**
 

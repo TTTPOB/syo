@@ -1,0 +1,65 @@
+//! Smoke test: actually boot SiYuan inside Podman.
+//!
+//! Run with: `cargo test -p siyuan-testkit --test smoke -- --ignored --nocapture`
+//!
+//! Both tests hit /api/notebook/lsNotebooks because it actually enforces the
+//! token. /api/system/version, the natural-looking choice, is unauthenticated
+//! and would let any token pass.
+
+use std::time::Duration;
+
+use reqwest::Client;
+use siyuan_testkit::{SiyuanContainer, init_tracing};
+
+#[tokio::test]
+#[ignore = "starts a real podman container; opt-in"]
+async fn boots_siyuan_and_authenticates() {
+    init_tracing();
+
+    let sy = SiyuanContainer::builder()
+        .ready_timeout(Duration::from_secs(120))
+        .start()
+        .await
+        .expect("siyuan should start");
+
+    let client = Client::new();
+    let resp = client
+        .post(format!("{}/api/notebook/lsNotebooks", sy.base_url()))
+        .header("Authorization", format!("Token {}", sy.token()))
+        .header("Content-Type", "application/json")
+        .body("{}")
+        .send()
+        .await
+        .expect("HTTP request");
+    assert!(resp.status().is_success(), "lsNotebooks endpoint should be 200");
+
+    let body: serde_json::Value = resp.json().await.expect("json");
+    assert_eq!(body["code"].as_i64(), Some(0), "api code should be 0; body={body}");
+    assert!(
+        body["data"]["notebooks"].is_array(),
+        "lsNotebooks response should carry data.notebooks; body={body}"
+    );
+}
+
+#[tokio::test]
+#[ignore = "starts a real podman container; opt-in"]
+async fn rejects_wrong_token() {
+    init_tracing();
+
+    let sy = SiyuanContainer::start().await.expect("siyuan should start");
+    let client = Client::new();
+    let resp = client
+        .post(format!("{}/api/notebook/lsNotebooks", sy.base_url()))
+        .header("Authorization", "Token deliberately-wrong")
+        .header("Content-Type", "application/json")
+        .body("{}")
+        .send()
+        .await
+        .expect("HTTP request");
+
+    let body = resp.text().await.unwrap_or_default();
+    assert!(
+        body.contains("\"code\":-1"),
+        "wrong token should be rejected with code:-1; body={body}"
+    );
+}

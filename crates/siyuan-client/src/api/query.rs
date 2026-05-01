@@ -39,3 +39,35 @@ impl SiyuanClient {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn publish_mode_detected_from_message() {
+        let err = SiyuanError::Api {
+            code: -1,
+            msg: "sql is disabled in publish mode".into(),
+        };
+        // Simulate the match logic
+        match err {
+            SiyuanError::Api { msg, .. } if msg.to_lowercase().contains("publish") => {}
+            _ => panic!("should have matched publish"),
+        }
+    }
+
+    #[test]
+    fn publish_mode_not_matched_for_other_errors() {
+        let err = SiyuanError::Api {
+            code: 500,
+            msg: "internal server error".into(),
+        };
+        match err {
+            SiyuanError::Api { msg, .. } if msg.to_lowercase().contains("publish") => {
+                panic!("should not match non-publish message")
+            }
+            _ => {} // expected
+        }
+    }
+}

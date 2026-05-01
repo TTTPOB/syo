@@ -57,7 +57,11 @@ impl SiyuanClient {
         let raw: String = self
             .post(
                 "/api/filetree/createDocWithMd",
-                &CreateDocReq { notebook, path: hpath, markdown },
+                &CreateDocReq {
+                    notebook,
+                    path: hpath,
+                    markdown,
+                },
             )
             .await?;
         BlockId::parse(raw).map_err(|e| SiyuanError::Parse(e.to_string()))
@@ -72,7 +76,11 @@ impl SiyuanClient {
         let _: serde_json::Value = self
             .post_envelope(
                 "/api/filetree/renameDoc",
-                &RenameDocReq { notebook, path, title: new_title },
+                &RenameDocReq {
+                    notebook,
+                    path,
+                    title: new_title,
+                },
             )
             .await?
             .into_result_or_unit()?
@@ -89,7 +97,11 @@ impl SiyuanClient {
         let _: serde_json::Value = self
             .post_envelope(
                 "/api/filetree/moveDocs",
-                &MoveDocsReq { from_paths, to_notebook, to_path },
+                &MoveDocsReq {
+                    from_paths,
+                    to_notebook,
+                    to_path,
+                },
             )
             .await?
             .into_result_or_unit()?
@@ -113,7 +125,13 @@ impl SiyuanClient {
         hpath: &str,
     ) -> Result<Vec<BlockId>, SiyuanError> {
         let raw: Vec<String> = self
-            .post("/api/filetree/getIDsByHPath", &GetIdsReq { notebook, path: hpath })
+            .post(
+                "/api/filetree/getIDsByHPath",
+                &GetIdsReq {
+                    notebook,
+                    path: hpath,
+                },
+            )
             .await?;
         raw.into_iter()
             .map(|s| BlockId::parse(s).map_err(|e| SiyuanError::Parse(e.to_string())))
@@ -122,6 +140,7 @@ impl SiyuanClient {
 
     /// `/api/filetree/getHPathByID` — opposite of above.
     pub async fn get_hpath_by_id(&self, id: &BlockId) -> Result<String, SiyuanError> {
-        self.post("/api/filetree/getHPathByID", &GetHPathReq { id }).await
+        self.post("/api/filetree/getHPathByID", &GetHPathReq { id })
+            .await
     }
 }

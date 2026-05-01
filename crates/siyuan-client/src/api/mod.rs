@@ -1,6 +1,6 @@
 // API submodules — populated in Phase B.
-pub mod attr;
 pub mod asset;
+pub mod attr;
 pub mod block;
 pub mod export;
 pub mod filetree;

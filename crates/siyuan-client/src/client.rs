@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use reqwest::Url;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use tracing::{debug, trace};
 
 use siyuan_types::SiyuanError;
@@ -33,6 +33,10 @@ impl SiyuanClient {
 
     pub fn base_url(&self) -> &Url {
         &self.base_url
+    }
+
+    pub(crate) fn token(&self) -> &str {
+        &self.token
     }
 
     /// POST `<base>/<path>` with `body` as JSON, decode `data` into `R`.
@@ -68,7 +72,10 @@ impl SiyuanClient {
             .map_err(|e| SiyuanError::Http(e.to_string()))?;
 
         let status = resp.status();
-        let body_text = resp.text().await.map_err(|e| SiyuanError::Http(e.to_string()))?;
+        let body_text = resp
+            .text()
+            .await
+            .map_err(|e| SiyuanError::Http(e.to_string()))?;
         trace!(%status, body = %body_text, "siyuan response");
 
         if status == reqwest::StatusCode::UNAUTHORIZED {

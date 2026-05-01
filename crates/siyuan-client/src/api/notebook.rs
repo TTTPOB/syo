@@ -46,7 +46,9 @@ pub struct CreatedNotebook {
 
 impl SiyuanClient {
     pub async fn ls_notebooks(&self) -> Result<Vec<Notebook>, SiyuanError> {
-        let data: LsNotebooksData = self.post("/api/notebook/lsNotebooks", &serde_json::json!({})).await?;
+        let data: LsNotebooksData = self
+            .post("/api/notebook/lsNotebooks", &serde_json::json!({}))
+            .await?;
         Ok(data.notebooks)
     }
 
@@ -69,13 +71,25 @@ impl SiyuanClient {
     }
 
     pub async fn create_notebook(&self, name: &str) -> Result<Notebook, SiyuanError> {
-        let data: CreatedNotebook = self.post("/api/notebook/createNotebook", &CreateNotebook { name }).await?;
+        let data: CreatedNotebook = self
+            .post("/api/notebook/createNotebook", &CreateNotebook { name })
+            .await?;
         Ok(data.notebook)
     }
 
-    pub async fn rename_notebook(&self, id: &NotebookId, new_name: &str) -> Result<(), SiyuanError> {
+    pub async fn rename_notebook(
+        &self,
+        id: &NotebookId,
+        new_name: &str,
+    ) -> Result<(), SiyuanError> {
         let _: serde_json::Value = self
-            .post_envelope("/api/notebook/renameNotebook", &RenameNotebook { notebook: id, name: new_name })
+            .post_envelope(
+                "/api/notebook/renameNotebook",
+                &RenameNotebook {
+                    notebook: id,
+                    name: new_name,
+                },
+            )
             .await?
             .into_result_or_unit()?
             .unwrap_or(serde_json::Value::Null);
@@ -84,7 +98,10 @@ impl SiyuanClient {
 
     pub async fn remove_notebook(&self, id: &NotebookId) -> Result<(), SiyuanError> {
         let _: serde_json::Value = self
-            .post_envelope("/api/notebook/removeNotebook", &OneNotebook { notebook: id })
+            .post_envelope(
+                "/api/notebook/removeNotebook",
+                &OneNotebook { notebook: id },
+            )
             .await?
             .into_result_or_unit()?
             .unwrap_or(serde_json::Value::Null);

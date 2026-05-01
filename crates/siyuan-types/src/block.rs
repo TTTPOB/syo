@@ -136,10 +136,12 @@ pub struct BlockNode {
     pub sort: Option<i64>,
 
     /// Children whose `parent_id == self.id` (data-structure children).
+    /// Invariant: ordered by `(sort, id)` when populated by `siyuan-model`.
     #[serde(default)]
     pub structural_children: Vec<BlockId>,
 
     /// Heading section content. Empty unless `block_type == Heading`.
+    /// Invariant: ordered by `(sort, id)` when populated by `siyuan-model`.
     #[serde(default)]
     pub section_children: Vec<BlockId>,
 }

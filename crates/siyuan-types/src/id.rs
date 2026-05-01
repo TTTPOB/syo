@@ -53,6 +53,8 @@ impl FromStr for BlockId {
 pub struct NotebookId(String);
 
 impl NotebookId {
+    /// Shares `BLOCK_ID_RE` because notebook ids currently have the same
+    /// lexical shape as block ids. Tighten if/when the kernel diverges.
     pub fn parse(s: impl Into<String>) -> Result<Self, IdError> {
         let s = s.into();
         if BLOCK_ID_RE.is_match(&s) {

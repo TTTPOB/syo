@@ -369,6 +369,8 @@ impl FromStr for BlockId {
 pub struct NotebookId(String);
 
 impl NotebookId {
+    /// Shares `BLOCK_ID_RE` because notebook ids currently have the same
+    /// lexical shape as block ids. Tighten if/when the kernel diverges.
     pub fn parse(s: impl Into<String>) -> Result<Self, IdError> {
         let s = s.into();
         if BLOCK_ID_RE.is_match(&s) {
@@ -613,10 +615,12 @@ pub struct BlockNode {
     pub sort: Option<i64>,
 
     /// Children whose `parent_id == self.id` (data-structure children).
+    /// Invariant: ordered by `(sort, id)` when populated by `siyuan-model`.
     #[serde(default)]
     pub structural_children: Vec<BlockId>,
 
     /// Heading section content. Empty unless `block_type == Heading`.
+    /// Invariant: ordered by `(sort, id)` when populated by `siyuan-model`.
     #[serde(default)]
     pub section_children: Vec<BlockId>,
 }

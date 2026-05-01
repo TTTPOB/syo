@@ -9,6 +9,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/tpob/siyuan-cli"
 
 [workspace.dependencies]
+# rmcp: Rust SDK for MCP; "server" enables ServerHandler, "transport-io" enables the stdio() transport
+rmcp = { version = "1", features = ["server", "transport-io"] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 serde = { version = "1", features = ["derive"] }

@@ -46,35 +46,37 @@ where
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// `podman stop --time=<timeout> <id>`. Best-effort; does not error if container
-/// is already gone.
+/// `podman stop --ignore --time=<timeout> <id>`. Best-effort; `--ignore` makes
+/// podman exit 0 if the container is already gone, so we don't have to parse
+/// stderr.
 pub fn stop(container_id: &str, timeout_secs: u32) -> Result<()> {
     let out = Command::new("podman")
-        .args(["stop", "--time", &timeout_secs.to_string(), container_id])
+        .args(["stop", "--ignore", "--time", &timeout_secs.to_string(), container_id])
         .output()
         .context("spawning `podman stop`")?;
     if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        if err.contains("no such container") {
-            return Ok(());
-        }
-        bail!("`podman stop` exited {}: {err}", out.status);
+        bail!(
+            "`podman stop` exited {}: {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
     Ok(())
 }
 
-/// `podman rm -f <id>`. Best-effort.
+/// `podman rm --ignore -f <id>`. Best-effort; `--ignore` makes podman exit 0
+/// if the container is already gone.
 pub fn force_remove(container_id: &str) -> Result<()> {
     let out = Command::new("podman")
-        .args(["rm", "-f", container_id])
+        .args(["rm", "--ignore", "-f", container_id])
         .output()
         .context("spawning `podman rm -f`")?;
     if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        if err.contains("no such container") {
-            return Ok(());
-        }
-        bail!("`podman rm -f` exited {}: {err}", out.status);
+        bail!(
+            "`podman rm -f` exited {}: {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
     Ok(())
 }

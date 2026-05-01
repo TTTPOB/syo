@@ -26,6 +26,9 @@ enum Cmd {
     Status,
     GetDoc(commands::get_doc::GetDocArgs),
     GetBlock(commands::get_block::GetBlockArgs),
+    CreateDoc(commands::create_doc::CreateDocArgs),
+    UpdateBlock(commands::update_block::UpdateBlockArgs),
+    InsertBlocks(commands::insert_blocks::InsertBlocksArgs),
 }
 
 #[tokio::main]
@@ -44,6 +47,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Cmd::GetDoc(a) => commands::get_doc::run(&client, a).await?,
         Cmd::GetBlock(a) => commands::get_block::run(&client, a).await?,
+        Cmd::CreateDoc(a) => commands::create_doc::run(&client, a).await?,
+        Cmd::UpdateBlock(a) => commands::update_block::run(&client, a).await?,
+        Cmd::InsertBlocks(a) => commands::insert_blocks::run(&client, a).await?,
     }
     Ok(())
 }

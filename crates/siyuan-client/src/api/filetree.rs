@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use siyuan_types::{BlockId, NotebookId, SiyuanError};
 
@@ -9,11 +9,6 @@ struct CreateDocReq<'a> {
     notebook: &'a NotebookId,
     path: &'a str,
     markdown: &'a str,
-}
-
-#[derive(Debug, Serialize)]
-struct DocId<'a> {
-    id: &'a BlockId,
 }
 
 #[derive(Debug, Serialize)]

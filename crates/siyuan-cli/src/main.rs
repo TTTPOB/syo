@@ -40,6 +40,22 @@ enum Cmd {
         #[command(subcommand)]
         cmd: commands::doc::DocCmd,
     },
+    Tag {
+        #[command(subcommand)]
+        cmd: commands::tag::TagCmd,
+    },
+    Asset {
+        #[command(subcommand)]
+        cmd: commands::asset::AssetCmd,
+    },
+    Graph {
+        #[command(subcommand)]
+        cmd: commands::graph::GraphCmd,
+    },
+    Search {
+        #[command(subcommand)]
+        cmd: commands::search::SearchCmd,
+    },
 }
 
 #[tokio::main]
@@ -66,6 +82,10 @@ async fn main() -> anyhow::Result<()> {
         Cmd::SetAttrs(a) => commands::set_attrs::run(&client, a).await?,
         Cmd::Notebook { cmd } => commands::notebook::run(&client, cmd).await?,
         Cmd::Doc { cmd } => commands::doc::run(&client, cmd).await?,
+        Cmd::Tag { cmd } => commands::tag::run(&client, cmd).await?,
+        Cmd::Asset { cmd } => commands::asset::run(&client, cmd).await?,
+        Cmd::Graph { cmd } => commands::graph::run(&client, cmd).await?,
+        Cmd::Search { cmd } => commands::search::run(&client, cmd).await?,
     }
     Ok(())
 }

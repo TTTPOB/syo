@@ -1,1 +1,197 @@
-// stub, populated in Phase C
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+
+use siyuan_client::SiyuanClient;
+use siyuan_types::BlockId;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Incoming,
+    Outgoing,
+    Both,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphNode {
+    pub id: BlockId,
+    pub root_id: BlockId,
+    pub block_type: String,
+    pub markdown_preview: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphEdge {
+    pub source: BlockId,
+    pub target: BlockId,
+    pub anchor: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Graph {
+    pub schema: String, // "siyuan-agent.graph.v1"
+    pub center: BlockId,
+    pub depth: usize,
+    pub direction: String,
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct EdgeRow {
+    block_id: String,
+    def_block_id: String,
+    #[serde(default)]
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct NodeRow {
+    id: String,
+    root_id: String,
+    #[serde(rename = "type")]
+    block_type: String,
+    #[serde(default)]
+    markdown: String,
+}
+
+const NODE_LIMIT: usize = 500;
+const EDGE_LIMIT: usize = 1000;
+
+pub async fn neighborhood(
+    client: &SiyuanClient,
+    center: &BlockId,
+    depth: usize,
+    direction: Direction,
+) -> Result<Graph> {
+    let mut visited: BTreeSet<BlockId> = BTreeSet::new();
+    visited.insert(center.clone());
+    let mut frontier: VecDeque<BlockId> = VecDeque::new();
+    frontier.push_back(center.clone());
+
+    let mut edges: Vec<GraphEdge> = Vec::new();
+    let mut truncated = false;
+
+    for _ in 0..depth {
+        let current: Vec<BlockId> = std::mem::take(&mut frontier).into_iter().collect();
+        if current.is_empty() {
+            break;
+        }
+        let id_list = current
+            .iter()
+            .map(|i| format!("'{}'", i.as_str()))
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut next_ids: BTreeSet<BlockId> = BTreeSet::new();
+
+        if matches!(direction, Direction::Outgoing | Direction::Both) {
+            let rows: Vec<EdgeRow> = client
+                .sql_typed(&format!(
+                    "SELECT block_id, def_block_id, content FROM refs WHERE block_id IN ({id_list})"
+                ))
+                .await
+                .context("graph outgoing")?;
+            for r in rows {
+                if edges.len() >= EDGE_LIMIT {
+                    truncated = true;
+                    break;
+                }
+                let (src, tgt) =
+                    match (BlockId::parse(&r.block_id), BlockId::parse(&r.def_block_id)) {
+                        (Ok(s), Ok(t)) => (s, t),
+                        _ => continue,
+                    };
+                edges.push(GraphEdge {
+                    source: src,
+                    target: tgt.clone(),
+                    anchor: r.content,
+                });
+                if !visited.contains(&tgt) {
+                    next_ids.insert(tgt);
+                }
+            }
+        }
+        if matches!(direction, Direction::Incoming | Direction::Both) {
+            let rows: Vec<EdgeRow> = client
+                .sql_typed(&format!(
+                    "SELECT block_id, def_block_id, content FROM refs WHERE def_block_id IN ({id_list})"
+                ))
+                .await
+                .context("graph incoming")?;
+            for r in rows {
+                if edges.len() >= EDGE_LIMIT {
+                    truncated = true;
+                    break;
+                }
+                let (src, tgt) =
+                    match (BlockId::parse(&r.block_id), BlockId::parse(&r.def_block_id)) {
+                        (Ok(s), Ok(t)) => (s, t),
+                        _ => continue,
+                    };
+                edges.push(GraphEdge {
+                    source: src.clone(),
+                    target: tgt,
+                    anchor: r.content,
+                });
+                if !visited.contains(&src) {
+                    next_ids.insert(src);
+                }
+            }
+        }
+
+        for id in next_ids {
+            if visited.len() >= NODE_LIMIT {
+                truncated = true;
+                break;
+            }
+            visited.insert(id.clone());
+            frontier.push_back(id);
+        }
+    }
+
+    // Fetch node metadata for everyone in `visited`.
+    let id_list = visited
+        .iter()
+        .map(|i| format!("'{}'", i.as_str()))
+        .collect::<Vec<_>>()
+        .join(",");
+    let stmt = format!("SELECT id, root_id, type, markdown FROM blocks WHERE id IN ({id_list})");
+    let rows: Vec<NodeRow> = client.sql_typed(&stmt).await.context("graph nodes")?;
+    let mut node_map: BTreeMap<BlockId, GraphNode> = BTreeMap::new();
+    for r in rows {
+        if let (Ok(id), Ok(root)) = (BlockId::parse(&r.id), BlockId::parse(&r.root_id)) {
+            let preview = if r.markdown.len() <= 100 {
+                r.markdown
+            } else {
+                format!("{}…", &r.markdown[..100])
+            };
+            node_map.insert(
+                id.clone(),
+                GraphNode {
+                    id,
+                    root_id: root,
+                    block_type: r.block_type,
+                    markdown_preview: preview,
+                },
+            );
+        }
+    }
+
+    let direction_s = match direction {
+        Direction::Incoming => "incoming",
+        Direction::Outgoing => "outgoing",
+        Direction::Both => "both",
+    };
+
+    Ok(Graph {
+        schema: "siyuan-agent.graph.v1".to_string(),
+        center: center.clone(),
+        depth,
+        direction: direction_s.to_string(),
+        nodes: node_map.into_values().collect(),
+        edges,
+        truncated,
+    })
+}

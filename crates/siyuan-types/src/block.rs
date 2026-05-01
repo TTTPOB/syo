@@ -173,9 +173,42 @@ mod tests {
     }
 
     #[test]
-    fn role_classification() {
-        assert_eq!(BlockRole::for_block_type(BlockType::Heading), BlockRole::HeadingSectionOwner);
-        assert_eq!(BlockRole::for_block_type(BlockType::SuperBlock), BlockRole::Container);
-        assert_eq!(BlockRole::for_block_type(BlockType::Paragraph), BlockRole::Leaf);
+    fn unknown_round_trips_via_fallback() {
+        // `Unknown.as_kernel()` returns "unknown"; `from_kernel("unknown")`
+        // also lands on Unknown via the wildcard arm. The serialised form
+        // is therefore stable even for unrecognised kernel types.
+        assert_eq!(BlockType::Unknown.as_kernel(), "unknown");
+        assert_eq!(BlockType::from_kernel("unknown"), BlockType::Unknown);
+        assert_eq!(BlockType::from_kernel(""), BlockType::Unknown);
+    }
+
+    #[test]
+    fn role_classification_covers_all_variants() {
+        use BlockRole::*;
+        use BlockType::*;
+        let cases: &[(BlockType, BlockRole)] = &[
+            (Document, Container),
+            (SuperBlock, Container),
+            (List, Container),
+            (ListItem, Container),
+            (Blockquote, Container),
+            (Heading, HeadingSectionOwner),
+            (Paragraph, Leaf),
+            (Code, Leaf),
+            (Math, Leaf),
+            (Table, Leaf),
+            (ThematicBreak, Leaf),
+            (QueryEmbed, Leaf),
+            (AttributeView, Leaf),
+            (Html, Leaf),
+            (IFrame, Leaf),
+            (Widget, Leaf),
+            (Audio, Leaf),
+            (Video, Leaf),
+            (Unknown, Leaf),
+        ];
+        for (bt, expected) in cases {
+            assert_eq!(BlockRole::for_block_type(*bt), *expected, "{bt:?}");
+        }
     }
 }

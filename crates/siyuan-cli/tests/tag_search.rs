@@ -78,7 +78,7 @@ async fn search_by_tag_returns_tagged_blocks() {
     let client = &f.client;
     let hits = wait_for(
         || async {
-            let h = search_by_tag(client, "alpha").await?;
+            let h = search_by_tag(client, "alpha", 50).await?;
             if !h.is_empty() { Ok(Some(h)) } else { Ok(None) }
         },
         Duration::from_secs(10),
@@ -103,13 +103,54 @@ async fn search_by_tag_returns_tagged_blocks() {
 async fn search_by_tag_handles_unknown_tag() {
     let f = boot_with_seed().await.expect("boot");
 
-    let hits = search_by_tag(&f.client, "nonexistent")
+    let hits = search_by_tag(&f.client, "nonexistent", 50)
         .await
         .expect("search_by_tag should not error for missing tag");
 
     assert!(
         hits.is_empty(),
         "no blocks should match an unknown tag; got {hits:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 3b: search_by_tag honours the caller-supplied LIMIT
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore]
+async fn search_by_tag_respects_limit() {
+    let f = boot_with_seed().await.expect("boot");
+
+    // Append three paragraphs that all carry the same `#cap` tag.
+    for body in ["#cap# row one", "#cap# row two", "#cap# row three"] {
+        f.client
+            .append_block_markdown(body, &f.doc_id)
+            .await
+            .expect("append cap block");
+    }
+
+    // Wait for all three blocks to be indexed by querying with a generous
+    // limit; only after we see >=3 hits do we know the index has caught up
+    // and the limit-respect assertion becomes meaningful.
+    let client = &f.client;
+    let _ = wait_for(
+        || async {
+            let h = search_by_tag(client, "cap", 50).await?;
+            if h.len() >= 3 { Ok(Some(h)) } else { Ok(None) }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for three cap blocks to index");
+
+    let limited = search_by_tag(&f.client, "cap", 2)
+        .await
+        .expect("search_by_tag with limit=2 should succeed");
+    assert!(
+        limited.len() <= 2,
+        "limit=2 must cap result count; got {} hits",
+        limited.len()
     );
 }
 

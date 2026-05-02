@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-use siyuan_client::SiyuanClient;
+use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient};
 use siyuan_model::tag::{list_tags, search_by_tag};
 
 #[derive(Subcommand, Debug)]
@@ -33,13 +33,15 @@ pub enum TagCmd {
     ///   --tag (required): tag content WITHOUT the surrounding `#`
     ///     characters (pass `project` to find blocks tagged `#project`).
     ///     Match is exact on the tag value.
+    ///   --limit (optional, default 50): maximum hits, capped by
+    ///     `MAX_SEARCH_LIMIT`.
     ///
     /// Output is one block per line: `<block-id>\t<markdown-preview>`.
     /// Results are eventually consistent with the SQL index — freshly
     /// tagged blocks may take ~100-500 ms to appear.
     ///
     /// Example:
-    ///   in:  --tag project
+    ///   in:  --tag project --limit 10
     ///   out: 20260501090000-blk0001    Plan kickoff #project
     #[command(verbatim_doc_comment)]
     Search(SearchArgs),
@@ -50,6 +52,10 @@ pub struct SearchArgs {
     /// Tag content WITHOUT the leading `#` (e.g. `project`, not `#project`).
     #[arg(long)]
     pub tag: String,
+
+    /// Maximum hits returned. Default 50, capped by `MAX_SEARCH_LIMIT`.
+    #[arg(long, default_value_t = 50)]
+    pub limit: usize,
 }
 
 pub async fn run(client: &SiyuanClient, cmd: TagCmd) -> Result<()> {
@@ -60,7 +66,12 @@ pub async fn run(client: &SiyuanClient, cmd: TagCmd) -> Result<()> {
             }
         }
         TagCmd::Search(a) => {
-            for hit in search_by_tag(client, &a.tag).await? {
+            // Mirror `search blocks`/`search text`: usize-typed CLI flag
+            // capped at MAX_SEARCH_LIMIT so a pathological caller cannot
+            // ask the kernel for an unbounded result set.
+            let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
+            let limit = a.limit.min(limit_cap).max(1);
+            for hit in search_by_tag(client, &a.tag, limit).await? {
                 println!("{}\t{}", hit.block_id, hit.markdown_preview);
             }
         }

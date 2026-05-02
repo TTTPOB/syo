@@ -1,9 +1,9 @@
 use rmcp::ErrorData as McpError;
 use serde_json::{Value, json};
 
-use siyuan_client::SiyuanClient;
+use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient};
 
-use super::util::{anyhow_to_mcp, ensure_object, required_string, with_hint};
+use super::util::{anyhow_to_mcp, ensure_object, optional_u64, required_string, with_hint};
 
 pub async fn ls_tags(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let _ = ensure_object(args)?;
@@ -21,8 +21,16 @@ pub async fn ls_tags(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
 pub async fn search_by_tag(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let tag = required_string(&map, "tag")?;
+    // Cap user-supplied limit to MAX_SEARCH_LIMIT (mirrors siyuan_search_text)
+    // so a pathological caller cannot ask the kernel for an unbounded result
+    // set. Floor of 1 keeps the model-layer assertion satisfied even if the
+    // caller passes 0.
+    let limit = optional_u64(&map, "limit")
+        .unwrap_or(50)
+        .min(MAX_SEARCH_LIMIT)
+        .max(1) as usize;
 
-    let hits = siyuan_model::tag::search_by_tag(client, &tag)
+    let hits = siyuan_model::tag::search_by_tag(client, &tag, limit)
         .await
         .map_err(anyhow_to_mcp)?;
     let hits_json =
@@ -30,6 +38,7 @@ pub async fn search_by_tag(client: &SiyuanClient, args: Value) -> Result<Value, 
     Ok(with_hint(
         json!({ "hits": hits_json }),
         "Results are eventually consistent with the SQL index. Blocks tagged very recently may \
-         not appear yet. Use siyuan_get_doc or siyuan_sql to verify freshly-tagged blocks.",
+         not appear yet. The `limit` argument is capped server-side at 1000. Use siyuan_get_doc \
+         or siyuan_sql to verify freshly-tagged blocks.",
     ))
 }

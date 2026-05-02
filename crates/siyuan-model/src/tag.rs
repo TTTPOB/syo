@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use siyuan_client::SiyuanClient;
@@ -19,7 +19,6 @@ struct Row {
     markdown: String,
 }
 
-const TAG_SEARCH_LIMIT: usize = 200;
 const TAG_PREVIEW_LEN: usize = 160;
 
 /// List every distinct tag string in the workspace (sorted).
@@ -35,17 +34,20 @@ pub async fn list_tags(client: &SiyuanClient) -> Result<Vec<String>> {
     Ok(rows.into_iter().map(|r| r.content).collect())
 }
 
-/// Find every block that has the given tag.
-pub async fn search_by_tag(client: &SiyuanClient, tag: &str) -> Result<Vec<TagBlockHit>> {
+/// Find every block that has the given tag, returning at most `limit` hits.
+///
+/// `limit` must be non-zero; callers are responsible for capping it (the CLI
+/// and MCP layers cap at `MAX_SEARCH_LIMIT`).
+pub async fn search_by_tag(
+    client: &SiyuanClient,
+    tag: &str,
+    limit: usize,
+) -> Result<Vec<TagBlockHit>> {
+    if limit == 0 {
+        bail!("`limit` must be greater than 0");
+    }
     let escaped = tag.replace('\'', "''");
-    let stmt = format!(
-        "SELECT b.id AS block_id, b.root_id, b.markdown
-         FROM blocks b
-         JOIN spans s ON s.block_id = b.id
-         WHERE s.type LIKE '%tag%' AND s.content = '{escaped}'
-         ORDER BY b.updated DESC
-         LIMIT {TAG_SEARCH_LIMIT}"
-    );
+    let stmt = build_search_by_tag_sql(&escaped, limit);
     let rows: Vec<Row> = client.sql_typed(&stmt).await.context("search by tag")?;
     rows.into_iter()
         .map(|r| {
@@ -56,6 +58,19 @@ pub async fn search_by_tag(client: &SiyuanClient, tag: &str) -> Result<Vec<TagBl
             })
         })
         .collect()
+}
+
+// Build the SQL for `search_by_tag`. Extracted so the LIMIT clause can be
+// asserted in unit tests without needing a live kernel.
+fn build_search_by_tag_sql(escaped_tag: &str, limit: usize) -> String {
+    format!(
+        "SELECT b.id AS block_id, b.root_id, b.markdown
+         FROM blocks b
+         JOIN spans s ON s.block_id = b.id
+         WHERE s.type LIKE '%tag%' AND s.content = '{escaped_tag}'
+         ORDER BY b.updated DESC
+         LIMIT {limit}"
+    )
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -78,10 +93,49 @@ mod tests {
 
     #[test]
     fn truncate_long_ascii() {
-        let s = "a".repeat(TAG_SEARCH_LIMIT);
+        let s = "a".repeat(TAG_PREVIEW_LEN * 2);
         let out = truncate(&s, TAG_PREVIEW_LEN);
         assert!(out.ends_with('…'));
         assert!(out.chars().count() <= TAG_PREVIEW_LEN + 1); // preview chars + '…'
+    }
+
+    // The build_search_by_tag_sql helper is the single point at which the
+    // caller-supplied limit is interpolated into the SQL. Pinning the LIMIT
+    // suffix here means a regression that drops or hard-codes the clause
+    // fails loudly without needing a live kernel.
+    #[test]
+    fn build_search_by_tag_sql_includes_limit_clause() {
+        let stmt = build_search_by_tag_sql("alpha", 7);
+        assert!(
+            stmt.trim_end().ends_with("LIMIT 7"),
+            "SQL must end with `LIMIT 7`; got: {stmt}"
+        );
+        assert!(stmt.contains("s.content = 'alpha'"));
+    }
+
+    #[test]
+    fn build_search_by_tag_sql_propagates_arbitrary_limit() {
+        let stmt = build_search_by_tag_sql("beta", 1);
+        assert!(stmt.trim_end().ends_with("LIMIT 1"));
+        let stmt = build_search_by_tag_sql("beta", 1000);
+        assert!(stmt.trim_end().ends_with("LIMIT 1000"));
+    }
+
+    #[tokio::test]
+    async fn search_by_tag_rejects_zero_limit() {
+        // The dummy client points at an unreachable port: if the early-return
+        // guard regresses, this test would fail with a network error instead
+        // of the "must be greater than 0" string. Pinning the message keeps
+        // the validation contract obvious.
+        let client = SiyuanClient::new("http://127.0.0.1:1", "tok").expect("dummy client builds");
+        let err = search_by_tag(&client, "anything", 0)
+            .await
+            .expect_err("limit=0 must be rejected");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("greater than 0"),
+            "error must reference the limit floor; got: {msg}"
+        );
     }
 
     #[test]

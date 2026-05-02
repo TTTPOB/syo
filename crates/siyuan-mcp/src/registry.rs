@@ -747,7 +747,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Inputs: `tag` (required) is the tag content WITHOUT the surrounding `#` \
              characters — pass `project` to find blocks tagged `#project`. Match is exact \
-             on the tag value.\n\
+             on the tag value. `limit` (optional, default 50) caps the result count and \
+             is capped server-side at 1000.\n\
              \n\
              Results are eventually consistent with the SQL index — freshly-tagged blocks \
              may take ~100-500 ms to appear (the kernel is immediately consistent; only \
@@ -755,9 +756,9 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              of block records.\n\
              \n\
              Example:\n\
-               in:  { \"tag\": \"project\" }\n\
+               in:  { \"tag\": \"project\", \"limit\": 10 }\n\
                out: { \"data\": { \"hits\": [ { \"id\": \"20260501090000-blk0001\", \"root_id\": \"20260501090000-doc0001\", \"markdown\": \"Plan kickoff #project\" } ] } }",
-            r#"{"type":"object","required":["tag"],"properties":{"tag":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["tag"],"properties":{"tag":{"type":"string"},"limit":{"type":"integer","default":50}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::tag::search_by_tag(&c, args).await }

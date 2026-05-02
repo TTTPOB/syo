@@ -11,6 +11,7 @@ pub mod notebook;
 pub mod search;
 pub mod serve_mcp;
 pub mod set_attrs;
+pub mod sql;
 pub mod tag;
 pub mod update_block;
 

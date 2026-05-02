@@ -56,6 +56,10 @@ enum Cmd {
         #[command(subcommand)]
         cmd: commands::search::SearchCmd,
     },
+    /// Run a read-only SQL SELECT directly against the SiYuan SQLite store.
+    /// Power tool — prefer `search`, `tag`, `graph` etc. when they cover the
+    /// use case. Output is the raw row array as pretty JSON.
+    Sql(commands::sql::SqlArgs),
     /// Run the Model Context Protocol server on stdio.
     ServeMcp(commands::serve_mcp::ServeMcpArgs),
 }
@@ -97,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Asset { cmd } => commands::asset::run(&client, cmd).await?,
         Cmd::Graph { cmd } => commands::graph::run(&client, cmd).await?,
         Cmd::Search { cmd } => commands::search::run(&client, cmd).await?,
+        Cmd::Sql(a) => commands::sql::run(&client, a).await?,
         Cmd::ServeMcp(_) => unreachable!("serve-mcp dispatched above"),
     }
     Ok(())

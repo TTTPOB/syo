@@ -29,7 +29,7 @@ pub async fn search_by_tag(client: &SiyuanClient, args: Value) -> Result<Value, 
     let raw_limit = optional_u64(&map, "limit").unwrap_or(50);
     if raw_limit == 0 {
         return Err(McpError::invalid_params(
-            "`limit` must be greater than 0",
+            siyuan_model::tag::ZERO_LIMIT_ERR.to_string(),
             None,
         ));
     }

@@ -21,6 +21,11 @@ struct Row {
 
 const TAG_PREVIEW_LEN: usize = 160;
 
+/// Validation message returned when callers pass `limit == 0` to
+/// `search_by_tag`. Exposed as a `pub const` so the MCP layer's early-return
+/// guard and the model layer's `bail!` stay byte-for-byte in sync.
+pub const ZERO_LIMIT_ERR: &str = "`limit` must be greater than 0";
+
 /// List every distinct tag string in the workspace (sorted).
 pub async fn list_tags(client: &SiyuanClient) -> Result<Vec<String>> {
     #[derive(Debug, Deserialize)]
@@ -44,7 +49,7 @@ pub async fn search_by_tag(
     limit: usize,
 ) -> Result<Vec<TagBlockHit>> {
     if limit == 0 {
-        bail!("`limit` must be greater than 0");
+        bail!("{ZERO_LIMIT_ERR}");
     }
     let escaped = tag.replace('\'', "''");
     let stmt = build_search_by_tag_sql(&escaped, limit);

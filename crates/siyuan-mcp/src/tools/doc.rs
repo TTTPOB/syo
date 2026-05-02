@@ -6,7 +6,8 @@ use siyuan_model::pagination::PageRequest;
 use siyuan_types::BlockId;
 
 use super::util::{
-    anyhow_to_mcp, ensure_object, optional_u64, required_string, siyuan_to_mcp, with_hint,
+    MAX_PAGE_SIZE, anyhow_to_mcp, ensure_object, optional_u64, required_string, siyuan_to_mcp,
+    with_hint,
 };
 
 pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -15,8 +16,14 @@ pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
     let id = BlockId::parse(&id_str)
         .map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))?;
 
+    // Do NOT cap `page` here: paginate() clamps an over-large `page` to
+    // total_pages (see R1 BUG-1 fix), and capping here would prevent
+    // legitimate access to high page numbers in long documents. We only
+    // cap `page_size` so a pathological caller cannot defeat pagination.
     let page = optional_u64(&map, "page").unwrap_or(1) as usize;
-    let page_size = optional_u64(&map, "page_size").unwrap_or(50) as usize;
+    let page_size = optional_u64(&map, "page_size")
+        .unwrap_or(50)
+        .min(MAX_PAGE_SIZE) as usize;
     let format = map
         .get("format")
         .and_then(|v| v.as_str())

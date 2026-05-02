@@ -3,6 +3,18 @@ use serde_json::{Map, Value};
 
 use siyuan_types::SiyuanError;
 
+// Maximum graph traversal depth accepted from MCP arguments. The graph
+// neighborhood traversal already has a 500-node / 1000-edge ceiling, but a
+// pathological `depth` value still wastes CPU walking empty levels. 8 hops
+// is far beyond any realistic neighborhood query; larger values almost
+// always indicate misuse.
+pub const MAX_GRAPH_DEPTH: u64 = 8;
+
+// Maximum page size accepted by paginated MCP tools. Mirrors the spirit of
+// `MAX_SEARCH_LIMIT` (1000) — a request for more than this defeats the
+// pagination contract and risks unbounded payloads.
+pub const MAX_PAGE_SIZE: u64 = 1000;
+
 // Convert a SiYuan domain error into a meaningful MCP error.
 pub fn siyuan_to_mcp(e: SiyuanError) -> McpError {
     use SiyuanError as E;
@@ -88,4 +100,23 @@ pub fn object_field(map: &Map<String, Value>, key: &str) -> Result<Map<String, V
 // Tools that do NOT need a hint should return the bare payload directly.
 pub fn with_hint(payload: Value, hint: &str) -> Value {
     serde_json::json!({ "data": payload, "_hint": hint })
+}
+
+#[cfg(test)]
+mod tests {
+    // The cap constants are part of the MCP tool contract and are referenced
+    // verbatim in the registry tool descriptions ("depth is capped at 8",
+    // "page_size is capped at 1000"). These sentinel tests fail loudly if a
+    // future change moves the cap without updating the description.
+    use super::{MAX_GRAPH_DEPTH, MAX_PAGE_SIZE};
+
+    #[test]
+    fn graph_depth_cap_is_eight() {
+        assert_eq!(MAX_GRAPH_DEPTH, 8);
+    }
+
+    #[test]
+    fn page_size_cap_is_one_thousand() {
+        assert_eq!(MAX_PAGE_SIZE, 1000);
+    }
 }

@@ -6,7 +6,8 @@ use siyuan_model::graph::Direction;
 use siyuan_types::BlockId;
 
 use super::util::{
-    anyhow_to_mcp, ensure_object, optional_string, optional_u64, required_string, with_hint,
+    MAX_GRAPH_DEPTH, anyhow_to_mcp, ensure_object, optional_string, optional_u64, required_string,
+    with_hint,
 };
 
 pub async fn neighborhood(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -15,7 +16,12 @@ pub async fn neighborhood(client: &SiyuanClient, args: Value) -> Result<Value, M
     let center = BlockId::parse(&center_str)
         .map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))?;
 
-    let depth = optional_u64(&map, "depth").unwrap_or(1) as usize;
+    // Cap depth so a pathological caller cannot ask the traversal to walk
+    // millions of empty levels. The 500-node ceiling inside neighborhood()
+    // bounds the working set, but iterating over depth itself is still O(depth).
+    let depth = optional_u64(&map, "depth")
+        .unwrap_or(1)
+        .min(MAX_GRAPH_DEPTH) as usize;
     let direction_str = optional_string(&map, "direction");
     let direction = match direction_str.as_deref() {
         Some("outgoing") => Direction::Outgoing,

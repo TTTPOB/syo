@@ -74,7 +74,8 @@ pub fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static str, Han
             "siyuan_get_doc",
             "Load a SiYuan document by its root block id and return it as agent-readable \
              markdown (default) or a structured JSON bundle. Pagination uses DFS document \
-             order; `page` is 1-indexed and `page_size` defaults to 50 blocks per page. \
+             order; `page` is 1-indexed and `page_size` defaults to 50 blocks per page \
+             (page_size is capped at 1000). \
              When `total_pages > page` the response is wrapped with a `_hint` that tells you \
              to fetch the next page. Use `format=agent-md` (default) for a compact markdown \
              representation with `<!-- sy:* -->` HTML-comment block markers; use `format=json` \
@@ -582,10 +583,11 @@ pub fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static str, Han
              `direction` controls which edges are followed: `outgoing` follows references FROM \
              the center block to blocks it references; `incoming` follows references TO the \
              center from other blocks; `both` (default) follows both. `depth` (default 1) \
-             controls how many hops to expand. The traversal stops at 500 nodes or 1000 edges \
-             per call; when either limit is hit the `truncated` field in the response is set \
-             to true. When `truncated` is true, narrow the query by reducing depth, switching \
-             to a single direction, or querying a more specific center block. \
+             controls how many hops to expand; depth is capped at 8. The traversal stops at \
+             500 nodes or 1000 edges per call; when either limit is hit the `truncated` field \
+             in the response is set to true. When `truncated` is true, narrow the query by \
+             reducing depth, switching to a single direction, or querying a more specific \
+             center block. \
              Alternatively use `siyuan_sql` to query the `refs` table directly for unbounded results. \
              Response envelope includes the full graph with `data.nodes`, `data.edges`, and `data.truncated`.",
             r#"{"type":"object","required":["center"],"properties":{"center":{"type":"string"},"depth":{"type":"integer","default":1},"direction":{"type":"string","enum":["outgoing","incoming","both"],"default":"both"}},"additionalProperties":true}"#,

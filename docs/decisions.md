@@ -143,3 +143,17 @@ Position-aware operations (`insert_block` family, `move_block`, CLI `insert-bloc
 **Tradeoff.** `siyuan --help` shows `--token` as global, but `serve-mcp` actually doesn't require it; small docs inconsistency. The dispatch in `main.rs` has a small early-return shortcut to bypass strict resolve for `ServeMcp`. Code reviewer flagged this as slightly awkward but not blocking.
 
 **Reversal trigger.** Token-at-spawn becomes the only realistic configuration in practice (i.e. no production MCP host actually injects per-request) — at which point we'd unify on the strict path and update the description accordingly.
+
+---
+
+## 10. Ergonomic stage: dual-mode doc locator + format flag + doc tree
+
+**Context.** Dogfooding surfaced three rough edges. (a) `doc rename` / `doc remove` / `doc move` leaked storage paths — every call required a prior `doc resolve` and pasting back unreadable `/<nb>/<doc>.sy` strings. (b) Output-format conventions drifted across read commands: TSV from `notebook ls` / `tag ls` / `tag search` / `search text` / `search blocks`, `json-pretty` from `doc resolve`, JSON-only from `sql`, no opt-in. (c) No `doc tree` primitive existed — agents fell back to raw `siyuan sql` for filetree navigation. Plus four smaller fixes: missing `tag search --limit`, `move-block` position kinds that bailed at runtime, `get-doc` returning a misleading "empty doc" message for a missing id, and `sql`'s unverified read-only claim.
+
+**Decision.** Land all seven items (A–G in the spec) as atomic semantic commits. Reuse the `DocLookup` enum and `parse_doc_lookup` helper from `doc resolve` on rename/remove/move, plus a new `resolve_one_storage(client, lookup) -> Result<(NotebookId, String), SiyuanError>` that maps 0 hits to `NotFound` and >1 to `AmbiguousPath`. Add `siyuan-model::doc_tree`, which pulls the subtree via one bounded `SELECT`, builds the tree from `path` parent-prefix relationships, slices to depth, and computes `doc_count_recursive` from the FULL preload so a depth=1 view still reports correct descendant counts. Propagate `--format <agent-md|json|json-pretty>` to the five list commands and `doc resolve`, preserving each command's current default byte shape exactly (`agent-md` is rejected for `doc resolve` since its output is structured metadata).
+
+**Rationale.** Agents should not switch between `--id`, `--notebook --hpath`, and `--path` for what is conceptually the same "address a doc" op; extending `DocLookup` to every doc-mutator collapses the mental model to one-and-done. `doc tree` is a basic navigation primitive whose absence pushed agents into raw SQL for trivial questions — the friction a harness exists to remove. `--format` gives consumers JSON for `jq` while keeping terse defaults for human/LLM reading.
+
+**Tradeoff.** `--path` and `--from-paths` disappear from the CLI/MCP surface entirely; scripts that piped `doc resolve` output into rename/remove/move must migrate to id mode. `storage_path` stays as a *field* on `ResolvedDoc` for `curl`/`jq` users, but no command consumes it as input. `doc tree` does the full-subtree SQL pull even at default depth=1 — slightly more work for very large notebooks, but buys correct `doc_count_recursive` without a second round trip.
+
+**Reversal trigger.** A workflow surfaces where storage-path inputs are essential — e.g. recovering from a corrupted index where `doc resolve` cannot find the doc but the storage path is still usable. At that point, add a `--storage-path` flag as an explicit third locator mode — escape hatch, not default.

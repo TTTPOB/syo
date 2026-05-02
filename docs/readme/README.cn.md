@@ -63,6 +63,24 @@ siyuan doc resolve --id 20260501090000-doc0001
 siyuan doc resolve --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
 # 输出 JSON 数组，每条含 { id, hpath, notebook_id, notebook_name, title, storage_path }
 
+# 列出某个 notebook / 文件夹下的子树
+# （--depth 默认 1，可填整数或 `all`；--format 默认 agent-md。）
+siyuan doc tree --notebook 20260501000000-nb00001                                # 顶层文档
+siyuan doc tree --notebook 20260501000000-nb00001 --hpath /Projects --depth all
+siyuan doc tree --id 20260501090000-doc0001 --depth 2 --format json-pretty
+
+# 文档文件树变更 —— 支持 --id 或 (--notebook + --hpath) 二选一。
+# 不接受 `.sy` 存储路径，CLI 会在内部完成解析。
+siyuan doc rename --id 20260501090000-doc0001 --title "Q3 Plan"
+siyuan doc rename --notebook 20260501000000-nb00001 --hpath "/Projects/Plan" --title "Q3 Plan"
+siyuan doc remove --id 20260501090000-doc0001
+siyuan doc remove --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
+# `doc move`：源地址 --from-ids 与 (--notebook --from-hpaths) 二选一，目的地用 hpath。
+siyuan doc move --from-ids 20260501090000-doc0001 \
+  --to-notebook 20260501000000-nb00002 --to-path /Archive
+siyuan doc move --notebook 20260501000000-nb00001 --from-hpaths /Plan /Notes \
+  --to-notebook 20260501000000-nb00002 --to-path /Archive
+
 # 读文档：默认输出 agent-readable markdown，也可输出 JSON
 siyuan get-doc --id 20260501090000-doc0001
 siyuan get-doc --id 20260501090000-doc0001 --format json-pretty
@@ -171,7 +189,8 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 | `siyuan_get_attrs` / `siyuan_set_attrs` | 读 / 增量更新块属性。                                  |
 | `siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | 笔记本管理（不暴露 open/close）。      |
 | `siyuan_doc_resolve`       | 统一查询：可按 id 或 (notebook + hpath) 反查；返回数组，含 `storage_path`。 |
-| `siyuan_doc_rename` / `_move` / `_remove` | 文件树操作。这些工具接受**存储 `.sy` 路径**而非 hpath。  |
+| `siyuan_doc_tree`          | 以树形列出 notebook / 文件夹子树（id 与 notebook[+hpath] 二选一，`depth` 取 1..N 或 `all`）。 |
+| `siyuan_doc_rename` / `_move` / `_remove` | 文件树操作。接受 id 或 (notebook + hpath) 二选一，harness 内部把存储 `.sy` 路径解析出来。 |
 | `siyuan_tag_ls` / `siyuan_tag_search` | 列 tag / 按 tag 找块。                                  |
 | `siyuan_search_text`       | 在 `blocks` 表上做 LIKE 子串搜索。                                  |
 | `siyuan_sql`               | 只读 raw SQL，进阶工具，需自行转义参数。                            |

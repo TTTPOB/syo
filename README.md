@@ -63,6 +63,24 @@ siyuan doc resolve --id 20260501090000-doc0001
 siyuan doc resolve --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
 # Output is a JSON array of { id, hpath, notebook_id, notebook_name, title, storage_path }
 
+# List a notebook/folder subtree as a tree
+# (--depth defaults to 1; pass an integer or `all`. --format defaults to agent-md.)
+siyuan doc tree --notebook 20260501000000-nb00001                                # top-level docs
+siyuan doc tree --notebook 20260501000000-nb00001 --hpath /Projects --depth all
+siyuan doc tree --id 20260501090000-doc0001 --depth 2 --format json-pretty
+
+# Doc filetree mutations — accept EITHER --id OR (--notebook + --hpath).
+# Storage `.sy` paths are NOT accepted; the CLI resolves them internally.
+siyuan doc rename --id 20260501090000-doc0001 --title "Q3 Plan"
+siyuan doc rename --notebook 20260501000000-nb00001 --hpath "/Projects/Plan" --title "Q3 Plan"
+siyuan doc remove --id 20260501090000-doc0001
+siyuan doc remove --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
+# `doc move`: source is --from-ids XOR (--notebook --from-hpaths); destination is hpath form.
+siyuan doc move --from-ids 20260501090000-doc0001 \
+  --to-notebook 20260501000000-nb00002 --to-path /Archive
+siyuan doc move --notebook 20260501000000-nb00001 --from-hpaths /Plan /Notes \
+  --to-notebook 20260501000000-nb00002 --to-path /Archive
+
 # Read a doc as agent-readable markdown (default), or as JSON
 siyuan get-doc --id 20260501090000-doc0001
 siyuan get-doc --id 20260501090000-doc0001 --format json-pretty
@@ -171,7 +189,8 @@ Tools exposed (one-line summary; full agent-friendly descriptions live in `crate
 | `siyuan_get_attrs` / `siyuan_set_attrs` | Read / partial-update block attributes. |
 | `siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | Notebook management. (open/close not exposed.) |
 | `siyuan_doc_resolve`       | Unified lookup by id OR (notebook + hpath); returns array of doc metadata including `storage_path`. |
-| `siyuan_doc_rename` / `_move` / `_remove` | Filetree ops. Take *storage* `.sy` paths, NOT hpaths. |
+| `siyuan_doc_tree`          | List a notebook/folder subtree as a tree (id XOR notebook[+hpath], `depth` 1..N or `all`). |
+| `siyuan_doc_rename` / `_move` / `_remove` | Filetree ops. Accept id XOR (notebook + hpath); the harness resolves storage `.sy` paths internally. |
 | `siyuan_tag_ls` / `siyuan_tag_search` | Enumerate tags / find blocks by tag. |
 | `siyuan_search_text`       | LIKE-substring search across the `blocks` table.     |
 | `siyuan_sql`               | Read-only raw SQL. Power tool — escape values yourself. |

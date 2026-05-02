@@ -702,6 +702,54 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
+            "siyuan_doc_tree",
+            "List documents under a notebook/folder root as a tree.\n\
+             \n\
+             Sibling tools: `siyuan_doc_resolve` looks up ONE document's metadata; \
+             this tool enumerates a SUBTREE. `siyuan_notebook_ls` enumerates whole \
+             notebooks (no nesting). `siyuan_get_doc` returns rendered content for \
+             one doc; `siyuan_doc_tree` is filetree-only — block-level children \
+             live under `siyuan_get_block` or `siyuan_sql`. Use this instead of \
+             hand-rolled `siyuan_sql` queries against the `blocks` table for \
+             navigation.\n\
+             \n\
+             Inputs: provide EXACTLY ONE address mode. Either `id` (string) to \
+             anchor the tree at a known document (must be `type='d'`; non-doc \
+             ids return `NotFound`), or `notebook` (string) with optional `hpath` \
+             (string, default `\"/\"`). With `hpath=\"/\"` the result has a \
+             VIRTUAL root containing the notebook's top-level docs (empty \
+             id/title/storage_path, `hpath=\"/\"`). With a non-`/` hpath the \
+             tree root is the doc at that hpath. `depth` (integer >= 1, or the \
+             string `\"all\"`; default `1`) controls how many levels of \
+             descendants to unfold; `0` is rejected. `doc_count_recursive` on \
+             every node reflects the FULL preload regardless of slice depth.\n\
+             \n\
+             Each node carries: `id`, `title`, `hpath`, `has_children` (boolean), \
+             `doc_count_recursive` (count of all descendant docs), `created`, \
+             `updated`, `sort` (integer), `icon` (string from IAL), `notebook_id`, \
+             `notebook_name` (empty when the notebook is not in `lsNotebooks`), \
+             `storage_path` (the `.sy` path; internal kernel detail), and \
+             `children` (recursive; empty when the depth budget cut off below \
+             this node — disambiguate with `has_children`). The output is wrapped \
+             with a `_hint` envelope.\n\
+             \n\
+             Example:\n\
+               in:  { \"id\": \"20260501090000-doc0001\", \"depth\": 2 }\n\
+               out: { \"data\": { \"tree\": { \"id\": \"20260501090000-doc0001\", \"title\": \"Plan\", \"hpath\": \"/Plan\", \"has_children\": true, \"doc_count_recursive\": 2, \"created\": \"20260501090000\", \"updated\": \"20260501090000\", \"sort\": 0, \"icon\": \"\", \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"storage_path\": \"/20260501090000-doc0001.sy\", \"children\": [...] } }, \"_hint\": \"Filetree listing: ...\" }\n\
+             \n\
+               in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/\", \"depth\": \"all\" }\n\
+               out: { \"data\": { \"tree\": { \"id\": \"\", \"title\": \"\", \"hpath\": \"/\", \"has_children\": true, \"doc_count_recursive\": 3, \"sort\": 0, \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"storage_path\": \"\", \"children\": [...] } }, \"_hint\": \"...\" }",
+            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook[+hpath])"},"notebook":{"type":"string","description":"Notebook id (use with optional hpath)"},"hpath":{"type":"string","description":"Human path inside `notebook`; default \"/\" yields virtual root","default":"/"},"depth":{"oneOf":[{"type":"integer","minimum":1},{"type":"string","enum":["all"]}],"description":"Levels of descendants (default 1; 0 rejected)","default":1}},"additionalProperties":true}"#,
+            make_handler(move |_, args| {
+                let c = Arc::clone(&c);
+                async move { tools::filetree::tree(&c, args).await }
+            })
+        );
+    }
+
+    {
+        let c = Arc::clone(&client);
+        reg!(
             "siyuan_doc_remove",
             "Permanently remove a document and all its child blocks.\n\
              \n\

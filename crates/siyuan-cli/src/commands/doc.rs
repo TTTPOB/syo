@@ -3,6 +3,7 @@ use clap::{ArgGroup, Args, Subcommand};
 
 use siyuan_client::SiyuanClient;
 use siyuan_model::doc_meta::{DocLookup, resolve as resolve_doc_meta, resolve_one_storage};
+use siyuan_model::doc_tree::{Depth, build_tree, render_agent_md as render_tree_md};
 use siyuan_types::{BlockId, NotebookId};
 
 use crate::output::OutputFormat;
@@ -186,6 +187,51 @@ pub enum DocCmd {
     ///   out: ok
     #[command(verbatim_doc_comment)]
     Remove(RemoveArgs),
+    /// List documents under a notebook/folder root as a tree.
+    ///
+    /// Sibling commands: `siyuan doc resolve` looks up a single
+    /// document's metadata; this command enumerates a SUBTREE.
+    /// `siyuan notebook ls` enumerates whole notebooks (no nesting).
+    /// `siyuan get-doc` returns rendered content for one doc; `doc tree`
+    /// is filetree-only — block-level children live under `get-block`.
+    ///
+    /// Address modes (mutually exclusive — provide EXACTLY ONE):
+    ///   --id <BLOCK_ID>: tree root is the document with this id (must
+    ///     be `type='d'`; non-doc → `NotFound`). Output includes the root
+    ///     plus `--depth` levels of descendants.
+    ///   --notebook <NB_ID> [--hpath <HPATH>]: in this mode, `--hpath`
+    ///     defaults to `/` and yields a VIRTUAL root containing the
+    ///     notebook's top-level docs. A non-`/` hpath (e.g. `/Foo`)
+    ///     anchors the tree at that doc, same shape as `--id`.
+    ///
+    /// Inputs:
+    ///   --depth <N|all> (default 1): how many levels of descendants to
+    ///     unfold. `0` is rejected at parse. `all` returns the full
+    ///     subtree. `doc_count_recursive` on every node is computed from
+    ///     the FULL preload regardless of slice depth — a depth=1 view
+    ///     still tells you how many descendants exist further down.
+    ///   --format (default agent-md): one of `agent-md` (indented bullet
+    ///     list with `<!-- sy:doc id=... -->` markers), `json` (compact),
+    ///     or `json-pretty` (indented).
+    ///
+    /// Each node carries: id, title, hpath, has_children,
+    /// doc_count_recursive, created, updated, sort, icon, notebook_id,
+    /// notebook_name, storage_path, children. The virtual root case
+    /// (notebook + `/`) emits an empty id/title/storage_path with
+    /// hpath="/".
+    ///
+    /// Example:
+    ///   in:  --id 20260501090000-doc0001 --depth 2
+    ///   out: <!-- sy:doc id=20260501090000-doc0001 hpath=/Plan ... -->
+    ///        - /Plan (2 subdocs)
+    ///          <!-- sy:doc id=... hpath=/Plan/Q3 ... -->
+    ///          - /Plan/Q3 (1 subdoc)
+    ///        <!-- sy:tree depth=2 total_loaded=3 truncated=false -->
+    ///
+    ///   in:  --notebook 20260501000000-nb00001 --hpath /
+    ///   out: <virtual root>'s top-level children, one bullet each.
+    #[command(verbatim_doc_comment)]
+    Tree(TreeArgs),
 }
 
 /// Arguments for `siyuan doc resolve`.
@@ -324,6 +370,78 @@ pub struct SortArgs {
     pub sort: i64,
 }
 
+/// Arguments for `siyuan doc tree`.
+///
+/// Same id-XOR-(notebook+hpath) shape as `ResolveArgs`. `--hpath` defaults
+/// to `/` when in `--notebook` mode (virtual-root behaviour). `--depth`
+/// accepts an integer >= 1 or the literal string `all`; clap rejects `0`
+/// at parse time via the [`DepthArg::parse`] custom parser.
+#[derive(Args, Debug)]
+#[command(group(
+    ArgGroup::new("tree_lookup")
+        .args(["id", "notebook"])
+        .required(true)
+))]
+pub struct TreeArgs {
+    /// Document block id. Tree root is this doc; output includes it plus
+    /// `--depth` levels of descendants.
+    #[arg(long, conflicts_with_all = ["notebook", "hpath"])]
+    pub id: Option<String>,
+
+    /// Notebook id. With `--hpath /` (the default in this mode) returns
+    /// the notebook's top-level docs under a virtual root; with a
+    /// non-`/` hpath anchors the tree at that doc.
+    #[arg(long)]
+    pub notebook: Option<String>,
+
+    /// Human path inside the notebook. Defaults to `/` (virtual-root
+    /// notebook listing). Required-by-association: must be supplied with
+    /// `--notebook`.
+    #[arg(long, requires = "notebook", default_value = "/")]
+    pub hpath: String,
+
+    /// Depth budget: integer >= 1, or the literal `all`. Default 1.
+    /// `0` is rejected at parse time. The full preload is always pulled
+    /// from the kernel — depth only controls how much of it gets
+    /// included in `children`.
+    #[arg(long, default_value = "1", value_parser = parse_depth_arg)]
+    pub depth: DepthArg,
+
+    /// Output format: `agent-md` (default; indented bullet list with
+    /// `<!-- sy:doc id=... -->` markers), `json` (compact), or
+    /// `json-pretty` (indented).
+    #[arg(long, value_enum, default_value_t = OutputFormat::AgentMd)]
+    pub format: OutputFormat,
+}
+
+/// Wrapper around [`Depth`] for clap value-parser ergonomics.
+///
+/// Clap's `value_parser` machinery wants a function that produces a
+/// concrete type; the model's [`Depth`] enum is the eventual target but
+/// `DepthArg` carries it through the parse step so the help text reads
+/// `<N|all>` (or whatever value-name we set) rather than referencing
+/// `Depth` symbolically.
+#[derive(Debug, Clone, Copy)]
+pub struct DepthArg(pub Depth);
+
+/// Custom parser for `--depth`. Accepts `all` (case-insensitive) or a
+/// non-zero positive integer. `0` is rejected — depth=0 collapses the
+/// tree to the root node alone, which is a degenerate output that has
+/// no use case (`doc resolve` already covers "metadata for one doc").
+fn parse_depth_arg(s: &str) -> Result<DepthArg, String> {
+    let trimmed = s.trim();
+    if trimmed.eq_ignore_ascii_case("all") {
+        return Ok(DepthArg(Depth::All));
+    }
+    let n: u32 = trimmed
+        .parse()
+        .map_err(|e| format!("--depth must be a positive integer or 'all': {e}"))?;
+    if n == 0 {
+        return Err("--depth 0 is not allowed; use 1 or higher (or 'all')".to_string());
+    }
+    Ok(DepthArg(Depth::N(n)))
+}
+
 /// Arguments for `siyuan doc remove`.
 ///
 /// Same id-XOR-(notebook+hpath) shape as `RenameArgs`. Storage `.sy` paths
@@ -438,8 +556,53 @@ pub async fn run(client: &SiyuanClient, cmd: DocCmd) -> Result<()> {
             client.remove_doc(&nb, &storage_path).await?;
             println!("ok");
         }
+        DocCmd::Tree(a) => {
+            // Build the lookup. `--hpath` carries a default of "/", but
+            // when the caller supplies `--id` we must NOT force the hpath
+            // branch: clap's `conflicts_with_all` strips `notebook` in
+            // that case, but the `--hpath` default still fires. The
+            // helper below treats `notebook=None` as id-mode regardless
+            // of hpath.
+            let lookup = build_tree_lookup(a.id.as_deref(), a.notebook.as_deref(), &a.hpath)?;
+            let depth = a.depth.0;
+            let tree = build_tree(client, lookup, depth).await?;
+            let s = match a.format {
+                OutputFormat::AgentMd => render_tree_md(&tree, depth),
+                OutputFormat::Json => serde_json::to_string(&tree)?,
+                OutputFormat::JsonPretty => serde_json::to_string_pretty(&tree)?,
+            };
+            // render_tree_md already terminates with a newline; the JSON
+            // branches do not, so add one here for parity with the rest
+            // of the CLI's println-based output.
+            print!("{s}");
+            if !s.ends_with('\n') {
+                println!();
+            }
+        }
     }
     Ok(())
+}
+
+/// Build a `DocLookup` for `doc tree`.
+///
+/// Same id-XOR-(notebook+hpath) shape as `build_single_doc_lookup`, but
+/// `--hpath` carries a default value of `/` so the notebook-mode path is
+/// always populated. We treat `notebook=None` as id-mode regardless of
+/// hpath, which is what clap's `ArgGroup` already enforces at parse time.
+fn build_tree_lookup(id: Option<&str>, notebook: Option<&str>, hpath: &str) -> Result<DocLookup> {
+    match (id, notebook) {
+        (Some(id), None) => Ok(DocLookup::ById(BlockId::parse(id.trim()).context("--id")?)),
+        (None, Some(nb)) => Ok(DocLookup::ByHpath {
+            notebook: NotebookId::parse(nb.trim()).context("--notebook")?,
+            hpath: hpath.to_string(),
+        }),
+        (Some(_), Some(_)) => Err(anyhow!(
+            "--id conflicts with --notebook; pick exactly one input mode"
+        )),
+        (None, None) => Err(anyhow!(
+            "provide either --id, or --notebook (with optional --hpath)"
+        )),
+    }
 }
 
 /// Build a single-document `DocLookup` from clap-parsed pieces.
@@ -517,4 +680,43 @@ fn build_move_source_lookups(
         });
     }
     Ok(lookups)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use siyuan_model::doc_tree::Depth;
+
+    // Locks the contract: `--depth all` (any case) yields Depth::All.
+    #[test]
+    fn parse_depth_arg_accepts_all_case_insensitive() {
+        assert!(matches!(parse_depth_arg("all").unwrap().0, Depth::All));
+        assert!(matches!(parse_depth_arg("ALL").unwrap().0, Depth::All));
+        assert!(matches!(parse_depth_arg("All").unwrap().0, Depth::All));
+    }
+
+    #[test]
+    fn parse_depth_arg_accepts_positive_integer() {
+        match parse_depth_arg("3").unwrap().0 {
+            Depth::N(n) => assert_eq!(n, 3),
+            Depth::All => panic!("expected Depth::N"),
+        }
+    }
+
+    // Acceptance #2: `--depth 0` rejected at parse, not runtime.
+    #[test]
+    fn parse_depth_arg_rejects_zero() {
+        let err = parse_depth_arg("0").expect_err("0 must be rejected");
+        assert!(
+            err.contains("0 is not allowed"),
+            "expected friendly error; got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_depth_arg_rejects_negative_or_garbage() {
+        assert!(parse_depth_arg("-1").is_err());
+        assert!(parse_depth_arg("everything").is_err());
+        assert!(parse_depth_arg("").is_err());
+    }
 }

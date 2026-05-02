@@ -3,6 +3,7 @@ use serde_json::{Map, Value, json};
 
 use siyuan_client::SiyuanClient;
 use siyuan_model::doc_meta::{DocLookup, resolve as resolve_doc_meta, resolve_one_storage};
+use siyuan_model::doc_tree::{Depth, build_tree};
 use siyuan_types::{BlockId, NotebookId};
 
 use super::util::{
@@ -157,6 +158,112 @@ pub(crate) fn parse_doc_lookup_batch(map: &Map<String, Value>) -> Result<Vec<Doc
         });
     }
     Ok(out)
+}
+
+/// Validate `siyuan_doc_tree` arguments and produce a [`DocLookup`].
+///
+/// Same rule as `parse_doc_lookup` (id XOR notebook+hpath) with one
+/// relaxation: in `--notebook` mode `hpath` is OPTIONAL and defaults to
+/// `/` (the virtual-root case). The id branch still rejects accompanying
+/// notebook/hpath fields.
+pub(crate) fn parse_tree_lookup(map: &Map<String, Value>) -> Result<DocLookup, McpError> {
+    let id_raw = optional_string(map, "id");
+    let nb_raw = optional_string(map, "notebook");
+    let hp_raw = optional_string(map, "hpath");
+
+    let has_id = is_present(id_raw.as_deref());
+    let has_nb = is_present(nb_raw.as_deref());
+    let has_hp = is_present(hp_raw.as_deref());
+
+    if has_id && (has_nb || has_hp) {
+        return Err(McpError::invalid_params(
+            "provide either `id` or `notebook` (with optional `hpath`), not both",
+            None,
+        ));
+    }
+    if !has_id && !has_nb {
+        return Err(McpError::invalid_params(
+            "provide either `id` or `notebook` (with optional `hpath`)",
+            None,
+        ));
+    }
+
+    if has_id {
+        return Ok(DocLookup::ById(parse_block_id(
+            id_raw.as_deref().unwrap_or_default().trim(),
+        )?));
+    }
+
+    let notebook = parse_notebook_id(nb_raw.as_deref().unwrap_or_default().trim())?;
+    // Default to `/` (virtual root) when hpath is absent.
+    let hpath = hp_raw.unwrap_or_else(|| "/".to_string());
+    Ok(DocLookup::ByHpath { notebook, hpath })
+}
+
+/// Parse `--depth` from MCP args. Accepts an integer (>= 1) or the string
+/// `"all"` (case-insensitive). Default 1. `0` and negatives are rejected.
+pub(crate) fn parse_depth(map: &Map<String, Value>) -> Result<Depth, McpError> {
+    match map.get("depth") {
+        None => Ok(Depth::N(1)),
+        Some(Value::String(s)) => {
+            let trimmed = s.trim();
+            if trimmed.eq_ignore_ascii_case("all") {
+                return Ok(Depth::All);
+            }
+            // String integer fallback: some agents send ints as strings.
+            let n: u32 = trimmed.parse().map_err(|_| {
+                McpError::invalid_params(
+                    format!("`depth` must be a positive integer or 'all'; got {s:?}"),
+                    None,
+                )
+            })?;
+            if n == 0 {
+                return Err(McpError::invalid_params(
+                    "`depth` must be >= 1 (or 'all')",
+                    None,
+                ));
+            }
+            Ok(Depth::N(n))
+        }
+        Some(Value::Number(n)) => {
+            let v = n.as_u64().ok_or_else(|| {
+                McpError::invalid_params(
+                    "`depth` integer must be a non-negative whole number",
+                    None,
+                )
+            })?;
+            if v == 0 {
+                return Err(McpError::invalid_params(
+                    "`depth` must be >= 1 (or 'all')",
+                    None,
+                ));
+            }
+            // Cap at u32::MAX so the sentinel still represents "all" only.
+            Ok(Depth::N(u32::try_from(v).unwrap_or(u32::MAX - 1)))
+        }
+        Some(_) => Err(McpError::invalid_params(
+            "`depth` must be an integer or the string 'all'",
+            None,
+        )),
+    }
+}
+
+pub async fn tree(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
+    let map = ensure_object(args)?;
+    let lookup = parse_tree_lookup(&map)?;
+    let depth = parse_depth(&map)?;
+    let tree = build_tree(client, lookup, depth)
+        .await
+        .map_err(siyuan_to_mcp)?;
+    Ok(with_hint(
+        json!({ "tree": tree }),
+        "Filetree listing: each node carries id, title, hpath, has_children, \
+         doc_count_recursive (full subtree count), created, updated, sort, icon, \
+         notebook_id, notebook_name, storage_path, and children (sliced to `depth`). \
+         The notebook-root case (notebook + hpath=/) emits a virtual node with \
+         empty id/title/storage_path and hpath=\"/\". `doc_count_recursive` reflects \
+         the FULL preload regardless of slice depth.",
+    ))
 }
 
 pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -569,6 +676,144 @@ mod tests {
         assert!(
             err.message.contains("title"),
             "error must reference `title`; got: {}",
+            err.message
+        );
+    }
+
+    // ---- siyuan_doc_tree arg parsing -------------------------------------
+    //
+    // The tree handler's lookup parser accepts an `id` OR a `notebook` (with
+    // optional `hpath`, default `/`). Depth is a separate parser that takes
+    // an integer or the string `"all"`. These tests pin the contract for
+    // each branch without requiring a live kernel — the handler itself
+    // hits the network via build_tree.
+
+    #[test]
+    fn parse_tree_lookup_accepts_id() {
+        let map = args_map(json!({ "id": "20260501090000-doc0001" }));
+        let lookup = parse_tree_lookup(&map).expect("id-only is valid");
+        assert!(matches!(lookup, DocLookup::ById(_)));
+    }
+
+    #[test]
+    fn parse_tree_lookup_accepts_notebook_with_default_hpath() {
+        // No `hpath` field: the parser defaults to `/`.
+        let map = args_map(json!({ "notebook": "20260501000000-nb00001" }));
+        let lookup = parse_tree_lookup(&map).expect("notebook-only is valid");
+        match lookup {
+            DocLookup::ByHpath { hpath, .. } => assert_eq!(hpath, "/"),
+            DocLookup::ById(_) => panic!("expected ByHpath"),
+        }
+    }
+
+    #[test]
+    fn parse_tree_lookup_accepts_notebook_plus_hpath() {
+        let map = args_map(json!({
+            "notebook": "20260501000000-nb00001",
+            "hpath": "/Plan",
+        }));
+        let lookup = parse_tree_lookup(&map).expect("notebook+hpath is valid");
+        match lookup {
+            DocLookup::ByHpath { hpath, .. } => assert_eq!(hpath, "/Plan"),
+            DocLookup::ById(_) => panic!("expected ByHpath"),
+        }
+    }
+
+    #[test]
+    fn parse_tree_lookup_rejects_both_modes() {
+        let map = args_map(json!({
+            "id": "20260501090000-doc0001",
+            "notebook": "20260501000000-nb00001",
+        }));
+        let err = parse_tree_lookup(&map).expect_err("both modes must be rejected");
+        assert!(
+            err.message.contains("not both"),
+            "error must explain mutual exclusion; got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn parse_tree_lookup_rejects_neither() {
+        let map = args_map(json!({}));
+        let err = parse_tree_lookup(&map).expect_err("missing both modes must be rejected");
+        assert!(
+            err.message.contains("`id`") && err.message.contains("`notebook`"),
+            "error must mention both modes; got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn parse_depth_defaults_to_one() {
+        let map = args_map(json!({}));
+        let d = parse_depth(&map).expect("missing depth → default 1");
+        assert!(matches!(d, Depth::N(1)));
+    }
+
+    #[test]
+    fn parse_depth_accepts_integer() {
+        let map = args_map(json!({ "depth": 5 }));
+        let d = parse_depth(&map).expect("integer depth is valid");
+        assert!(matches!(d, Depth::N(5)));
+    }
+
+    #[test]
+    fn parse_depth_accepts_string_all() {
+        let map = args_map(json!({ "depth": "all" }));
+        let d = parse_depth(&map).expect("'all' is valid");
+        assert!(matches!(d, Depth::All));
+    }
+
+    #[test]
+    fn parse_depth_accepts_string_all_case_insensitive() {
+        let map = args_map(json!({ "depth": "ALL" }));
+        let d = parse_depth(&map).expect("'ALL' is valid");
+        assert!(matches!(d, Depth::All));
+    }
+
+    // Acceptance: depth=0 must be rejected at the boundary. This mirrors
+    // the clap-side rejection so the MCP path produces the same error.
+    #[test]
+    fn parse_depth_rejects_zero_integer() {
+        let map = args_map(json!({ "depth": 0 }));
+        let err = parse_depth(&map).expect_err("depth=0 must be rejected");
+        assert!(
+            err.message.contains(">= 1"),
+            "error must reference >= 1 floor; got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn parse_depth_rejects_zero_string() {
+        let map = args_map(json!({ "depth": "0" }));
+        let err = parse_depth(&map).expect_err("depth='0' must be rejected");
+        assert!(
+            err.message.contains(">= 1"),
+            "error must reference >= 1 floor; got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn parse_depth_rejects_garbage_string() {
+        let map = args_map(json!({ "depth": "everything" }));
+        let err = parse_depth(&map).expect_err("garbage string must be rejected");
+        assert!(
+            err.message.contains("positive integer") || err.message.contains("'all'"),
+            "error must guide caller; got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn parse_depth_rejects_wrong_type() {
+        let map = args_map(json!({ "depth": [1, 2, 3] }));
+        let err = parse_depth(&map).expect_err("array depth must be rejected");
+        assert!(
+            err.message.contains("integer") || err.message.contains("'all'"),
+            "error must explain valid types; got: {}",
             err.message
         );
     }

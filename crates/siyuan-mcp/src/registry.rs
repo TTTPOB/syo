@@ -353,35 +353,26 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         let c = Arc::clone(&client);
         reg!(
             "siyuan_doc_resolve",
-            "Resolve a human-readable hpath to one or more document block ids. \
-             `hpath` is the `/Folder/Title` style path as seen in the SiYuan UI; \
-             `notebook` is the notebook id. Returns an array of matching ids (usually one, \
-             but SiYuan allows duplicate hpaths in some edge cases). Use this as the first \
-             step whenever you know a document's title/path but need its id for \
-             `siyuan_get_doc`, `siyuan_update_block`, etc. \
-             Response: { \"ids\": [\"<block-id>\", ...] }.",
-            r#"{"type":"object","required":["notebook","hpath"],"properties":{"notebook":{"type":"string"},"hpath":{"type":"string"}},"additionalProperties":true}"#,
+            "Look up document metadata by EITHER block id OR (notebook + hpath) — pick \
+             exactly one input mode; supplying both, or neither, is an error. \
+             Use the `id` direction to recover an hpath (e.g. after a move or rename, or \
+             when you only have an id from SQL/search results). Use the `notebook + hpath` \
+             direction to locate a document by its human-readable title/path before calling \
+             tools that require a block id (`siyuan_get_doc`, `siyuan_update_block`, etc.). \
+             Returns an array of matches under `docs`; SiYuan allows duplicate hpaths in \
+             rare edge cases so the array may have more than one entry, and is empty when \
+             nothing matches (this is NOT an error — it just means no such document). \
+             Each entry has six fields: `id` (block id), `hpath` (human path), `notebook_id`, \
+             `notebook_name`, `title` (last `/`-delimited segment of `hpath`), and \
+             `storage_path` (the `.sy` file path). The `storage_path` is the value you pass \
+             as `path` / `from_paths` to `siyuan_doc_rename`, `siyuan_doc_move`, and \
+             `siyuan_doc_remove` — those endpoints take storage paths, not hpaths. \
+             Response: { \"docs\": [ { \"id\": ..., \"hpath\": ..., \"notebook_id\": ..., \
+             \"notebook_name\": ..., \"title\": ..., \"storage_path\": ... }, ... ] }.",
+            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::resolve(&c, args).await }
-            })
-        );
-    }
-
-    {
-        let c = Arc::clone(&client);
-        reg!(
-            "siyuan_doc_hpath_by_id",
-            "Look up the human-readable hpath (`/Folder/Title` style) for a document given \
-             its root block id. Use this to recover the display path after a move or rename, \
-             or when you have an id from SQL results and want to present a human-readable \
-             location to the user. This call reflects filesystem state immediately — it does \
-             not go through the SQL index and is not subject to indexing lag. \
-             Response: { \"hpath\": \"/Folder/Title\" }.",
-            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string"}},"additionalProperties":true}"#,
-            make_handler(move |_, args| {
-                let c = Arc::clone(&c);
-                async move { tools::filetree::hpath_by_id(&c, args).await }
             })
         );
     }
@@ -393,11 +384,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "Rename a document by changing its display title. \
              IMPORTANT: `path` is the on-disk storage path (with `.sy` suffix, e.g. \
              `/20230101120000-abcdefg.sy`), NOT the human-readable hpath. \
-             To obtain the storage path from an id, use the SQL blocks table \
-             (`SELECT path FROM blocks WHERE id = '<id>'`) or derive it from the \
-             filesystem layout. The `title` parameter is the new human-readable display name. \
-             The hpath returned by `siyuan_doc_hpath_by_id` reflects the new title immediately \
-             after this call.",
+             To obtain the storage path from an id, call `siyuan_doc_resolve` with the id — \
+             the returned `storage_path` field is what you want here. The `title` parameter \
+             is the new human-readable display name. The hpath returned by a subsequent \
+             `siyuan_doc_resolve` call reflects the new title immediately after this call.",
             r#"{"type":"object","required":["notebook","path","title"],"properties":{"notebook":{"type":"string"},"path":{"type":"string","description":"Storage .sy path"},"title":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -413,10 +403,9 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "Move one or more documents to a different location in the file tree. \
              IMPORTANT: `from_paths` contains storage `.sy` paths (NOT hpaths). \
              `to_notebook` is the destination notebook id; `to_path` is the destination \
-             folder as a storage path (NOT an hpath). Use `siyuan_doc_hpath_by_id` or the \
-             SQL blocks table to obtain storage paths from ids. After the move, \
-             `siyuan_doc_resolve` and `siyuan_doc_hpath_by_id` reflect the new location \
-             immediately. This is a filesystem-level mutation.",
+             folder as a storage path (NOT an hpath). Call `siyuan_doc_resolve` first to \
+             obtain `storage_path` values from ids. After the move, `siyuan_doc_resolve` \
+             reflects the new location immediately. This is a filesystem-level mutation.",
             r#"{"type":"object","required":["from_paths","to_notebook","to_path"],"properties":{"from_paths":{"type":"array","items":{"type":"string"}},"to_notebook":{"type":"string"},"to_path":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -431,10 +420,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "siyuan_doc_remove",
             "Permanently remove a document and all its child blocks. \
              This action is irreversible. IMPORTANT: `path` is the on-disk storage path \
-             (with `.sy` suffix), NOT the human-readable hpath. Use the SQL blocks table or \
-             `siyuan_doc_resolve` followed by a SQL lookup to obtain the storage path. \
-             After removal, `siyuan_doc_resolve` will no longer find this path. \
-             Verify the notebook and path before calling this tool.",
+             (with `.sy` suffix), NOT the human-readable hpath. Call `siyuan_doc_resolve` \
+             to obtain the `storage_path` from an id or hpath. After removal, \
+             `siyuan_doc_resolve` will no longer find this document. Verify the notebook \
+             and path before calling this tool.",
             r#"{"type":"object","required":["notebook","path"],"properties":{"notebook":{"type":"string"},"path":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);

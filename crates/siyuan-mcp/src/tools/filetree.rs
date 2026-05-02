@@ -2,9 +2,12 @@ use rmcp::ErrorData as McpError;
 use serde_json::{Value, json};
 
 use siyuan_client::SiyuanClient;
+use siyuan_model::doc_meta::{DocLookup, resolve as resolve_doc_meta};
 use siyuan_types::{BlockId, NotebookId};
 
-use super::util::{ensure_object, required_string, siyuan_to_mcp, string_array, with_hint};
+use super::util::{
+    ensure_object, optional_string, required_string, siyuan_to_mcp, string_array, with_hint,
+};
 
 fn parse_notebook_id(s: &str) -> Result<NotebookId, McpError> {
     NotebookId::parse(s)
@@ -15,29 +18,71 @@ fn parse_block_id(s: &str) -> Result<BlockId, McpError> {
     BlockId::parse(s).map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))
 }
 
-pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
-    let notebook = parse_notebook_id(&required_string(&map, "notebook")?)?;
-    let hpath = required_string(&map, "hpath")?;
-    // Reject blank/whitespace-only hpaths but allow exactly "/" since the
-    // kernel uses it as the canonical root hpath.
-    if hpath != "/" && hpath.trim().is_empty() {
-        return Err(McpError::invalid_params("`hpath` must not be empty", None));
-    }
-
-    let ids = client
-        .get_ids_by_hpath(&notebook, &hpath)
-        .await
-        .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ids": ids }))
+/// Treat whitespace-only inputs as absent. Mirrors the rejection pattern used
+/// elsewhere in this module so agents can't accidentally squeak past the
+/// "exactly one input mode" rule by passing `"   "`.
+fn is_present(s: Option<&str>) -> bool {
+    s.is_some_and(|v| !v.trim().is_empty())
 }
 
-pub async fn hpath_by_id(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
+pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
-    let id = parse_block_id(&required_string(&map, "id")?)?;
 
-    let hpath = client.get_hpath_by_id(&id).await.map_err(siyuan_to_mcp)?;
-    Ok(json!({ "hpath": hpath }))
+    // Optional inputs. We allow exactly ONE of `id` or (`notebook` + `hpath`).
+    // Whitespace-only strings count as absent.
+    let id_raw = optional_string(&map, "id");
+    let nb_raw = optional_string(&map, "notebook");
+    let hp_raw = optional_string(&map, "hpath");
+
+    let has_id = is_present(id_raw.as_deref());
+    let has_nb = is_present(nb_raw.as_deref());
+    let has_hp = is_present(hp_raw.as_deref());
+
+    // The hpath branch needs both fields together; partial supply is misuse.
+    let has_hpath_branch = has_nb || has_hp;
+
+    if has_id && has_hpath_branch {
+        return Err(McpError::invalid_params(
+            "provide either `id` or (`notebook` + `hpath`), not both",
+            None,
+        ));
+    }
+    if !has_id && !has_hpath_branch {
+        return Err(McpError::invalid_params(
+            "provide either `id` or (`notebook` + `hpath`)",
+            None,
+        ));
+    }
+
+    let lookup = if has_id {
+        DocLookup::ById(parse_block_id(
+            id_raw.as_deref().unwrap_or_default().trim(),
+        )?)
+    } else {
+        // Hpath branch: both halves are required.
+        if !has_nb {
+            return Err(McpError::invalid_params(
+                "`notebook` is required when looking up by hpath",
+                None,
+            ));
+        }
+        if !has_hp {
+            return Err(McpError::invalid_params(
+                "`hpath` is required when looking up by notebook",
+                None,
+            ));
+        }
+        let notebook = parse_notebook_id(nb_raw.as_deref().unwrap_or_default().trim())?;
+        // Preserve the user-supplied hpath verbatim — the kernel uses `/` as
+        // the canonical root and we don't want to silently rewrite it.
+        let hpath = hp_raw.unwrap_or_default();
+        DocLookup::ByHpath { notebook, hpath }
+    };
+
+    let docs = resolve_doc_meta(client, lookup)
+        .await
+        .map_err(siyuan_to_mcp)?;
+    Ok(json!({ "docs": docs }))
 }
 
 pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -53,7 +98,7 @@ pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
         .map_err(siyuan_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
-        "Filesystem-level mutation: document title updated. siyuan_doc_hpath_by_id reflects the \
+        "Filesystem-level mutation: document title updated. siyuan_doc_resolve reflects the \
          new title immediately. Use the storage .sy path for any follow-up calls requiring path.",
     ))
 }
@@ -80,7 +125,7 @@ pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpEr
     Ok(with_hint(
         json!({ "ok": true }),
         "Filesystem-level mutation: documents moved to the target notebook/path. \
-         siyuan_doc_resolve and siyuan_doc_hpath_by_id reflect the change immediately. \
+         siyuan_doc_resolve reflects the change immediately. \
          Use the storage .sy path for follow-up calls.",
     ))
 }
@@ -131,18 +176,67 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resolve_rejects_whitespace_hpath() {
+    async fn resolve_rejects_both_id_and_hpath() {
         let client = dummy_client();
         let args = json!({
+            "id": "20260501090000-doc0001",
             "notebook": "20260501000000-nb00001",
-            "hpath": "   ",
+            "hpath": "/Plan",
         });
         let err = resolve(&client, args)
             .await
-            .expect_err("whitespace hpath must be rejected");
+            .expect_err("both id and hpath branch must be rejected");
+        assert!(
+            err.message.contains("not both"),
+            "error message should explain mutual exclusion; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_rejects_neither() {
+        let client = dummy_client();
+        let args = json!({});
+        let err = resolve(&client, args)
+            .await
+            .expect_err("missing both modes must be rejected");
+        // Match on the user-facing phrasing rather than a single keyword so
+        // we catch any future rewording that drops the disambiguation hint.
+        assert!(
+            err.message.contains("`id`") && err.message.contains("`hpath`"),
+            "error message should mention both input modes; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_rejects_partial_hpath_branch_missing_hpath() {
+        let client = dummy_client();
+        let args = json!({
+            "notebook": "20260501000000-nb00001",
+        });
+        let err = resolve(&client, args)
+            .await
+            .expect_err("notebook without hpath must be rejected");
         assert!(
             err.message.contains("hpath"),
             "error message should reference `hpath`; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_rejects_partial_hpath_branch_missing_notebook() {
+        let client = dummy_client();
+        let args = json!({
+            "hpath": "/Plan",
+        });
+        let err = resolve(&client, args)
+            .await
+            .expect_err("hpath without notebook must be rejected");
+        assert!(
+            err.message.contains("notebook"),
+            "error message should reference `notebook`; got: {}",
             err.message
         );
     }

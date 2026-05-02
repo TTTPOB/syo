@@ -34,8 +34,6 @@ The hint is informational only — it is never required for correctness. It surf
 | `siyuan_get_attrs` | Read all attributes of a block. |
 | `siyuan_set_attrs` | Partially update attributes on a block (custom- prefix required). |
 | `siyuan_notebook_ls` | List all notebooks (open and closed). |
-| `siyuan_notebook_open` | Mount a notebook so its documents become accessible. |
-| `siyuan_notebook_close` | Unmount a notebook. |
 | `siyuan_notebook_create` | Create a new notebook. |
 | `siyuan_notebook_rename` | Rename a notebook. |
 | `siyuan_notebook_remove` | Permanently remove a notebook and all its documents. |

@@ -61,15 +61,6 @@ impl SiyuanClient {
         Ok(())
     }
 
-    pub async fn close_notebook(&self, id: &NotebookId) -> Result<(), SiyuanError> {
-        let _: serde_json::Value = self
-            .post_envelope("/api/notebook/closeNotebook", &OneNotebook { notebook: id })
-            .await?
-            .into_result_or_unit()?
-            .unwrap_or(serde_json::Value::Null);
-        Ok(())
-    }
-
     pub async fn create_notebook(&self, name: &str) -> Result<Notebook, SiyuanError> {
         let data: CreatedNotebook = self
             .post("/api/notebook/createNotebook", &CreateNotebook { name })

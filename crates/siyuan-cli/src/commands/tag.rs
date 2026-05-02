@@ -68,9 +68,12 @@ pub async fn run(client: &SiyuanClient, cmd: TagCmd) -> Result<()> {
         TagCmd::Search(a) => {
             // Mirror `search blocks`/`search text`: usize-typed CLI flag
             // capped at MAX_SEARCH_LIMIT so a pathological caller cannot
-            // ask the kernel for an unbounded result set.
+            // ask the kernel for an unbounded result set. `limit == 0` is
+            // intentionally NOT promoted to 1 — the model layer rejects it
+            // with a typed bail!, and surfacing that error makes misuse
+            // visible instead of papering over it.
             let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
-            let limit = a.limit.min(limit_cap).max(1);
+            let limit = a.limit.min(limit_cap);
             for hit in search_by_tag(client, &a.tag, limit).await? {
                 println!("{}\t{}", hit.block_id, hit.markdown_preview);
             }

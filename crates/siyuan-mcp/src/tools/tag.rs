@@ -23,12 +23,17 @@ pub async fn search_by_tag(client: &SiyuanClient, args: Value) -> Result<Value, 
     let tag = required_string(&map, "tag")?;
     // Cap user-supplied limit to MAX_SEARCH_LIMIT (mirrors siyuan_search_text)
     // so a pathological caller cannot ask the kernel for an unbounded result
-    // set. Floor of 1 keeps the model-layer assertion satisfied even if the
-    // caller passes 0.
-    let limit = optional_u64(&map, "limit")
-        .unwrap_or(50)
-        .min(MAX_SEARCH_LIMIT)
-        .max(1) as usize;
+    // set. `limit == 0` is rejected up front as invalid_params: the model
+    // layer's bail! reaches the user as a clear validation error rather than
+    // being silently promoted to 1.
+    let raw_limit = optional_u64(&map, "limit").unwrap_or(50);
+    if raw_limit == 0 {
+        return Err(McpError::invalid_params(
+            "`limit` must be greater than 0",
+            None,
+        ));
+    }
+    let limit = raw_limit.min(MAX_SEARCH_LIMIT) as usize;
 
     let hits = siyuan_model::tag::search_by_tag(client, &tag, limit)
         .await

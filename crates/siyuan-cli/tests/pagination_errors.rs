@@ -259,10 +259,11 @@ async fn auth_error_when_token_wrong() {
 // Error test 2: unknown block id — uniform NotFound contract
 //
 // Investigation finding: SiYuan kernel v3.6.5 returns code=0 with an empty
-// kramdown string for unknown block ids rather than a non-zero error code.
-// The client maps this kernel quirk to `SiyuanError::NotFound` so callers
-// get a typed signal regardless of which side detected the absence. This
-// test pins down the contract: an unknown id always yields NotFound.
+// kramdown string for unknown block ids — but it returns the same shape for
+// blocks whose content is genuinely empty. The client disambiguates by doing
+// a SQL existence probe on the empty-kramdown branch; only confirmed absence
+// surfaces as `SiyuanError::NotFound`. This test pins down the contract for
+// the absence case.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

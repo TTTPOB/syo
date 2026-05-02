@@ -105,18 +105,39 @@ impl SiyuanClient {
     /// Fetch the kramdown source of a block.
     ///
     /// Quirk: `/api/block/getBlockKramdown` returns `code = 0` with an empty
-    /// `data.kramdown` when the requested id does not exist. That collapses
-    /// "block missing" with "block exists but is genuinely empty" (the
-    /// latter is rare but possible). Surface the missing case as a typed
-    /// `SiyuanError::NotFound` so callers get a uniform contract.
+    /// `data.kramdown` for two indistinguishable cases — the id doesn't exist,
+    /// and the block exists but its content is genuinely empty (rare but
+    /// possible). To give callers a uniform contract, only report
+    /// `SiyuanError::NotFound` when a follow-up SQL existence probe confirms
+    /// the id is absent; if the kernel echoes empty kramdown for an id that
+    /// SQL still knows about, return `Ok` with the empty string verbatim. If
+    /// the verification probe itself fails (SQL unavailable, network blip,
+    /// auth revoked between calls), trust the kernel's original response and
+    /// surface the empty kramdown rather than guessing.
     pub async fn get_block_kramdown(&self, id: &BlockId) -> Result<BlockKramdown, SiyuanError> {
         let bk: BlockKramdown = self
             .post("/api/block/getBlockKramdown", &ById { id })
             .await?;
-        if bk.kramdown.is_empty() {
-            return Err(SiyuanError::NotFound(format!("block {id}")));
+        if !bk.kramdown.is_empty() {
+            return Ok(bk);
         }
-        Ok(bk)
+        match self.block_exists(id).await {
+            Ok(true) => Ok(bk),
+            Ok(false) => Err(SiyuanError::NotFound(format!("block {id}"))),
+            // Verification failed for a reason orthogonal to existence; fall
+            // back to the kernel's response so we don't manufacture errors.
+            Err(_) => Ok(bk),
+        }
+    }
+
+    /// Probe the SQL index for whether a block id is present.
+    ///
+    /// `BlockId` is regex-validated to `^\d{14}-[0-9a-z]{7}$` at construction,
+    /// so direct string interpolation here is injection-safe.
+    async fn block_exists(&self, id: &BlockId) -> Result<bool, SiyuanError> {
+        let stmt = format!("SELECT 1 FROM blocks WHERE id = '{}' LIMIT 1", id.as_str());
+        let rows = self.sql(&stmt).await?;
+        Ok(!rows.is_empty())
     }
 
     pub async fn get_child_blocks(&self, id: &BlockId) -> Result<Vec<ChildBlock>, SiyuanError> {

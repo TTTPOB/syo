@@ -179,16 +179,18 @@ async fn pagination_last_page_partial() {
 }
 
 // ---------------------------------------------------------------------------
-// Pagination test 4: requesting page 999 on a small doc returns empty blocks
+// Pagination test 4: requesting an out-of-bounds page clamps to the last page
 //
-// The paginator clamps page to total_pages when page > total_pages,
-// so rather than "empty" we get the last page. We assert the opposite:
-// total_pages > 0 (doc exists) and the clamped result has <= total_blocks blocks.
+// The paginator (siyuan-model::pagination::paginate) clamps the requested
+// page to total_pages when the caller asks for a page past the end, so the
+// returned bundle is the *last* real page — not an empty one. This contract
+// is what BUG-1 relies on; the test below pins it down with concrete asserts
+// instead of vacuous bounds.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[ignore]
-async fn pagination_invalid_page_returns_empty() {
+async fn pagination_oob_page_clamps_to_last() {
     let f = boot_with_seed().await.expect("boot");
 
     // f.doc_id is the small seeded doc (6+ blocks).
@@ -203,8 +205,21 @@ async fn pagination_invalid_page_returns_empty() {
     .await
     .expect("load_doc page 999");
 
-    // The paginator clamps to total_pages, so the result is the last real page.
-    // What we guarantee: doc exists (total_pages > 0) and blocks <= total_blocks.
+    // Hard guarantees of clamping behavior on a non-empty doc.
+    assert_eq!(
+        bundle.page.page, bundle.page.total_pages,
+        "out-of-bounds page must be clamped to total_pages"
+    );
+    assert!(
+        bundle.blocks.len() <= bundle.page.page_size,
+        "page must not exceed page_size"
+    );
+    assert!(
+        !bundle.blocks.is_empty(),
+        "seeded doc is non-empty so the clamped last page must contain blocks"
+    );
+
+    // Soft contract assertions kept for documentation.
     assert!(
         bundle.page.total_pages > 0,
         "total_pages must be positive for a real doc"

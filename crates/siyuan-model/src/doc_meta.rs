@@ -123,6 +123,63 @@ pub async fn resolve(
     Ok(out)
 }
 
+/// Resolve a [`DocLookup`] to exactly one `(notebook_id, storage_path)` pair.
+///
+/// Wraps [`resolve`] for the rename/move/remove call sites that need a single
+/// storage path and refuse to silently pick one when the lookup is ambiguous:
+/// - 0 hits → [`SiyuanError::NotFound`] (the kernel would otherwise return a
+///   confusing API error like "file does not exist" with the still-unresolved
+///   hpath in the message);
+/// - 1 hit → `(notebook_id, storage_path)`;
+/// - more than 1 hit → [`SiyuanError::AmbiguousPath`] with all candidate ids
+///   so the caller can disambiguate by id.
+///
+/// The hpath surfaced in the `NotFound` / `AmbiguousPath` errors is the one the
+/// caller passed in (for `ByHpath`) or a synthetic `id:<...>` marker (for
+/// `ById`) so the message is always actionable.
+pub async fn resolve_one_storage(
+    client: &SiyuanClient,
+    lookup: DocLookup,
+) -> Result<(NotebookId, String), SiyuanError> {
+    // Capture a human-readable identifier BEFORE moving `lookup` into
+    // `resolve`, so the error path below can quote what the caller asked for
+    // without needing to reconstruct it.
+    let descriptor = match &lookup {
+        DocLookup::ById(id) => format!("id:{}", id.as_str()),
+        DocLookup::ByHpath { hpath, .. } => hpath.clone(),
+    };
+
+    let docs = resolve(client, lookup).await?;
+    pick_one_storage(descriptor, docs)
+}
+
+/// Pure dispatch over `resolve`'s output. Split out so it is unit-testable
+/// without a live `SiyuanClient` — the `>1` and `0` branches in particular
+/// can't be reproduced through the dummy-client pattern used elsewhere.
+fn pick_one_storage(
+    descriptor: String,
+    docs: Vec<ResolvedDoc>,
+) -> Result<(NotebookId, String), SiyuanError> {
+    match docs.len() {
+        0 => Err(SiyuanError::NotFound(descriptor)),
+        1 => {
+            let d = docs.into_iter().next().expect("len==1 implies one element");
+            Ok((d.notebook_id, d.storage_path))
+        }
+        // >1 hits: surface ALL candidate ids so the caller can disambiguate
+        // by id rather than guessing. The kernel allows duplicate hpaths in
+        // rare edge cases (e.g. concurrent doc creation races) — we do not
+        // pick a winner here.
+        _ => {
+            let candidates = docs.into_iter().map(|d| d.id).collect();
+            Err(SiyuanError::AmbiguousPath {
+                hpath: descriptor,
+                candidates,
+            })
+        }
+    }
+}
+
 /// Derive the document title from its hpath. The kernel stores hpaths as
 /// `/Folder/Title`; the title is the last `/`-delimited segment. Edge cases
 /// follow `rsplit('/').next()` mechanics:
@@ -176,5 +233,79 @@ mod tests {
     #[test]
     fn title_from_unrooted_hpath_returns_whole_string() {
         assert_eq!(title_from_hpath("Foo"), "Foo");
+    }
+
+    // ---- pick_one_storage --------------------------------------------------
+    //
+    // The `resolve_one_storage` wrapper composes a network call with
+    // `pick_one_storage`. The pure dispatch is the interesting failure-mode
+    // surface (0/1/>1 hits → which error variant?), so we test the dispatch
+    // directly. Exercising `resolve_one_storage` through a live kernel is
+    // covered by the integration tests in `crates/siyuan-cli/tests/`.
+
+    fn nb() -> NotebookId {
+        NotebookId::parse("20260501000000-nb00001").unwrap()
+    }
+
+    fn doc(id: &str, hpath: &str, storage_path: &str) -> ResolvedDoc {
+        ResolvedDoc {
+            id: BlockId::parse(id).unwrap(),
+            hpath: hpath.to_string(),
+            notebook_id: nb(),
+            notebook_name: "Inbox".to_string(),
+            title: hpath.rsplit('/').next().unwrap_or("").to_string(),
+            storage_path: storage_path.to_string(),
+        }
+    }
+
+    #[test]
+    fn pick_one_storage_zero_hits_is_not_found() {
+        let err = pick_one_storage("/Missing".into(), Vec::new()).expect_err("0 hits must error");
+        match err {
+            SiyuanError::NotFound(s) => assert_eq!(s, "/Missing"),
+            other => panic!("expected NotFound, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pick_one_storage_one_hit_returns_pair() {
+        let docs = vec![doc(
+            "20260501090000-doc0001",
+            "/Plan",
+            "/20260501090000-doc0001.sy",
+        )];
+        let (nb_id, path) =
+            pick_one_storage("/Plan".into(), docs).expect("single hit must succeed");
+        assert_eq!(nb_id, nb());
+        assert_eq!(path, "/20260501090000-doc0001.sy");
+    }
+
+    // Locks the contract for the >1 hits case: the kernel can return more
+    // than one document at the same hpath in rare race conditions, and we
+    // want callers to see ALL candidate ids so they can disambiguate by id.
+    #[test]
+    fn pick_one_storage_multiple_hits_is_ambiguous_with_all_candidates() {
+        let docs = vec![
+            doc(
+                "20260501090000-doc0001",
+                "/Plan",
+                "/20260501090000-doc0001.sy",
+            ),
+            doc(
+                "20260501090000-doc0002",
+                "/Plan",
+                "/20260501090000-doc0002.sy",
+            ),
+        ];
+        let err = pick_one_storage("/Plan".into(), docs).expect_err(">1 hits must error");
+        match err {
+            SiyuanError::AmbiguousPath { hpath, candidates } => {
+                assert_eq!(hpath, "/Plan");
+                assert_eq!(candidates.len(), 2);
+                assert_eq!(candidates[0].as_str(), "20260501090000-doc0001");
+                assert_eq!(candidates[1].as_str(), "20260501090000-doc0002");
+            }
+            other => panic!("expected AmbiguousPath, got {other:?}"),
+        }
     }
 }

@@ -576,8 +576,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Sibling tools: `siyuan_get_doc` returns the rendered document content (and \
              requires an id); this tool returns ONLY the metadata (id, hpath, notebook_id, \
              notebook_name, title, storage_path) and is the canonical hpath<->id translator. \
-             `siyuan_notebook_ls` enumerates whole notebooks. Reach for this tool before \
-             any rename/move/remove call to recover a storage path from an id or hpath.\n\
+             `siyuan_notebook_ls` enumerates whole notebooks. As of the dual-mode locator \
+             rollout, `siyuan_doc_rename`/`_remove`/`_move` accept the same id-or-hpath \
+             addressing natively, so resolve is no longer a mandatory pre-step — use it \
+             when you need the metadata itself (e.g. `storage_path` for diagnostics).\n\
              \n\
              Inputs: provide EXACTLY ONE input mode — either `id` to recover hpath/notebook \
              from a known id (e.g. after a move/rename, or when only an id is in hand from \
@@ -590,9 +592,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              edge cases so the array may contain more than one entry. Each entry has six \
              fields: `id` (block id), `hpath` (human path), `notebook_id`, `notebook_name`, \
              `title` (last `/`-delimited segment of `hpath`), and `storage_path` (the `.sy` \
-             file path). The `storage_path` is what `siyuan_doc_rename`, `siyuan_doc_move`, \
-             and `siyuan_doc_remove` take as their `path` / `from_paths` argument — those \
-             endpoints accept STORAGE paths, NOT hpaths.\n\
+             file path; an internal kernel detail surfaced here for diagnostics — the \
+             rename/move/remove tools no longer accept it as input).\n\
              \n\
              Example:\n\
                in:  { \"id\": \"20260501090000-doc0001\" }\n\
@@ -616,14 +617,19 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Sibling tools: `siyuan_doc_move` changes the parent folder of a document; \
              this tool changes only its title (the last hpath segment). `siyuan_set_attrs` \
-             with key `icon` is the analogous icon mutator.\n\
+             with key `icon` is the analogous icon mutator. `siyuan_doc_resolve` is no \
+             longer required as a pre-step — this tool accepts the same id-or-hpath \
+             locator natively.\n\
              \n\
-             Inputs: `notebook` (required) is the notebook id. `path` (required) is the \
-             on-disk STORAGE path with `.sy` suffix (e.g. `/20230101120000-abcdefg.sy`) — \
-             NOT the human-readable hpath. Call `siyuan_doc_resolve` with the id to obtain \
-             `storage_path` and pass that as `path` here. `title` (required) is the new \
-             human-readable display name; a subsequent `siyuan_doc_resolve` reflects the \
-             new title immediately.\n\
+             Inputs: provide EXACTLY ONE locator mode plus `title`.\n\
+               * `id` (string): document block id; the simplest form when an id is in \
+                 hand from SQL/search/another tool.\n\
+               * `notebook` + `hpath` (both strings): locate the document by human path \
+                 (e.g. `/Projects/Plan`) inside `notebook`. Both fields are required \
+                 together; supplying one without the other is an error.\n\
+               * `title` (string, required): new human-readable display name.\n\
+             Storage `.sy` paths are NOT accepted — the legacy `path` argument is gone \
+             and the tool resolves the storage path internally before calling the kernel.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
              siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
@@ -631,9 +637,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              lags.\n\
              \n\
              Example:\n\
-               in:  { \"notebook\": \"20260501000000-nb00001\", \"path\": \"/20260501090000-doc0001.sy\", \"title\": \"Q3 Plan\" }\n\
+               in:  { \"id\": \"20260501090000-doc0001\", \"title\": \"Q3 Plan\" }\n\
+               out: { \"ok\": true }\n\
+             \n\
+               in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\", \"title\": \"Q3 Plan\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["notebook","path","title"],"properties":{"notebook":{"type":"string"},"path":{"type":"string","description":"Storage .sy path"},"title":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["title"],"properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"},"title":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::rename_doc(&c, args).await }
@@ -649,15 +658,26 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Sibling tools: `siyuan_move_block` moves a block within a document tree \
              (block-level); `siyuan_doc_rename` only retitles. siyuan_doc_move relocates \
-             whole `.sy` files in the file tree.\n\
+             whole `.sy` files in the file tree. `siyuan_doc_resolve` is no longer a \
+             required pre-step — this tool accepts the same id-or-hpath addressing \
+             natively (in batch form).\n\
              \n\
-             Inputs: `from_paths` (required, non-empty array) holds source documents as \
-             STORAGE `.sy` paths — NOT hpaths. `to_notebook` (required) is the destination \
-             notebook id. `to_path` (required) is the destination FOLDER as a storage \
-             path (e.g. `/Projects` or `/`); not an hpath, although for folders the two \
-             often coincide because folders carry no `.sy` suffix. Each source's own `.sy` \
-             filename is preserved at the target. Call `siyuan_doc_resolve` first to obtain \
-             `storage_path` values from ids.\n\
+             Inputs: source addressing has TWO mutually exclusive modes.\n\
+               * `from_ids` (array of strings, non-empty): source documents addressed \
+                 by block id.\n\
+               * `notebook` (string) + `from_hpaths` (array of strings, non-empty): \
+                 source documents addressed by human path inside `notebook`. The two \
+                 fields must be supplied together; `notebook` here is the SOURCE \
+                 notebook (distinct from `to_notebook`).\n\
+             Destination is the same shape in both modes:\n\
+               * `to_notebook` (string, required): DESTINATION notebook id.\n\
+               * `to_path` (string, required): destination FOLDER as an hpath (e.g. \
+                 `/Projects` or `/`). For folders the hpath and storage path coincide \
+                 because folders carry no `.sy` suffix. Each source's own `.sy` filename \
+                 is preserved at the target.\n\
+             Storage `.sy` paths are NOT accepted as sources — the legacy `from_paths` \
+             argument is gone and the tool resolves storage paths internally before \
+             calling the kernel.\n\
              \n\
              After the move, `siyuan_doc_resolve` reflects the new location immediately. \
              SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
@@ -666,9 +686,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              lags.\n\
              \n\
              Example:\n\
-               in:  { \"from_paths\": [\"/20260501090000-doc0001.sy\"], \"to_notebook\": \"20260501000000-nb00002\", \"to_path\": \"/\" }\n\
+               in:  { \"from_ids\": [\"20260501090000-doc0001\"], \"to_notebook\": \"20260501000000-nb00002\", \"to_path\": \"/\" }\n\
+               out: { \"ok\": true }\n\
+             \n\
+               in:  { \"notebook\": \"20260501000000-nb00001\", \"from_hpaths\": [\"/Plan\", \"/Notes\"], \"to_notebook\": \"20260501000000-nb00002\", \"to_path\": \"/Archive\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["from_paths","to_notebook","to_path"],"properties":{"from_paths":{"type":"array","items":{"type":"string"}},"to_notebook":{"type":"string"},"to_path":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["to_notebook","to_path"],"properties":{"from_ids":{"type":"array","items":{"type":"string"},"description":"Source document ids (use this OR notebook+from_hpaths)"},"notebook":{"type":"string","description":"SOURCE notebook id (use with from_hpaths)"},"from_hpaths":{"type":"array","items":{"type":"string"},"description":"Source hpaths inside `notebook` (use with notebook)"},"to_notebook":{"type":"string","description":"DESTINATION notebook id"},"to_path":{"type":"string","description":"Destination folder hpath (e.g. /Projects)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::move_doc(&c, args).await }
@@ -685,11 +708,16 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Sibling tools: `siyuan_delete_block` with the document root id deletes the \
              same content via the block API; `siyuan_doc_move` relocates instead of \
              deleting; `siyuan_notebook_remove` destroys an entire notebook. \
-             siyuan_doc_remove is the per-document destroyer.\n\
+             siyuan_doc_remove is the per-document destroyer. `siyuan_doc_resolve` is no \
+             longer a required pre-step — this tool accepts the same id-or-hpath \
+             locator natively.\n\
              \n\
-             Inputs: `notebook` (required) is the notebook id. `path` (required) is the \
-             on-disk STORAGE path with `.sy` suffix — NOT the human-readable hpath. Call \
-             `siyuan_doc_resolve` first to obtain the `storage_path` from an id or hpath.\n\
+             Inputs: provide EXACTLY ONE locator mode.\n\
+               * `id` (string): document block id.\n\
+               * `notebook` + `hpath` (both strings): locate by human path inside the \
+                 given notebook. Both fields are required together.\n\
+             Storage `.sy` paths are NOT accepted — the legacy `path` argument is gone \
+             and the tool resolves the storage path internally before calling the kernel.\n\
              \n\
              After removal, `siyuan_doc_resolve` no longer finds this document. \
              SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
@@ -698,9 +726,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              lags.\n\
              \n\
              Example:\n\
-               in:  { \"notebook\": \"20260501000000-nb00001\", \"path\": \"/20260501090000-doc0001.sy\" }\n\
+               in:  { \"id\": \"20260501090000-doc0001\" }\n\
+               out: { \"ok\": true }\n\
+             \n\
+               in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["notebook","path"],"properties":{"notebook":{"type":"string"},"path":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::remove_doc(&c, args).await }

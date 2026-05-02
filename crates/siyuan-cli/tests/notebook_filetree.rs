@@ -124,26 +124,20 @@ async fn get_hpath_by_id_round_trips() {
     );
 }
 
-#[tokio::test]
-#[ignore]
-async fn rename_doc_changes_title() {
-    let f: Fixture = boot_with_seed().await.expect("boot");
-
-    // The kernel's renameDoc API takes the .sy file path based on the doc id,
-    // not the human-readable hpath. The actual file is /<doc_id>.sy on disk.
-    let rename_path = format!("/{}.sy", f.doc_id);
-    f.client
-        .rename_doc(&f.notebook_id, &rename_path, "Renamed Title")
-        .await
-        .expect("rename_doc");
-
-    // get_hpath_by_id reads from the kernel's in-memory filetree; poll briefly in
-    // case propagation takes a moment.
-    let doc_id = f.doc_id.clone();
-    let hpath = wait_for(
+/// Wait for an hpath inside `notebook` to contain `needle`. Used by the
+/// rename / move tests that drive the CLI binary and then verify via the
+/// kernel's in-memory filetree.
+async fn wait_for_hpath_containing(
+    client: &siyuan_client::SiyuanClient,
+    doc_id: &siyuan_types::BlockId,
+    needle: &str,
+) -> anyhow::Result<String> {
+    let needle = needle.to_string();
+    let id = doc_id.clone();
+    wait_for(
         || async {
-            let h = f.client.get_hpath_by_id(&doc_id).await?;
-            if h.contains("Renamed Title") {
+            let h = client.get_hpath_by_id(&id).await?;
+            if h.contains(&needle) {
                 Ok(Some(h))
             } else {
                 Ok(None)
@@ -152,37 +146,144 @@ async fn rename_doc_changes_title() {
         Duration::from_secs(5),
     )
     .await
-    .expect("timed out waiting for hpath to reflect renamed title");
+}
 
+/// Drive the compiled `siyuan` binary so the test exercises the same clap
+/// parse path the user/agent sees. Returns stdout on success.
+fn run_cli(container: &siyuan_testkit::SiyuanContainer, args: &[&str]) -> std::process::Output {
+    Command::new(binary_path())
+        .args([
+            "--base-url",
+            container.base_url(),
+            "--token",
+            container.token(),
+        ])
+        .args(args)
+        .output()
+        .expect("spawn siyuan binary")
+}
+
+#[tokio::test]
+#[ignore]
+async fn rename_doc_by_id_changes_title() {
+    let f: Fixture = boot_with_seed().await.expect("boot");
+
+    let id_str = f.doc_id.to_string();
+    let out = run_cli(
+        &f.container,
+        &["doc", "rename", "--id", &id_str, "--title", "Renamed By Id"],
+    );
     assert!(
-        hpath.contains("Renamed Title"),
-        "hpath should contain 'Renamed Title' after rename_doc; got: {hpath:?}"
+        out.status.success(),
+        "doc rename --id failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let hpath = wait_for_hpath_containing(&f.client, &f.doc_id, "Renamed By Id")
+        .await
+        .expect("timed out waiting for hpath to reflect renamed title");
+    assert!(
+        hpath.contains("Renamed By Id"),
+        "hpath should contain 'Renamed By Id' after rename; got: {hpath:?}"
     );
 }
 
 #[tokio::test]
 #[ignore]
-async fn move_docs_relocates_doc() {
+async fn rename_doc_by_hpath_changes_title() {
+    let f: Fixture = boot_with_seed().await.expect("boot");
+
+    let nb_str = f.notebook_id.to_string();
+    let out = run_cli(
+        &f.container,
+        &[
+            "doc",
+            "rename",
+            "--notebook",
+            &nb_str,
+            "--hpath",
+            "/IntegrationTestDoc",
+            "--title",
+            "Renamed By Hpath",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "doc rename --notebook --hpath failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let hpath = wait_for_hpath_containing(&f.client, &f.doc_id, "Renamed By Hpath")
+        .await
+        .expect("timed out waiting for hpath to reflect renamed title");
+    assert!(
+        hpath.contains("Renamed By Hpath"),
+        "hpath should contain 'Renamed By Hpath' after rename; got: {hpath:?}"
+    );
+}
+
+/// The legacy `--path` flag is gone; clap must reject it at parse time.
+/// Locking this guard prevents anyone from accidentally re-introducing the
+/// old surface during a refactor.
+#[test]
+fn rename_doc_legacy_path_flag_is_rejected_by_clap() {
+    let out = Command::new(binary_path())
+        .args([
+            "doc",
+            "rename",
+            "--notebook",
+            "20260501000000-nb00001",
+            "--path",
+            "/20260501090000-doc0001.sy",
+            "--title",
+            "X",
+        ])
+        .output()
+        .expect("spawn siyuan");
+    assert!(
+        !out.status.success(),
+        "doc rename --path must error at clap parse time, but the CLI succeeded"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--path") || stderr.contains("unexpected"),
+        "clap should mention the offending flag; got stderr: {stderr}"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn move_docs_by_from_ids_relocates_doc() {
     let f: Fixture = boot_with_seed().await.expect("boot");
 
     // Create the destination notebook.
     let dest = f
         .client
-        .create_notebook("dest-nb")
+        .create_notebook("dest-nb-from-ids")
         .await
         .expect("create dest notebook");
-    // The new notebook may start closed; open it so the kernel tracks it fully.
     let _ = f.client.open_notebook(&dest.id).await;
 
-    // move_docs takes an on-disk .sy path: /<doc-id>.sy (no notebook segment).
-    // Note: get_hpath_by_id returns only the doc title path (no notebook prefix),
-    // so we cannot use hpath to verify notebook change. Instead we verify via
-    // get_ids_by_hpath on the destination notebook.
-    let from_path = format!("/{}.sy", f.doc_id);
-    f.client
-        .move_docs(&[from_path], &dest.id, "/")
-        .await
-        .expect("move_docs");
+    let id_str = f.doc_id.to_string();
+    let dest_str = dest.id.to_string();
+    let out = run_cli(
+        &f.container,
+        &[
+            "doc",
+            "move",
+            "--from-ids",
+            &id_str,
+            "--to-notebook",
+            &dest_str,
+            "--to-path",
+            "/",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "doc move --from-ids failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     // After the move, the doc should be resolvable in the destination notebook.
     let doc_id = f.doc_id.clone();
@@ -203,27 +304,105 @@ async fn move_docs_relocates_doc() {
     )
     .await
     .expect("timed out waiting for moved doc to appear in dest notebook hpath lookup");
+    assert!(ids.contains(&f.doc_id));
+}
 
+#[tokio::test]
+#[ignore]
+async fn move_docs_by_from_hpaths_relocates_doc() {
+    let f: Fixture = boot_with_seed().await.expect("boot");
+
+    let dest = f
+        .client
+        .create_notebook("dest-nb-from-hpaths")
+        .await
+        .expect("create dest notebook");
+    let _ = f.client.open_notebook(&dest.id).await;
+
+    let nb_str = f.notebook_id.to_string();
+    let dest_str = dest.id.to_string();
+    let out = run_cli(
+        &f.container,
+        &[
+            "doc",
+            "move",
+            "--notebook",
+            &nb_str,
+            "--from-hpaths",
+            "/IntegrationTestDoc",
+            "--to-notebook",
+            &dest_str,
+            "--to-path",
+            "/",
+        ],
+    );
     assert!(
-        ids.contains(&f.doc_id),
-        "doc should be resolvable in dest notebook after move"
+        out.status.success(),
+        "doc move --from-hpaths failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let doc_id = f.doc_id.clone();
+    let dest_id = dest.id.clone();
+    let ids = wait_for(
+        || async {
+            let ids = f
+                .client
+                .get_ids_by_hpath(&dest_id, "/IntegrationTestDoc")
+                .await?;
+            if ids.contains(&doc_id) {
+                Ok(Some(ids))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for moved doc to appear in dest notebook hpath lookup");
+    assert!(ids.contains(&f.doc_id));
+}
+
+/// Legacy `--from-paths` flag is gone; clap must reject it at parse time.
+#[test]
+fn move_docs_legacy_from_paths_flag_is_rejected_by_clap() {
+    let out = Command::new(binary_path())
+        .args([
+            "doc",
+            "move",
+            "--from-paths",
+            "/20260501090000-doc0001.sy",
+            "--to-notebook",
+            "20260501000000-nb00002",
+            "--to-path",
+            "/",
+        ])
+        .output()
+        .expect("spawn siyuan");
+    assert!(
+        !out.status.success(),
+        "doc move --from-paths must error at clap parse time, but the CLI succeeded"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--from-paths") || stderr.contains("unexpected"),
+        "clap should mention the offending flag; got stderr: {stderr}"
     );
 }
 
 #[tokio::test]
 #[ignore]
-async fn remove_doc_makes_lookup_empty() {
+async fn remove_doc_by_id_makes_lookup_empty() {
     let f: Fixture = boot_with_seed().await.expect("boot");
 
-    // remove_doc takes the .sy-suffixed path, not the human-readable hpath.
-    // Kernel convention: the path is /<doc-id>.sy.
-    let path = format!("/{}.sy", f.doc_id);
-    f.client
-        .remove_doc(&f.notebook_id, &path)
-        .await
-        .expect("remove_doc");
+    let id_str = f.doc_id.to_string();
+    let out = run_cli(&f.container, &["doc", "remove", "--id", &id_str]);
+    assert!(
+        out.status.success(),
+        "doc remove --id failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
-    // get_ids_by_hpath reads from the filetree; poll until the doc is gone.
     let nb_id = f.notebook_id.clone();
     let ids = wait_for(
         || async {
@@ -241,10 +420,74 @@ async fn remove_doc_makes_lookup_empty() {
     )
     .await
     .expect("timed out waiting for removed doc to disappear from hpath lookup");
+    assert!(ids.is_empty());
+}
 
+#[tokio::test]
+#[ignore]
+async fn remove_doc_by_hpath_makes_lookup_empty() {
+    let f: Fixture = boot_with_seed().await.expect("boot");
+
+    let nb_str = f.notebook_id.to_string();
+    let out = run_cli(
+        &f.container,
+        &[
+            "doc",
+            "remove",
+            "--notebook",
+            &nb_str,
+            "--hpath",
+            "/IntegrationTestDoc",
+        ],
+    );
     assert!(
-        ids.is_empty(),
-        "get_ids_by_hpath should return empty after remove_doc"
+        out.status.success(),
+        "doc remove --notebook --hpath failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let nb_id = f.notebook_id.clone();
+    let ids = wait_for(
+        || async {
+            let ids = f
+                .client
+                .get_ids_by_hpath(&nb_id, "/IntegrationTestDoc")
+                .await?;
+            if ids.is_empty() {
+                Ok(Some(ids))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for removed doc to disappear from hpath lookup");
+    assert!(ids.is_empty());
+}
+
+/// Legacy `--path` flag is gone; clap must reject it at parse time.
+#[test]
+fn remove_doc_legacy_path_flag_is_rejected_by_clap() {
+    let out = Command::new(binary_path())
+        .args([
+            "doc",
+            "remove",
+            "--notebook",
+            "20260501000000-nb00001",
+            "--path",
+            "/20260501090000-doc0001.sy",
+        ])
+        .output()
+        .expect("spawn siyuan");
+    assert!(
+        !out.status.success(),
+        "doc remove --path must error at clap parse time, but the CLI succeeded"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--path") || stderr.contains("unexpected"),
+        "clap should mention the offending flag; got stderr: {stderr}"
     );
 }
 

@@ -9,6 +9,18 @@ pub async fn raw_sql(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
     let map = ensure_object(args)?;
     let stmt = required_string(&map, "stmt")?;
 
+    // Client-side read-only guard: only SELECT and WITH (CTE) statements are
+    // accepted. The kernel rejects writes too, but matching here saves a
+    // round trip and surfaces a clearer error. Compare a trimmed +
+    // lowercased view but forward the original `stmt` to the kernel.
+    let head = stmt.trim_start().to_ascii_lowercase();
+    if !(head.starts_with("select") || head.starts_with("with")) {
+        return Err(McpError::invalid_params(
+            "`stmt` must be a read-only SELECT (or WITH) query",
+            None,
+        ));
+    }
+
     let rows = client.sql(&stmt).await.map_err(siyuan_to_mcp)?;
     Ok(with_hint(
         json!({ "rows": rows }),
@@ -71,6 +83,42 @@ mod tests {
         assert!(
             err.message.contains("query"),
             "error message should reference `query`; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn raw_sql_rejects_non_select_stmt() {
+        // The dummy client points at an unreachable port: if the leading-
+        // keyword guard regresses, this test would surface a network error
+        // instead of `invalid_params`. Pinning the assertion to the message
+        // keeps that contract obvious.
+        let client = dummy_client();
+        let args = json!({ "stmt": "DROP TABLE blocks" });
+        let err = raw_sql(&client, args)
+            .await
+            .expect_err("non-SELECT stmt must be rejected client-side");
+        assert!(
+            err.message.contains("read-only"),
+            "error message should mention the read-only requirement; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn raw_sql_accepts_leading_whitespace_select() {
+        // `"\n\n  SELECT 1"` should pass the guard and proceed to the HTTP
+        // layer (which then fails because the dummy client cannot connect).
+        // This pins the trim-then-lowercase semantics so a future regression
+        // cannot accidentally tighten the leading-keyword check.
+        let client = dummy_client();
+        let args = json!({ "stmt": "\n\n  SELECT 1" });
+        let err = raw_sql(&client, args)
+            .await
+            .expect_err("dummy client cannot reach the kernel");
+        assert!(
+            !err.message.contains("read-only"),
+            "leading-whitespace SELECT must clear the read-only guard; got: {}",
             err.message
         );
     }

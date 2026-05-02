@@ -12,9 +12,11 @@ use siyuan_client::SiyuanClient;
 ///
 /// Inputs:
 ///   --stmt (required): a single SQL SELECT statement. Whitespace-only
-///     input is rejected client-side. The kernel rejects
-///     INSERT/UPDATE/DELETE/DDL; in read-only / publish mode the endpoint
-///     is disabled entirely (you'll get `SqlUnavailable`).
+///     input is rejected client-side. A leading-keyword check rejects
+///     non-`SELECT`/`WITH` statements (INSERT/UPDATE/DELETE/DDL/PRAGMA)
+///     client-side before any kernel round trip; the kernel itself also
+///     rejects writes, but we save the trip. In read-only / publish mode
+///     the endpoint is disabled entirely (you'll get `SqlUnavailable`).
 ///
 /// Critical caveat: the kernel does NOT parameterise the query. Single
 /// quotes inside string literals must be doubled (`'O''Brien'`); LIKE
@@ -48,6 +50,14 @@ pub async fn run(client: &SiyuanClient, args: SqlArgs) -> Result<()> {
     // early avoids a useless round trip and produces a clearer message.
     if args.stmt.trim().is_empty() {
         bail!("--stmt must not be empty");
+    }
+    // Client-side read-only guard: only SELECT and WITH (CTE) statements are
+    // accepted. The kernel rejects writes too, but matching here saves a
+    // round trip and surfaces a clearer error. We compare a trimmed +
+    // lowercased view but still forward the original `stmt` to the kernel.
+    let head = args.stmt.trim_start().to_ascii_lowercase();
+    if !(head.starts_with("select") || head.starts_with("with")) {
+        bail!("--stmt must be a read-only SELECT (or WITH) query");
     }
     let rows = client.sql(&args.stmt).await?;
     println!("{}", serde_json::to_string_pretty(&rows)?);
@@ -87,6 +97,26 @@ mod tests {
         assert!(
             err.to_string().contains("--stmt"),
             "error message should reference `--stmt`; got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn run_rejects_non_select_stmt() {
+        // A `DROP TABLE` would burn a kernel round trip if forwarded; the
+        // client-side leading-keyword guard must reject it locally. The dummy
+        // client points at an unreachable port — if the guard regresses, this
+        // test would surface a network error instead of the read-only
+        // message, so the assertion pins the exact rejection reason.
+        let client = dummy_client();
+        let args = SqlArgs {
+            stmt: "DROP TABLE blocks".into(),
+        };
+        let err = run(&client, args)
+            .await
+            .expect_err("non-SELECT stmt must be rejected client-side");
+        assert!(
+            err.to_string().contains("read-only"),
+            "error message should mention the read-only requirement; got: {err}"
         );
     }
 }

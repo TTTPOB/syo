@@ -802,9 +802,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              tables like `refs`, `attributes`, `spans`). The CLI exposes the same operation \
              as `siyuan sql --stmt ...`.\n\
              \n\
-             Inputs: `stmt` (required) is a single SQL SELECT statement. The kernel rejects \
-             INSERT/UPDATE/DELETE/DDL and will return an error; in read-only / publish mode \
-             the endpoint itself is disabled and returns `SqlUnavailable`.\n\
+             Inputs: `stmt` (required) is a single SQL SELECT statement. A client-side \
+             keyword check rejects non-SELECT/WITH statements before any kernel round trip \
+             (whitespace and case are normalised; `WITH` is allowed for CTEs). The kernel \
+             also rejects INSERT/UPDATE/DELETE/DDL on its own and will return an error if \
+             anything slips past; in read-only / publish mode the endpoint itself is \
+             disabled and returns `SqlUnavailable`.\n\
              \n\
              Critical caveat: the kernel does NOT parameterise the query — there is no \
              auto-escaping. Single quotes inside string literals must be doubled \

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use clap::Parser;
@@ -20,7 +21,8 @@ struct Args {
     #[arg(long, env = "SIYUAN_TOKEN")]
     token: Option<String>,
 
-    /// HTTP request timeout in milliseconds (reserved for future use).
+    /// HTTP request timeout in milliseconds. Pass 0 to disable the timeout
+    /// entirely (useful when the caller imposes its own deadline).
     #[arg(long, env = "SIYUAN_TIMEOUT_MS", default_value_t = 30000)]
     timeout_ms: u64,
 }
@@ -38,15 +40,20 @@ async fn main() -> anyhow::Result<()> {
         .try_init();
 
     let args = Args::parse();
-    let _ = args.timeout_ms; // reserved; reqwest uses its own default for now
 
     if args.token.is_none() {
         warn!("--token / SIYUAN_TOKEN not set; API calls requiring auth will fail");
     }
 
-    let client =
-        siyuan_client::SiyuanClient::new(&args.base_url, args.token.as_deref().unwrap_or(""))
-            .with_context(|| format!("failed to build SiyuanClient for {}", args.base_url))?;
+    // Honour --timeout-ms: 0 -> Duration::ZERO, which SiyuanClient interprets
+    // as "no timeout"; any other value is passed straight through.
+    let timeout = Duration::from_millis(args.timeout_ms);
+    let client = siyuan_client::SiyuanClient::new_with_timeout(
+        &args.base_url,
+        args.token.as_deref().unwrap_or(""),
+        timeout,
+    )
+    .with_context(|| format!("failed to build SiyuanClient for {}", args.base_url))?;
 
     let client = Arc::new(client);
     let (tools, handlers) = registry::build(Arc::clone(&client));

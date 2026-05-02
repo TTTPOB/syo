@@ -17,11 +17,31 @@ pub struct SiyuanClient {
 }
 
 impl SiyuanClient {
+    /// Default request timeout used by [`SiyuanClient::new`].
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+    /// Build a client with the default 30-second request timeout.
     pub fn new(base_url: impl AsRef<str>, token: impl Into<String>) -> Result<Self, SiyuanError> {
+        Self::new_with_timeout(base_url, token, Self::DEFAULT_TIMEOUT)
+    }
+
+    /// Build a client with an explicit per-request timeout.
+    ///
+    /// `Duration::ZERO` is treated as "no timeout" — useful for callers that
+    /// front the kernel with their own deadline, and for diagnostic runs
+    /// where slow responses should be observed rather than terminated.
+    pub fn new_with_timeout(
+        base_url: impl AsRef<str>,
+        token: impl Into<String>,
+        timeout: Duration,
+    ) -> Result<Self, SiyuanError> {
         let parsed = Url::parse(base_url.as_ref())
             .map_err(|e| SiyuanError::Parse(format!("base_url: {e}")))?;
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
+        let mut builder = reqwest::Client::builder();
+        if !timeout.is_zero() {
+            builder = builder.timeout(timeout);
+        }
+        let http = builder
             .build()
             .map_err(|e| SiyuanError::Http(e.to_string()))?;
         Ok(Self {
@@ -99,5 +119,41 @@ impl SiyuanClient {
 
         serde_json::from_str(&body_text)
             .map_err(|e| SiyuanError::Parse(format!("decode {url}: {e}; body={body_text}")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_with_timeout_accepts_short_duration() {
+        // We only assert that the constructor returns Ok with a small timeout;
+        // verifying the timeout actually fires would require a hung server.
+        let client =
+            SiyuanClient::new_with_timeout("http://localhost:1", "tok", Duration::from_millis(50));
+        assert!(
+            client.is_ok(),
+            "constructor must succeed: {:?}",
+            client.err()
+        );
+    }
+
+    #[test]
+    fn new_with_timeout_zero_means_unbounded() {
+        // Duration::ZERO is documented to mean "no timeout"; we just verify
+        // that the underlying reqwest builder accepts the request.
+        let client = SiyuanClient::new_with_timeout("http://localhost:1", "tok", Duration::ZERO);
+        assert!(
+            client.is_ok(),
+            "zero timeout must build: {:?}",
+            client.err()
+        );
+    }
+
+    #[test]
+    fn new_uses_default_timeout() {
+        let client = SiyuanClient::new("http://localhost:1", "tok");
+        assert!(client.is_ok());
     }
 }

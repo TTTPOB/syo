@@ -288,12 +288,14 @@ async fn invalid_block_id_yields_not_found() {
 }
 
 // ---------------------------------------------------------------------------
-// Error test 3: load_doc on a missing doc id bails with "no blocks" message
+// Error test 3: load_doc on a missing doc id surfaces typed NotFound
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[ignore]
 async fn missing_doc_load_bails() {
+    use siyuan_types::SiyuanError;
+
     let f = boot_with_seed().await.expect("boot");
 
     let fake_id = BlockId::parse("20000101000000-fake000").expect("fake id parse");
@@ -302,11 +304,15 @@ async fn missing_doc_load_bails() {
         .await
         .expect_err("missing doc must return Err");
 
-    // load_doc emits: "doc <id> has no blocks (does it exist?)"
-    let msg = err.to_string();
-    assert!(
-        msg.contains("no blocks"),
-        "error message must mention 'no blocks'; got: {msg}"
+    // load_doc returns a typed SiyuanError::NotFound wrapped in anyhow;
+    // downcast back to the typed variant so we verify semantics, not strings.
+    let typed = err
+        .downcast_ref::<SiyuanError>()
+        .expect("error must be a SiyuanError");
+    assert_eq!(
+        typed.kind(),
+        ErrorKind::NotFound,
+        "missing doc must surface as NotFound; got: {typed:?}"
     );
 }
 

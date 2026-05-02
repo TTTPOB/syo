@@ -9,7 +9,7 @@ use siyuan_client::SiyuanClient;
 use siyuan_model::load::load_doc;
 use siyuan_model::pagination::PageRequest;
 use siyuan_testkit::SiyuanContainer;
-use siyuan_types::{BlockId, NotebookId};
+use siyuan_types::{BlockId, NotebookId, SiyuanError};
 
 // Some test binaries don't read every field; keep them on the fixture for the binaries that do.
 #[allow(dead_code)]
@@ -62,8 +62,14 @@ pub async fn wait_for_doc_indexed(
                 Ok(b) if b.page.total_blocks >= min_blocks => Ok(Some(())),
                 // Not enough blocks yet — keep polling.
                 Ok(_) => Ok(None),
-                // load_doc bails when the doc has no blocks at all; treat as not-ready.
-                Err(_) => Ok(None),
+                // load_doc returns SiyuanError::NotFound for a doc whose root
+                // row is not yet visible to the SQL index. Treat that as
+                // not-ready and keep polling; propagate any other error so
+                // genuine failures surface fast.
+                Err(e) => match e.downcast_ref::<SiyuanError>() {
+                    Some(SiyuanError::NotFound(_)) => Ok(None),
+                    _ => Err(e),
+                },
             }
         },
         Duration::from_secs(5),

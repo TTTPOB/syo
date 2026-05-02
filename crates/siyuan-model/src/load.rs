@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use siyuan_client::SiyuanClient;
-use siyuan_types::{BlockId, BlockNode, BlockRole, BlockType, NotebookId};
+use siyuan_types::{BlockId, BlockNode, BlockRole, BlockType, NotebookId, SiyuanError};
 
 use crate::bundle::{DocBundle, DocMeta, PageInfo};
 use crate::container::populate_structural_children;
@@ -117,8 +117,12 @@ pub async fn load_doc(
     );
     let rows: Vec<BlockRow> = client.sql_typed(&stmt).await.context("load doc blocks")?;
 
+    // A real document always has at least its root row (the doc block itself,
+    // with `root_id = id` self-reference). An empty result therefore means the
+    // doc does not exist; surface a typed NotFound rather than a misleading
+    // "no blocks" message so the MCP layer can map it to a proper error kind.
     if rows.is_empty() {
-        bail!("doc {} has no blocks (does it exist?)", doc_id);
+        return Err(SiyuanError::NotFound(doc_id.to_string()).into());
     }
 
     // 2. Lift into BlockNode.

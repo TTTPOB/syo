@@ -188,12 +188,24 @@ async fn sql_typed_round_trip() {
         "must return at least one row for the seeded doc"
     );
 
-    // The doc-level block (type=d) has the document title as its markdown.
+    // The doc-root row (type='d') is pinned first by the ORDER BY above; its
+    // `markdown` column is empty in current kernel versions (the title lives
+    // in `name`/the title IAL, not the kramdown body), so assert on the
+    // round-tripped id instead — that's what this test cares about anyway.
     assert!(
-        rows.iter()
-            .any(|r| r.markdown.contains("Integration Test Doc")),
-        "at least one row must contain the doc title; rows: {rows:?}"
+        rows.iter().any(|r| r.id == f.doc_id.as_str()),
+        "doc-root row must be present in the slice; rows: {rows:?}"
     );
+
+    // Round-trip check on the second column too: non-doc rows in this seed
+    // (headings, paragraphs, list) all carry non-empty markdown bodies, so an
+    // empty value here would point at a deserialization bug rather than data.
+    for row in rows.iter().filter(|r| r.id != f.doc_id.as_str()) {
+        assert!(
+            !row.markdown.is_empty(),
+            "non-doc row must round-trip non-empty markdown; got {row:?}"
+        );
+    }
 
     // Every returned id must be parseable as a BlockId.
     for row in &rows {

@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 use serde::Deserialize;
 
-use siyuan_client::SiyuanClient;
+use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_like};
 
 #[derive(Subcommand, Debug)]
 pub enum SearchCmd {
@@ -43,12 +43,17 @@ struct Hit {
 }
 
 pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
+    // Single source of truth for the LIMIT cap; usize-typed for CLI flag width.
+    let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
     match cmd {
         SearchCmd::Text(a) => {
-            let needle = a.query.replace('\'', "''");
+            // Escape LIKE meta-characters and quotes, and use ESCAPE '\' so
+            // the backslashes we inject neutralise %, _ and \ in user input.
+            let needle = escape_sql_like(&a.query);
+            let limit = a.limit.min(limit_cap);
             let stmt = format!(
-                "SELECT id, type, markdown FROM blocks WHERE markdown LIKE '%{needle}%' LIMIT {}",
-                a.limit
+                "SELECT id, type, markdown FROM blocks \
+                 WHERE markdown LIKE '%{needle}%' ESCAPE '\\' LIMIT {limit}"
             );
             let rows: Vec<Hit> = client.sql_typed(&stmt).await?;
             for r in rows {
@@ -58,12 +63,16 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
         SearchCmd::Blocks(a) => {
             let mut conds = Vec::new();
             if !a.r#type.is_empty() {
+                // type uses `=` (exact match), so only quote-escaping is needed;
+                // LIKE meta-chars are not interpreted here.
                 conds.push(format!("type = '{}'", a.r#type.replace('\'', "''")));
             }
             if !a.contains.is_empty() {
+                // content uses LIKE, so apply the full meta-char escape and
+                // pair it with ESCAPE '\' below.
                 conds.push(format!(
-                    "content LIKE '%{}%'",
-                    a.contains.replace('\'', "''")
+                    "content LIKE '%{}%' ESCAPE '\\'",
+                    escape_sql_like(&a.contains)
                 ));
             }
             let where_clause = if conds.is_empty() {
@@ -71,10 +80,9 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
             } else {
                 conds.join(" AND ")
             };
-            let stmt = format!(
-                "SELECT id, type, markdown FROM blocks WHERE {where_clause} LIMIT {}",
-                a.limit
-            );
+            let limit = a.limit.min(limit_cap);
+            let stmt =
+                format!("SELECT id, type, markdown FROM blocks WHERE {where_clause} LIMIT {limit}");
             let rows: Vec<Hit> = client.sql_typed(&stmt).await?;
             for r in rows {
                 println!("{}\t{}\t{}", r.id, r.block_type, oneline(&r.markdown));

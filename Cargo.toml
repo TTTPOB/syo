@@ -33,3 +33,4 @@ siyuan-client = { path = "crates/siyuan-client" }
 siyuan-model = { path = "crates/siyuan-model" }
 siyuan-render = { path = "crates/siyuan-render" }
 siyuan-testkit = { path = "crates/siyuan-testkit" }
+siyuan-mcp = { path = "crates/siyuan-mcp" }

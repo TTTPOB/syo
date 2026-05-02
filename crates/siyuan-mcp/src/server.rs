@@ -12,14 +12,14 @@ use siyuan_client::SiyuanClient;
 
 use crate::registry::Handler;
 
-pub struct SiyuanMcpServer {
+pub(crate) struct SiyuanMcpServer {
     client: Arc<SiyuanClient>,
     tools: Vec<Tool>,
     handlers: HashMap<&'static str, Handler>,
 }
 
 impl SiyuanMcpServer {
-    pub fn new(
+    pub(crate) fn new(
         client: Arc<SiyuanClient>,
         tools: Vec<Tool>,
         handlers: HashMap<&'static str, Handler>,
@@ -31,7 +31,7 @@ impl SiyuanMcpServer {
         }
     }
 
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub(crate) async fn run(self) -> anyhow::Result<()> {
         let ct = self
             .serve(rmcp::transport::stdio())
             .await

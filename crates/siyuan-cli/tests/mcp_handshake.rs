@@ -1,4 +1,4 @@
-/// End-to-end smoke test: spawn the siyuan-mcp binary, perform the MCP
+/// End-to-end smoke test: spawn `siyuan serve-mcp`, perform the MCP
 /// initialize + tools/list handshake over stdio, and verify the responses.
 ///
 /// We point --base-url at port 1 (refused), which is fine because no actual
@@ -10,10 +10,9 @@ use std::{
 
 use serde_json::{Value, json};
 
-/// Path to the compiled binary (cargo sets CARGO_BIN_EXE_siyuan-mcp in tests).
+/// Path to the compiled `siyuan` binary (cargo sets CARGO_BIN_EXE_siyuan in tests).
 fn binary_path() -> std::path::PathBuf {
-    // CARGO_BIN_EXE_<name> uses hyphens in the env var key.
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_siyuan-mcp"))
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_siyuan"))
 }
 
 /// Send one JSON-RPC line to the child's stdin and read one response line.
@@ -30,13 +29,19 @@ fn rpc(stdin: &mut impl Write, stdout: &mut impl BufRead, msg: &Value) -> Value 
 #[test]
 fn mcp_initialize_and_tools_list() {
     let mut child = Command::new(binary_path())
-        .args(["--base-url", "http://127.0.0.1:1"])
+        .args([
+            "--base-url",
+            "http://127.0.0.1:1",
+            "--token",
+            "dummy",
+            "serve-mcp",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         // Redirect stderr so tracing output doesn't clutter the test runner.
         .stderr(Stdio::null())
         .spawn()
-        .expect("failed to spawn siyuan-mcp");
+        .expect("failed to spawn siyuan serve-mcp");
 
     let stdin = child.stdin.as_mut().unwrap();
     let mut stdout = BufReader::new(child.stdout.as_mut().unwrap());

@@ -11,7 +11,7 @@ use siyuan_client::SiyuanClient;
 use crate::tools;
 
 // Boxed async fn: (client, args) -> Result<Value, McpError>
-pub type Handler = Arc<
+pub(crate) type Handler = Arc<
     dyn Fn(
             Arc<SiyuanClient>,
             Value,
@@ -39,7 +39,7 @@ where
 }
 
 // Build the full registry. Called once at startup.
-pub fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static str, Handler>) {
+pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static str, Handler>) {
     let mut tool_list: Vec<Tool> = Vec::new();
     let mut handlers: HashMap<&'static str, Handler> = HashMap::new();
 

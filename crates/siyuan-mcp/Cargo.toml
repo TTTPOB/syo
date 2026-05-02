@@ -10,10 +10,6 @@ description = "Model Context Protocol server exposing the SiYuan harness."
 #   server        – enables ServerHandler trait
 #   transport-io  – enables rmcp::transport::stdio() for stdin/stdout framing
 
-[[bin]]
-name = "siyuan-mcp"
-path = "src/main.rs"
-
 [dependencies]
 rmcp = { workspace = true }
 siyuan-types = { workspace = true }
@@ -23,10 +19,8 @@ siyuan-render = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

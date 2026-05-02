@@ -1541,6 +1541,7 @@ dependencies = [
  "serde",
  "serde_json",
  "siyuan-client",
+ "siyuan-mcp",
  "siyuan-model",
  "siyuan-render",
  "siyuan-testkit",
@@ -1568,7 +1569,6 @@ name = "siyuan-mcp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
  "rmcp",
  "serde",
  "serde_json",
@@ -1578,7 +1578,6 @@ dependencies = [
  "siyuan-types",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

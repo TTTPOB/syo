@@ -14,6 +14,7 @@ siyuan-types = { workspace = true }
 siyuan-client = { workspace = true }
 siyuan-model = { workspace = true }
 siyuan-render = { workspace = true }
+siyuan-mcp = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

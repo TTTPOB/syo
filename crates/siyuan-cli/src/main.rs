@@ -56,6 +56,8 @@ enum Cmd {
         #[command(subcommand)]
         cmd: commands::search::SearchCmd,
     },
+    /// Run the Model Context Protocol server on stdio.
+    ServeMcp(commands::serve_mcp::ServeMcpArgs),
 }
 
 #[tokio::main]
@@ -63,6 +65,15 @@ async fn main() -> anyhow::Result<()> {
     init_tracing();
 
     let cli = Cli::parse();
+
+    // ServeMcp tolerates a missing token and builds its own client with a
+    // configurable timeout; every other subcommand requires a token up front
+    // and uses the default client.
+    if let Cmd::ServeMcp(args) = cli.cmd {
+        let cfg = config::Config::resolve_optional_token(cli.base_url, cli.token);
+        return commands::serve_mcp::run(cfg, args).await;
+    }
+
     let cfg = config::Config::resolve(cli.base_url, cli.token)?;
     let client = cfg.into_client()?;
 
@@ -86,13 +97,17 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Asset { cmd } => commands::asset::run(&client, cmd).await?,
         Cmd::Graph { cmd } => commands::graph::run(&client, cmd).await?,
         Cmd::Search { cmd } => commands::search::run(&client, cmd).await?,
+        Cmd::ServeMcp(_) => unreachable!("serve-mcp dispatched above"),
     }
     Ok(())
 }
 
 fn init_tracing() {
     use tracing_subscriber::{EnvFilter, fmt};
+    // Always write tracing to stderr: stdout is reserved for user-facing
+    // command output (println!) and, under `serve-mcp`, for JSON-RPC framing.
     let _ = fmt()
+        .with_writer(std::io::stderr)
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )

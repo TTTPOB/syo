@@ -9,6 +9,7 @@ pub mod insert_blocks;
 pub mod move_block;
 pub mod notebook;
 pub mod search;
+pub mod serve_mcp;
 pub mod set_attrs;
 pub mod tag;
 pub mod update_block;

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::{Args, Subcommand};
 use serde::Deserialize;
 
@@ -47,6 +47,12 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
     let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
     match cmd {
         SearchCmd::Text(a) => {
+            // Reject blank/whitespace-only queries: an empty LIKE pattern
+            // matches every block and the result is always silently trimmed
+            // by `--limit`, hiding the misuse from the user.
+            if a.query.trim().is_empty() {
+                bail!("--query must not be empty");
+            }
             // Escape LIKE meta-characters and quotes, and use ESCAPE '\' so
             // the backslashes we inject neutralise %, _ and \ in user input.
             let needle = escape_sql_like(&a.query);

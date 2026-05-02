@@ -19,6 +19,11 @@ pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
     let map = ensure_object(args)?;
     let notebook = parse_notebook_id(&required_string(&map, "notebook")?)?;
     let hpath = required_string(&map, "hpath")?;
+    // Reject blank/whitespace-only hpaths but allow exactly "/" since the
+    // kernel uses it as the canonical root hpath.
+    if hpath != "/" && hpath.trim().is_empty() {
+        return Err(McpError::invalid_params("`hpath` must not be empty", None));
+    }
 
     let ids = client
         .get_ids_by_hpath(&notebook, &hpath)
@@ -121,6 +126,23 @@ mod tests {
         assert!(
             err.message.contains("from_paths"),
             "error message should reference `from_paths`; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_rejects_whitespace_hpath() {
+        let client = dummy_client();
+        let args = json!({
+            "notebook": "20260501000000-nb00001",
+            "hpath": "   ",
+        });
+        let err = resolve(&client, args)
+            .await
+            .expect_err("whitespace hpath must be rejected");
+        assert!(
+            err.message.contains("hpath"),
+            "error message should reference `hpath`; got: {}",
             err.message
         );
     }

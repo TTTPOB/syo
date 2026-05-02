@@ -37,19 +37,15 @@ pub enum DocCmd {
         .required(true)
 ))]
 pub struct ResolveArgs {
-    /// Document block id. Use this OR `--notebook` + `--hpath`, not both.
-    /// Pick this direction when you have an id (e.g. from search results)
-    /// and want to recover its human-readable hpath.
+    /// Document block id. Use to recover hpath/notebook from a known id.
     #[arg(long, conflicts_with_all = ["notebook", "hpath"])]
     pub id: Option<String>,
 
-    /// Notebook id. Required together with `--hpath`; conflicts with `--id`.
+    /// Notebook id (use together with --hpath to look up by human path).
     #[arg(long, requires = "hpath")]
     pub notebook: Option<String>,
 
-    /// Human-readable path like `/Folder/Title`. Required together with
-    /// `--notebook`; conflicts with `--id`. Pick this direction when you
-    /// know the document's title/path and need its id or storage path.
+    /// Human path inside the notebook, e.g. `/Projects/Plan`.
     #[arg(long, requires = "notebook")]
     pub hpath: Option<String>,
 }

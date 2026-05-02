@@ -2,9 +2,9 @@
 //!
 //! Combines the two kernel-level facilities — id ↔ hpath conversion via the
 //! filetree API and notebook enumeration via `lsNotebooks` — into a single
-//! semantic call that returns a uniform `DocMeta` shape regardless of which
-//! direction the caller approached from. The MCP and CLI layers wrap this
-//! function so agents and humans see one tool/command instead of two.
+//! semantic call that returns a uniform `ResolvedDoc` shape regardless of
+//! which direction the caller approached from. The MCP and CLI layers wrap
+//! this function so agents and humans see one tool/command instead of two.
 //!
 //! The input is modelled as an enum (`DocLookup`) so the "exactly one of id
 //! XOR (notebook+hpath)" invariant is unrepresentable in the library API;
@@ -24,11 +24,19 @@ use siyuan_types::{BlockId, NotebookId, SiyuanError};
 /// the MCP `siyuan_doc_resolve` tool and the `siyuan doc resolve` CLI
 /// subcommand — no field-level renames are needed because the snake_case
 /// field names are already the desired output keys.
+///
+/// Named `ResolvedDoc` to avoid colliding with [`crate::bundle::DocMeta`],
+/// which is a much smaller in-bundle descriptor used by the doc-bundle
+/// loader and renderer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DocMeta {
+pub struct ResolvedDoc {
     pub id: BlockId,
     pub hpath: String,
     pub notebook_id: NotebookId,
+    /// Empty when the notebook id is not in the live notebook list (e.g. the
+    /// notebook was removed between the SQL row being written and this
+    /// lookup running). Indistinguishable from a literally-empty notebook
+    /// name without cross-referencing `siyuan_notebook_ls` output.
     pub notebook_name: String,
     /// Last `/`-delimited segment of `hpath`. Empty when `hpath` is empty
     /// or exactly `/` (the kernel's canonical root).
@@ -65,7 +73,7 @@ struct DocRow {
 pub async fn resolve(
     client: &SiyuanClient,
     lookup: DocLookup,
-) -> Result<Vec<DocMeta>, SiyuanError> {
+) -> Result<Vec<ResolvedDoc>, SiyuanError> {
     // Build a notebook id → name map once; cheap call, no caching needed
     // because lookups are not in a hot loop.
     let notebooks = client.ls_notebooks().await?;
@@ -102,7 +110,7 @@ pub async fn resolve(
             NotebookId::parse(r.box_).map_err(|e| SiyuanError::Parse(e.to_string()))?;
         let notebook_name = nb_names.get(&notebook_id).cloned().unwrap_or_default();
         let title = title_from_hpath(&r.hpath);
-        out.push(DocMeta {
+        out.push(ResolvedDoc {
             id,
             hpath: r.hpath,
             notebook_id,
@@ -116,8 +124,12 @@ pub async fn resolve(
 }
 
 /// Derive the document title from its hpath. The kernel stores hpaths as
-/// `/Folder/Title`; the title is the last `/`-delimited segment. An empty
-/// string or the canonical root `/` both yield `""`.
+/// `/Folder/Title`; the title is the last `/`-delimited segment. Edge cases
+/// follow `rsplit('/').next()` mechanics:
+/// - empty input or `/` (canonical root) → `""`,
+/// - trailing slash (`/Foo/`) → `""` (the segment after the last `/`),
+/// - double slash (`/A//B`) → `"B"` (only the final segment matters),
+/// - no leading slash (`Foo`) → `"Foo"` (the whole input is one segment).
 fn title_from_hpath(hpath: &str) -> String {
     hpath.rsplit('/').next().unwrap_or("").to_string()
 }
@@ -144,5 +156,25 @@ mod tests {
     #[test]
     fn title_from_empty_hpath_is_empty() {
         assert_eq!(title_from_hpath(""), "");
+    }
+
+    // Trailing slash: rsplit returns the empty segment after the final `/`.
+    // Locks the contract: callers that pass `/Foo/` do NOT get `"Foo"`.
+    #[test]
+    fn title_from_trailing_slash_hpath_is_empty() {
+        assert_eq!(title_from_hpath("/Foo/"), "");
+    }
+
+    // Double slash: only the segment after the LAST `/` matters, so the
+    // empty middle segment is invisible.
+    #[test]
+    fn title_from_double_slash_hpath_uses_last_segment() {
+        assert_eq!(title_from_hpath("/A//B"), "B");
+    }
+
+    // No leading slash: the entire string is one segment.
+    #[test]
+    fn title_from_unrooted_hpath_returns_whole_string() {
+        assert_eq!(title_from_hpath("Foo"), "Foo");
     }
 }

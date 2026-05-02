@@ -1,5 +1,5 @@
 use rmcp::ErrorData as McpError;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use siyuan_client::SiyuanClient;
 use siyuan_model::doc_meta::{DocLookup, resolve as resolve_doc_meta};
@@ -25,14 +25,16 @@ fn is_present(s: Option<&str>) -> bool {
     s.is_some_and(|v| !v.trim().is_empty())
 }
 
-pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
-
-    // Optional inputs. We allow exactly ONE of `id` or (`notebook` + `hpath`).
-    // Whitespace-only strings count as absent.
-    let id_raw = optional_string(&map, "id");
-    let nb_raw = optional_string(&map, "notebook");
-    let hp_raw = optional_string(&map, "hpath");
+/// Validate the `siyuan_doc_resolve` argument map and produce a [`DocLookup`].
+///
+/// Enforces the "exactly one of `id` or (`notebook` + `hpath`)" invariant at
+/// the boundary so the model layer can stay enum-driven. Whitespace-only
+/// strings count as absent. Kept as a separate function so the validation
+/// rules are unit-testable without a live `SiyuanClient`.
+pub(crate) fn parse_doc_lookup(map: &Map<String, Value>) -> Result<DocLookup, McpError> {
+    let id_raw = optional_string(map, "id");
+    let nb_raw = optional_string(map, "notebook");
+    let hp_raw = optional_string(map, "hpath");
 
     let has_id = is_present(id_raw.as_deref());
     let has_nb = is_present(nb_raw.as_deref());
@@ -54,31 +56,35 @@ pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
         ));
     }
 
-    let lookup = if has_id {
-        DocLookup::ById(parse_block_id(
+    if has_id {
+        return Ok(DocLookup::ById(parse_block_id(
             id_raw.as_deref().unwrap_or_default().trim(),
-        )?)
-    } else {
-        // Hpath branch: both halves are required.
-        if !has_nb {
-            return Err(McpError::invalid_params(
-                "`notebook` is required when looking up by hpath",
-                None,
-            ));
-        }
-        if !has_hp {
-            return Err(McpError::invalid_params(
-                "`hpath` is required when looking up by notebook",
-                None,
-            ));
-        }
-        let notebook = parse_notebook_id(nb_raw.as_deref().unwrap_or_default().trim())?;
-        // Preserve the user-supplied hpath verbatim — the kernel uses `/` as
-        // the canonical root and we don't want to silently rewrite it.
-        let hpath = hp_raw.unwrap_or_default();
-        DocLookup::ByHpath { notebook, hpath }
-    };
+        )?));
+    }
 
+    // Hpath branch: both halves are required.
+    if !has_nb {
+        return Err(McpError::invalid_params(
+            "`notebook` is required when looking up by hpath",
+            None,
+        ));
+    }
+    if !has_hp {
+        return Err(McpError::invalid_params(
+            "`hpath` is required when looking up by notebook",
+            None,
+        ));
+    }
+    let notebook = parse_notebook_id(nb_raw.as_deref().unwrap_or_default().trim())?;
+    // Preserve the user-supplied hpath verbatim — the kernel uses `/` as
+    // the canonical root and we don't want to silently rewrite it.
+    let hpath = hp_raw.unwrap_or_default();
+    Ok(DocLookup::ByHpath { notebook, hpath })
+}
+
+pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
+    let map = ensure_object(args)?;
+    let lookup = parse_doc_lookup(&map)?;
     let docs = resolve_doc_meta(client, lookup)
         .await
         .map_err(siyuan_to_mcp)?;
@@ -237,6 +243,48 @@ mod tests {
         assert!(
             err.message.contains("notebook"),
             "error message should reference `notebook`; got: {}",
+            err.message
+        );
+    }
+
+    // Direct unit test for `parse_doc_lookup`. The handler tests above cover
+    // the same rules end-to-end through the dummy client; this one pins down
+    // the helper's contract so future refactors that route validation
+    // through a different call site don't silently regress it.
+    fn args_map(v: Value) -> serde_json::Map<String, Value> {
+        match v {
+            Value::Object(m) => m,
+            _ => panic!("test fixture must be a JSON object"),
+        }
+    }
+
+    #[test]
+    fn parse_doc_lookup_accepts_id_only() {
+        let map = args_map(json!({ "id": "20260501090000-doc0001" }));
+        let lookup = parse_doc_lookup(&map).expect("id-only input is valid");
+        assert!(matches!(lookup, DocLookup::ById(_)));
+    }
+
+    #[test]
+    fn parse_doc_lookup_accepts_notebook_plus_hpath() {
+        let map = args_map(json!({
+            "notebook": "20260501000000-nb00001",
+            "hpath": "/Plan",
+        }));
+        let lookup = parse_doc_lookup(&map).expect("notebook+hpath is valid");
+        match lookup {
+            DocLookup::ByHpath { hpath, .. } => assert_eq!(hpath, "/Plan"),
+            DocLookup::ById(_) => panic!("expected ByHpath variant"),
+        }
+    }
+
+    #[test]
+    fn parse_doc_lookup_rejects_whitespace_only_id() {
+        let map = args_map(json!({ "id": "   " }));
+        let err = parse_doc_lookup(&map).expect_err("whitespace id is treated as absent");
+        assert!(
+            err.message.contains("`id`") && err.message.contains("`hpath`"),
+            "got: {}",
             err.message
         );
     }

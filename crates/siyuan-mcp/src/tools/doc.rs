@@ -39,19 +39,29 @@ pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
 
     let payload = json!({ "format": format, "content": content });
 
-    // Only add pagination hint when there are more pages to fetch.
-    if total_pages > 1 {
-        Ok(with_hint(
-            payload,
-            &format!(
-                "Pagination: this is page {current_page} of {total_pages}. \
-                 Call again with page={} to fetch the next page. \
-                 Use format=json for structured access to block metadata.",
-                current_page + 1
-            ),
+    // Only emit a "next page" hint when there is actually a next page to fetch;
+    // on the last page paginate() clamps `page` to `total_pages`, so suggesting
+    // page=current+1 would loop forever.
+    match next_page_hint(current_page, total_pages, format) {
+        Some(hint) => Ok(with_hint(payload, &hint)),
+        None => Ok(payload),
+    }
+}
+
+// Decide whether to attach a pagination hint and, if so, what to say.
+// Returns Some(hint) only when a strictly-later page exists. The `format`
+// argument is kept in the signature so callers don't have to thread it
+// separately if the hint copy ever differs by render format.
+fn next_page_hint(current: usize, total: usize, _format: &str) -> Option<String> {
+    if current < total {
+        Some(format!(
+            "Pagination: this is page {current} of {total}. \
+             Call again with page={} to fetch the next page. \
+             Use format=json for structured access to block metadata.",
+            current + 1
         ))
     } else {
-        Ok(payload)
+        None
     }
 }
 
@@ -88,4 +98,32 @@ pub async fn create_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
          briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
          retry once. The returned id is the new document's root block id.",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_page_hint;
+
+    #[test]
+    fn single_page_emits_no_hint() {
+        assert!(next_page_hint(1, 1, "agent-md").is_none());
+    }
+
+    #[test]
+    fn middle_page_points_to_next() {
+        let hint = next_page_hint(2, 5, "agent-md").expect("middle page should yield a hint");
+        assert!(hint.contains("page 2 of 5"));
+        assert!(hint.contains("page=3"));
+    }
+
+    #[test]
+    fn last_page_emits_no_hint() {
+        assert!(next_page_hint(5, 5, "agent-md").is_none());
+    }
+
+    #[test]
+    fn first_of_two_pages_points_to_two() {
+        let hint = next_page_hint(1, 2, "json").expect("first of two pages should yield a hint");
+        assert!(hint.contains("page=2"));
+    }
 }

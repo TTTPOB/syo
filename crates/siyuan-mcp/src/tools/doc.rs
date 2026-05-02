@@ -29,9 +29,16 @@ pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
         .and_then(|v| v.as_str())
         .unwrap_or("agent-md");
 
+    // load_doc returns anyhow::Error but may wrap a typed SiyuanError (e.g.
+    // NotFound when the doc id is unknown). Downcast first so siyuan_to_mcp's
+    // existing typed-error mapping reaches the wire — otherwise NotFound gets
+    // flattened to a generic internal_error by anyhow_to_mcp.
     let bundle = siyuan_model::load::load_doc(client, &id, PageRequest { page, page_size })
         .await
-        .map_err(anyhow_to_mcp)?;
+        .map_err(|e| match e.downcast::<siyuan_types::SiyuanError>() {
+            Ok(typed) => siyuan_to_mcp(typed),
+            Err(other) => anyhow_to_mcp(other),
+        })?;
 
     let total_pages = bundle.page.total_pages;
     let current_page = bundle.page.page;

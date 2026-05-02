@@ -169,8 +169,12 @@ async fn sql_typed_round_trip() {
 
     let f = boot_with_seed().await.expect("boot");
 
+    // ORDER BY (type='d') DESC pins the doc-root row to the top of the slice
+    // so the title assertion below is independent of kernel-side row order.
+    // The id tiebreaker keeps the non-doc rows deterministic across runs.
     let stmt = format!(
-        "SELECT id, markdown FROM blocks WHERE root_id = '{}' LIMIT 5",
+        "SELECT id, markdown FROM blocks WHERE root_id = '{}' \
+         ORDER BY (type = 'd') DESC, id LIMIT 5",
         f.doc_id.as_str()
     );
     let rows: Vec<MyRow> = f

@@ -72,6 +72,7 @@ pub async fn neighborhood(
     frontier.push_back(center.clone());
 
     let mut edges: Vec<GraphEdge> = Vec::new();
+    let mut seen_edges: BTreeSet<(BlockId, BlockId, String)> = BTreeSet::new();
     let mut truncated = false;
 
     for _ in 0..depth {
@@ -103,11 +104,14 @@ pub async fn neighborhood(
                         (Ok(s), Ok(t)) => (s, t),
                         _ => continue,
                     };
-                edges.push(GraphEdge {
-                    source: src,
-                    target: tgt.clone(),
-                    anchor: r.content,
-                });
+                let edge_key = (src.clone(), tgt.clone(), r.content.clone());
+                if seen_edges.insert(edge_key) {
+                    edges.push(GraphEdge {
+                        source: src,
+                        target: tgt.clone(),
+                        anchor: r.content,
+                    });
+                }
                 if !visited.contains(&tgt) {
                     next_ids.insert(tgt);
                 }
@@ -130,11 +134,14 @@ pub async fn neighborhood(
                         (Ok(s), Ok(t)) => (s, t),
                         _ => continue,
                     };
-                edges.push(GraphEdge {
-                    source: src.clone(),
-                    target: tgt,
-                    anchor: r.content,
-                });
+                let edge_key = (src.clone(), tgt.clone(), r.content.clone());
+                if seen_edges.insert(edge_key) {
+                    edges.push(GraphEdge {
+                        source: src.clone(),
+                        target: tgt,
+                        anchor: r.content,
+                    });
+                }
                 if !visited.contains(&src) {
                     next_ids.insert(src);
                 }
@@ -199,6 +206,8 @@ pub async fn neighborhood(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn markdown_preview_cjk_safe() {
         // Construct a minimal GraphNode via the neighborhood path would need a
@@ -212,5 +221,50 @@ mod tests {
         };
         assert!(preview.ends_with('…'));
         assert!(preview.chars().count() <= 101);
+    }
+
+    #[test]
+    fn edge_dedup_prevents_duplicate_push() {
+        // Simulates the BFS edge-collection logic: the same (source, target,
+        // anchor) triple must only appear once in the edge list.
+        let mut seen: BTreeSet<(BlockId, BlockId, String)> = BTreeSet::new();
+        let mut edges: Vec<GraphEdge> = Vec::new();
+
+        let a = BlockId::parse("20260501093000-aaa0001").unwrap();
+        let b = BlockId::parse("20260501093000-bbb0002").unwrap();
+
+        // helper: push edge only if not already seen
+        fn push_edge(
+            seen: &mut BTreeSet<(BlockId, BlockId, String)>,
+            edges: &mut Vec<GraphEdge>,
+            src: &BlockId,
+            tgt: &BlockId,
+            anchor: &str,
+        ) {
+            let key = (src.clone(), tgt.clone(), anchor.to_string());
+            if seen.insert(key) {
+                edges.push(GraphEdge {
+                    source: src.clone(),
+                    target: tgt.clone(),
+                    anchor: anchor.to_string(),
+                });
+            }
+        }
+
+        // Outgoing pass finds A→B
+        push_edge(&mut seen, &mut edges, &a, &b, "anchor");
+        assert_eq!(edges.len(), 1);
+
+        // Incoming pass re-discovers the same A→B — must be deduplicated
+        push_edge(&mut seen, &mut edges, &a, &b, "anchor");
+        assert_eq!(edges.len(), 1, "duplicate edge must not be added");
+
+        // Different anchor is a distinct edge
+        push_edge(&mut seen, &mut edges, &a, &b, "other-anchor");
+        assert_eq!(edges.len(), 2, "different anchor means different edge");
+
+        // Reverse direction is distinct
+        push_edge(&mut seen, &mut edges, &b, &a, "backlink");
+        assert_eq!(edges.len(), 3, "B→A is distinct from A→B");
     }
 }

@@ -332,19 +332,17 @@ async fn neighborhood_both_is_symmetric() {
         .await
         .expect("neighborhood both");
 
-    // Direction::Both runs two SQL passes (outgoing then incoming), so the
-    // A→B edge can appear twice (once from the outgoing query, once if A
-    // appears in the incoming query of its own neighbors). We assert at least
-    // one edge with the right source/target exists.
-    let edge = graph
-        .edges
-        .iter()
-        .find(|e| e.source == a_id && e.target == b_id);
-    assert!(
-        edge.is_some(),
-        "Both graph from A must contain edge A→B; edges: {:?}",
+    // With dedup, Direction::Both must produce exactly one A→B edge (the
+    // outgoing pass discovers it; the incoming pass must not push it again).
+    assert_eq!(
+        graph.edges.len(),
+        1,
+        "Both graph from A must contain exactly one edge (no duplicates); edges: {:?}",
         graph.edges
     );
+    let edge = &graph.edges[0];
+    assert_eq!(edge.source, a_id, "edge source must be A");
+    assert_eq!(edge.target, b_id, "edge target must be B");
 
     let node_ids: Vec<_> = graph.nodes.iter().map(|n| &n.id).collect();
     assert!(

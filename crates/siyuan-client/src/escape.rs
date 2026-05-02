@@ -27,7 +27,7 @@ pub const MAX_SEARCH_LIMIT: u64 = 1000;
 ///
 /// A backslash (`\`) in the input is left as-is; without `ESCAPE` support
 /// it carries no special meaning in the kernel's LIKE engine.
-pub fn escape_sql_like(s: &str) -> String {
+pub fn escape_sql_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 4);
     for ch in s.chars() {
         match ch {
@@ -44,40 +44,40 @@ mod tests {
 
     #[test]
     fn plain_text_unchanged() {
-        assert_eq!(escape_sql_like("hello world"), "hello world");
+        assert_eq!(escape_sql_string("hello world"), "hello world");
     }
 
     #[test]
     fn single_quote_is_doubled() {
-        assert_eq!(escape_sql_like("it's"), "it''s");
+        assert_eq!(escape_sql_string("it's"), "it''s");
     }
 
     #[test]
     fn backslash_unchanged() {
         // Without ESCAPE support, backslash carries no special meaning.
-        assert_eq!(escape_sql_like(r"a\b"), r"a\b");
+        assert_eq!(escape_sql_string(r"a\b"), r"a\b");
     }
 
     #[test]
     fn percent_unchanged() {
         // % cannot be escaped -- it behaves as a LIKE wildcard.
-        assert_eq!(escape_sql_like("100%"), "100%");
+        assert_eq!(escape_sql_string("100%"), "100%");
     }
 
     #[test]
     fn underscore_unchanged() {
         // _ cannot be escaped -- it behaves as a LIKE wildcard.
-        assert_eq!(escape_sql_like("foo_bar"), "foo_bar");
+        assert_eq!(escape_sql_string("foo_bar"), "foo_bar");
     }
 
     #[test]
     fn combined_meta_characters() {
         // Only single quotes are doubled.
-        assert_eq!(escape_sql_like(r"a'\%_z"), r"a''\%_z");
+        assert_eq!(escape_sql_string(r"a'\%_z"), r"a''\%_z");
     }
 
     #[test]
     fn empty_string_is_empty() {
-        assert_eq!(escape_sql_like(""), "");
+        assert_eq!(escape_sql_string(""), "");
     }
 }

@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
 
-use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_like};
+use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_string};
 use siyuan_model::sql_guard;
 
 use crate::output::OutputFormat;
@@ -169,7 +169,7 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
             // Escape single quotes for SQL string-literal safety. The SiYuan
             // kernel's SQL engine does not support ESCAPE '\' in LIKE
             // patterns, so % and _ in user input behave as LIKE wildcards.
-            let needle = escape_sql_like(&a.query);
+            let needle = escape_sql_string(&a.query);
             let limit = a.limit.min(limit_cap);
             let stmt = format!(
                 "SELECT id, type, markdown FROM blocks \
@@ -194,7 +194,10 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
             if !a.contains.is_empty() {
                 // content uses LIKE; only single-quote escaping is effective
                 // since the SiYuan SQL engine does not support ESCAPE '\'.
-                conds.push(format!("content LIKE '%{}%'", escape_sql_like(&a.contains)));
+                conds.push(format!(
+                    "content LIKE '%{}%'",
+                    escape_sql_string(&a.contains)
+                ));
             }
             let where_clause = if conds.is_empty() {
                 "1=1".into()

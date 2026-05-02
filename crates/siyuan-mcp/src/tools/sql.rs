@@ -1,7 +1,7 @@
 use rmcp::ErrorData as McpError;
 use serde_json::{Value, json};
 
-use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_like};
+use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_string};
 use siyuan_model::sql_guard;
 
 use super::util::{ensure_object, optional_u64, required_string, siyuan_to_mcp, with_hint};
@@ -47,11 +47,17 @@ pub async fn search_text(client: &SiyuanClient, args: Value) -> Result<Value, Mc
     // Escape single quotes for SQL string-literal safety. The SiYuan
     // kernel's SQL engine does not support ESCAPE '\' in LIKE patterns,
     // so % and _ in user input behave as LIKE wildcards.
-    let escaped = escape_sql_like(&query);
+    let escaped = escape_sql_string(&query);
     let stmt = format!(
         "SELECT id, root_id, markdown FROM blocks \
          WHERE markdown LIKE '%{escaped}%' LIMIT {limit}"
     );
+
+    // AST-level read-only guard for defense-in-depth. User input is already
+    // escaped, but the AST guard catches any escaping bug or future regression.
+    if let Err(e) = sql_guard::validate_read_only(&stmt) {
+        return Err(McpError::invalid_params(format!("`query`: {e}"), None));
+    }
 
     let rows = client.sql(&stmt).await.map_err(siyuan_to_mcp)?;
     Ok(with_hint(

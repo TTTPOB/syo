@@ -283,47 +283,15 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Each notebook entry includes id, name, icon, sort order, and a `closed` flag. \
              Use this to discover notebook ids before calling tools that require a `notebook` \
              parameter (e.g. `siyuan_create_doc`, `siyuan_doc_resolve`). \
-             Closed notebooks must be opened with `siyuan_notebook_open` before their \
-             documents can be accessed. \
+             Notebooks that the user has closed in the SiYuan UI appear with `closed: true`; \
+             tools that look up documents inside such notebooks will return empty results or \
+             a kernel error. Re-opening a notebook is a UI-side action and is not exposed by \
+             this tool surface. \
              Response: { \"notebooks\": [ { \"id\": \"...\", \"name\": \"...\", \"closed\": bool, ... } ] }.",
             r#"{"type":"object","properties":{},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::notebook::ls(&c, args).await }
-            })
-        );
-    }
-
-    {
-        let c = Arc::clone(&client);
-        reg!(
-            "siyuan_notebook_open",
-            "Open (mount) a notebook so its documents become accessible for reading and writing. \
-             Notebooks that appear with `closed: true` in `siyuan_notebook_ls` must be opened \
-             before their documents can be loaded with `siyuan_get_doc` or queried via SQL. \
-             Already-open notebooks can be opened again without error. \
-             `id` must be a valid notebook id from `siyuan_notebook_ls`.",
-            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string","description":"Notebook id"}},"additionalProperties":true}"#,
-            make_handler(move |_, args| {
-                let c = Arc::clone(&c);
-                async move { tools::notebook::open(&c, args).await }
-            })
-        );
-    }
-
-    {
-        let c = Arc::clone(&client);
-        reg!(
-            "siyuan_notebook_close",
-            "Close (unmount) a notebook so its documents are no longer accessible. \
-             After closing, the notebook appears with `closed: true` in `siyuan_notebook_ls` \
-             and its documents cannot be read or modified until it is opened again. \
-             Use this to reduce memory footprint or to explicitly isolate a notebook from \
-             automated writes. Already-closed notebooks can be closed again without error.",
-            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string","description":"Notebook id"}},"additionalProperties":true}"#,
-            make_handler(move |_, args| {
-                let c = Arc::clone(&c);
-                async move { tools::notebook::close(&c, args).await }
             })
         );
     }
@@ -370,9 +338,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "siyuan_notebook_remove",
             "Permanently remove a notebook and ALL of its documents. \
              This action is irreversible — all content in the notebook is destroyed immediately. \
-             Use with extreme caution; prefer `siyuan_notebook_close` if you only want to \
-             hide the notebook from the active workspace. Verify the notebook id from \
-             `siyuan_notebook_ls` before calling this tool.",
+             Use with extreme caution. Verify the notebook id from `siyuan_notebook_ls` before \
+             calling this tool.",
             r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);

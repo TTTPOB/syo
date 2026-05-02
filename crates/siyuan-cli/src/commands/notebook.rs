@@ -7,8 +7,6 @@ use siyuan_types::NotebookId;
 #[derive(Subcommand, Debug)]
 pub enum NotebookCmd {
     Ls,
-    Open(IdArgs),
-    Close(IdArgs),
     Create(NameArgs),
     Rename(RenameArgs),
     Remove(IdArgs),
@@ -42,16 +40,6 @@ pub async fn run(client: &SiyuanClient, cmd: NotebookCmd) -> Result<()> {
                 let status = if nb.closed { "closed" } else { "open  " };
                 println!("{}\t{}\t{}", status, nb.id, nb.name);
             }
-        }
-        NotebookCmd::Open(a) => {
-            let id = NotebookId::parse(&a.id).context("--id")?;
-            client.open_notebook(&id).await?;
-            println!("ok");
-        }
-        NotebookCmd::Close(a) => {
-            let id = NotebookId::parse(&a.id).context("--id")?;
-            client.close_notebook(&id).await?;
-            println!("ok");
         }
         NotebookCmd::Create(a) => {
             let nb = client.create_notebook(&a.name).await?;

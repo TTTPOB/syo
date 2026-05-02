@@ -29,28 +29,6 @@ pub async fn ls(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     Ok(json!({ "notebooks": json_notebooks }))
 }
 
-pub async fn open(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
-    let id = parse_notebook_id(&required_string(&map, "id")?)?;
-    client.open_notebook(&id).await.map_err(siyuan_to_mcp)?;
-    Ok(with_hint(
-        json!({ "ok": true }),
-        "Notebook is now open. Documents inside it are visible to siyuan_doc_resolve and \
-         SQL-indexed reads. SQL-indexed reads may briefly show stale state for ~100–500 ms.",
-    ))
-}
-
-pub async fn close(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
-    let id = parse_notebook_id(&required_string(&map, "id")?)?;
-    client.close_notebook(&id).await.map_err(siyuan_to_mcp)?;
-    Ok(with_hint(
-        json!({ "ok": true }),
-        "Notebook is now closed. Its documents are no longer visible to siyuan_doc_resolve or \
-         SQL queries. Reopen with siyuan_notebook_open.",
-    ))
-}
-
 pub async fn create(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let name = required_string(&map, "name")?;

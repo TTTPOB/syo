@@ -25,53 +25,6 @@ async fn ls_notebooks_includes_seeded_notebook() {
 
 #[tokio::test]
 #[ignore]
-async fn open_close_notebook_round_trip() {
-    let f: Fixture = boot_with_seed().await.expect("boot");
-
-    // Close the seeded notebook.
-    f.client
-        .close_notebook(&f.notebook_id)
-        .await
-        .expect("close_notebook");
-
-    // ls_notebooks operates on the kernel's in-memory list — no SQL lag.
-    let notebooks = f
-        .client
-        .ls_notebooks()
-        .await
-        .expect("ls_notebooks after close");
-    let nb = notebooks
-        .iter()
-        .find(|nb| nb.id == f.notebook_id)
-        .expect("seeded notebook still listed after close");
-    assert!(
-        nb.closed,
-        "notebook should be marked closed after close_notebook"
-    );
-
-    // Re-open and verify the flag flips back.
-    f.client
-        .open_notebook(&f.notebook_id)
-        .await
-        .expect("open_notebook");
-
-    let notebooks = f
-        .client
-        .ls_notebooks()
-        .await
-        .expect("ls_notebooks after open");
-    let nb = notebooks
-        .iter()
-        .find(|nb| nb.id == f.notebook_id)
-        .expect("seeded notebook still listed after open");
-    assert!(
-        !nb.closed,
-        "notebook should be marked open after open_notebook"
-    );
-}
-
-#[tokio::test]
-#[ignore]
 async fn rename_notebook_changes_name() {
     let f: Fixture = boot_with_seed().await.expect("boot");
 

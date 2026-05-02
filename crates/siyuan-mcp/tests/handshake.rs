@@ -146,16 +146,18 @@ fn mcp_initialize_and_tools_list() {
     });
 
     let call_resp = rpc(stdin, &mut stdout, &call_req);
-    // The call hits port 1 and fails at the HTTP layer, so MCP returns an error.
-    let has_error = !call_resp["error"].is_null()
-        || call_resp["result"]["isError"].as_bool().unwrap_or(false)
-        || call_resp["result"]["content"]
-            .as_array()
-            .map(|a| !a.is_empty())
-            .unwrap_or(false);
+    // The call hits port 1 and fails at the HTTP layer, so MCP must surface
+    // it either as a JSON-RPC `error` or as a successful response carrying
+    // `isError: true`. We deliberately do NOT accept "non-empty content" as
+    // a proxy for failure: successful tool calls also have non-empty content,
+    // which would make the assertion vacuous if siyuan_status ever started
+    // succeeding against 127.0.0.1:1.
+    let has_error =
+        !call_resp["error"].is_null() || call_resp["result"]["isError"].as_bool().unwrap_or(false);
     assert!(
         has_error,
-        "call to unreachable kernel must produce an error or error content: {call_resp}"
+        "call to unreachable kernel must produce a JSON-RPC error or \
+         result.isError=true; got: {call_resp}"
     );
 
     // Terminate the child cleanly.

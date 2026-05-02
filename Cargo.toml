@@ -26,6 +26,12 @@ insta = { version = "1", features = ["yaml", "json", "redactions"] }
 regex = "1"
 once_cell = "1"
 camino = "1"
+# sqlparser: AST-level read-only validation for the `sql` command. The kernel
+# does NOT enforce read-only at the SQL level (see security advisories
+# GHSA-jqwg-75qf-vmf9 / GHSA-j7wh-x834-p3r7); we cannot rely on the kernel
+# guarding writes for us, so we parse the statement client-side and reject
+# anything that is not a single Query / Explain-of-Query node.
+sqlparser = "0.58"
 
 # Path deps for in-workspace crates
 siyuan-types = { path = "crates/siyuan-types" }

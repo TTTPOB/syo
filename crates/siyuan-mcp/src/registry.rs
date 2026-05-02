@@ -880,7 +880,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         let c = Arc::clone(&client);
         reg!(
             "siyuan_sql",
-            "Execute a raw read-only SQL SELECT statement against the SiYuan SQLite database.\n\
+            "Execute a single read-only SQL statement against the SiYuan SQLite database.\n\
              \n\
              Sibling tools: prefer `siyuan_search_text`, `siyuan_tag_search`, or \
              `siyuan_graph_neighborhood` when they cover the use case. Reach for siyuan_sql \
@@ -888,18 +888,35 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              tables like `refs`, `attributes`, `spans`). The CLI exposes the same operation \
              as `siyuan sql --stmt ...`.\n\
              \n\
-             Inputs: `stmt` (required) is a single SQL SELECT statement. A client-side \
-             keyword check rejects non-SELECT/WITH statements before any kernel round trip \
-             (whitespace and case are normalised; `WITH` is allowed for CTEs). The kernel \
-             also rejects INSERT/UPDATE/DELETE/DDL on its own and will return an error if \
-             anything slips past; in read-only / publish mode the endpoint itself is \
+             READ-ONLY ONLY. The statement is parsed locally with sqlparser-rs (SQLite \
+             dialect, single-statement) and rejected if the AST is anything other than a \
+             `SELECT` / `WITH ... SELECT` / `VALUES` / `EXPLAIN <select>` node. \
+             INSERT/UPDATE/DELETE/CREATE/DROP/ALTER/PRAGMA/ATTACH/DETACH and multi-statement \
+             input (`SELECT ...; DROP ...`) are rejected with `invalid_params` before any \
+             kernel round trip. CTE-tail writes (`WITH cte AS (...) DELETE ...`, \
+             `... UPDATE ...`, `... INSERT ...`) are also rejected — the AST check sees the \
+             write underneath the CTE. Do NOT assume the kernel itself enforces read-only at \
+             the SQL level; SiYuan security advisories GHSA-jqwg-75qf-vmf9 and \
+             GHSA-j7wh-x834-p3r7 document that `/api/query/sql` historically accepted writes, \
+             and the current kernel only gates the endpoint via admin-role / non-publish-mode \
+             middleware — neither is a SQL-level filter. This server's AST guard IS the gate.\n\
+             \n\
+             Inputs: `stmt` (required) is a single read-only statement. Whitespace-only \
+             input is rejected. Leading line (`-- ...`) and block (`/* ... */`) comments are \
+             stripped by the parser. In read-only / publish mode the endpoint itself is \
              disabled and returns `SqlUnavailable`.\n\
              \n\
-             Critical caveat: the kernel does NOT parameterise the query — there is no \
-             auto-escaping. Single quotes inside string literals must be doubled \
+             Critical caveats:\n\
+               * No parameterisation. Single quotes inside string literals must be doubled \
              (`'O''Brien'`); LIKE meta-chars (`%`, `_`, `\\`) must be escaped by the caller \
-             and paired with an `ESCAPE '\\\\'` clause. Treat the value as literal SQL \
-             text. `LIMIT` belongs inside the statement.\n\
+             and paired with an `ESCAPE '\\\\'` clause. `LIMIT` belongs inside the statement.\n\
+               * Use SQLite syntax. The kernel parses through a MySQL grammar as a fallback \
+             and may re-serialise the AST before execution, so MySQL-flavoured constructs \
+             (`CONCAT(...)`, `NOW()`, backtick identifiers, `LIMIT m, n`, `IF(c,a,b)`) may \
+             parse but fail or misbehave at execution. Stick to `||`, `datetime('now')`, \
+             `\"col\"`/`[col]`, `LIMIT n OFFSET m`, `iif(c,a,b)` or `CASE`.\n\
+               * `REGEXP` is supported via a kernel-registered custom function; other \
+             non-stock SQLite functions are not.\n\
              \n\
              Results are returned as an array of JSON objects where each key is a column \
              name. Some columns may be unstable internal fields. The SQL index lags writes \

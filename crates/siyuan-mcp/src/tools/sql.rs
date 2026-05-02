@@ -2,6 +2,7 @@ use rmcp::ErrorData as McpError;
 use serde_json::{Value, json};
 
 use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_like};
+use siyuan_model::sql_guard;
 
 use super::util::{ensure_object, optional_u64, required_string, siyuan_to_mcp, with_hint};
 
@@ -9,16 +10,13 @@ pub async fn raw_sql(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
     let map = ensure_object(args)?;
     let stmt = required_string(&map, "stmt")?;
 
-    // Client-side read-only guard: only SELECT and WITH (CTE) statements are
-    // accepted. The kernel rejects writes too, but matching here saves a
-    // round trip and surfaces a clearer error. Compare a trimmed +
-    // lowercased view but forward the original `stmt` to the kernel.
-    let head = stmt.trim_start().to_ascii_lowercase();
-    if !(head.starts_with("select") || head.starts_with("with")) {
-        return Err(McpError::invalid_params(
-            "`stmt` must be a read-only SELECT (or WITH) query",
-            None,
-        ));
+    // AST-level read-only guard. The kernel does NOT enforce read-only at
+    // the SQL level (see security advisories GHSA-jqwg-75qf-vmf9 and
+    // GHSA-j7wh-x834-p3r7), so this check is the actual gate, not just a
+    // UX nicety. Reject anything that is not a single Query / Explain-of-
+    // Query node before any kernel round trip.
+    if let Err(e) = sql_guard::validate_read_only(&stmt) {
+        return Err(McpError::invalid_params(format!("`stmt`: {e}"), None));
     }
 
     let rows = client.sql(&stmt).await.map_err(siyuan_to_mcp)?;
@@ -26,7 +24,8 @@ pub async fn raw_sql(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
         json!({ "rows": rows }),
         "Power tool: results are raw rows from the SiYuan SQLite database. Some columns may be \
          unstable internal fields. Results reflect the SQL index which may lag mutations by \
-         ~100–500 ms. This is read-only; do not issue INSERT/UPDATE/DELETE.",
+         ~100–500 ms. The kernel does not enforce SQL-level read-only — this server validates \
+         the statement AST locally and rejects writes before any round trip.",
     ))
 }
 
@@ -89,10 +88,10 @@ mod tests {
 
     #[tokio::test]
     async fn raw_sql_rejects_non_select_stmt() {
-        // The dummy client points at an unreachable port: if the leading-
-        // keyword guard regresses, this test would surface a network error
-        // instead of `invalid_params`. Pinning the assertion to the message
-        // keeps that contract obvious.
+        // The dummy client points at an unreachable port: if the AST guard
+        // regresses, this test would surface a network error instead of
+        // `invalid_params`. Pinning the assertion to the message keeps that
+        // contract obvious.
         let client = dummy_client();
         let args = json!({ "stmt": "DROP TABLE blocks" });
         let err = raw_sql(&client, args)
@@ -107,10 +106,10 @@ mod tests {
 
     #[tokio::test]
     async fn raw_sql_accepts_leading_whitespace_select() {
-        // `"\n\n  SELECT 1"` should pass the guard and proceed to the HTTP
-        // layer (which then fails because the dummy client cannot connect).
-        // This pins the trim-then-lowercase semantics so a future regression
-        // cannot accidentally tighten the leading-keyword check.
+        // `"\n\n  SELECT 1"` should pass the AST guard and proceed to the
+        // HTTP layer (which then fails because the dummy client cannot
+        // connect). This pins the parser's whitespace tolerance so a future
+        // regression cannot accidentally tighten the validator.
         let client = dummy_client();
         let args = json!({ "stmt": "\n\n  SELECT 1" });
         let err = raw_sql(&client, args)
@@ -119,6 +118,40 @@ mod tests {
         assert!(
             !err.message.contains("read-only"),
             "leading-whitespace SELECT must clear the read-only guard; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn raw_sql_rejects_with_tail_delete() {
+        // The whole reason we upgraded from a leading-keyword check to AST
+        // validation: this statement starts with `WITH` but executes a
+        // DELETE. The AST guard sees the SetExpr::Delete under the WITH and
+        // rejects it before any kernel round trip.
+        let client = dummy_client();
+        let args = json!({
+            "stmt": "WITH x AS (SELECT id FROM blocks) DELETE FROM blocks WHERE id IN (SELECT id FROM x)"
+        });
+        let err = raw_sql(&client, args)
+            .await
+            .expect_err("WITH-tail DELETE must be rejected by the AST guard");
+        assert!(
+            err.message.contains("DELETE"),
+            "error should name the rejected operation; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn raw_sql_rejects_multi_statement() {
+        let client = dummy_client();
+        let args = json!({ "stmt": "SELECT 1; DROP TABLE blocks" });
+        let err = raw_sql(&client, args)
+            .await
+            .expect_err("multi-statement input must be rejected");
+        assert!(
+            err.message.contains("single statement"),
+            "error should name the constraint; got: {}",
             err.message
         );
     }

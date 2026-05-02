@@ -256,42 +256,34 @@ async fn auth_error_when_token_wrong() {
 }
 
 // ---------------------------------------------------------------------------
-// Error test 2: unknown block id — actual kernel behaviour
+// Error test 2: unknown block id — uniform NotFound contract
 //
 // Investigation finding: SiYuan kernel v3.6.5 returns code=0 with an empty
 // kramdown string for unknown block ids rather than a non-zero error code.
-// The test therefore checks this actual behaviour: the call succeeds but
-// the kramdown field is empty, indicating the block was not found.
+// The client maps this kernel quirk to `SiyuanError::NotFound` so callers
+// get a typed signal regardless of which side detected the absence. This
+// test pins down the contract: an unknown id always yields NotFound.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[ignore]
-async fn invalid_block_id_returns_empty_kramdown() {
+async fn invalid_block_id_yields_not_found() {
     let f = boot_with_seed().await.expect("boot");
 
     // A syntactically valid id that no block in the kernel will match.
     let fake_id = BlockId::parse("20000101000000-fake000").expect("fake id parse");
 
-    // The kernel returns code=0 with an empty kramdown for unknown ids.
-    // This is a quirk: treat empty kramdown as the "not found" signal.
-    match f.client.get_block_kramdown(&fake_id).await {
-        Ok(kd) => {
-            // Kernel signals "not found" by returning an empty kramdown string.
-            assert!(
-                kd.kramdown.is_empty(),
-                "unknown block should return empty kramdown; got: {:?}",
-                kd.kramdown
-            );
-        }
-        Err(err) => {
-            // Some kernel versions do return an error — accept Api kind.
-            assert_eq!(
-                err.kind(),
-                ErrorKind::Api,
-                "if error: must be Api kind; got: {err:?}"
-            );
-        }
-    }
+    let err = f
+        .client
+        .get_block_kramdown(&fake_id)
+        .await
+        .expect_err("unknown block id must yield Err");
+
+    assert_eq!(
+        err.kind(),
+        ErrorKind::NotFound,
+        "unknown block id must surface as NotFound; got: {err:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------

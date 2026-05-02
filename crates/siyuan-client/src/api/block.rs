@@ -102,8 +102,21 @@ fn first_new_id(txs: &[Transaction]) -> Result<BlockId, SiyuanError> {
 // -------- methods --------
 
 impl SiyuanClient {
+    /// Fetch the kramdown source of a block.
+    ///
+    /// Quirk: `/api/block/getBlockKramdown` returns `code = 0` with an empty
+    /// `data.kramdown` when the requested id does not exist. That collapses
+    /// "block missing" with "block exists but is genuinely empty" (the
+    /// latter is rare but possible). Surface the missing case as a typed
+    /// `SiyuanError::NotFound` so callers get a uniform contract.
     pub async fn get_block_kramdown(&self, id: &BlockId) -> Result<BlockKramdown, SiyuanError> {
-        self.post("/api/block/getBlockKramdown", &ById { id }).await
+        let bk: BlockKramdown = self
+            .post("/api/block/getBlockKramdown", &ById { id })
+            .await?;
+        if bk.kramdown.is_empty() {
+            return Err(SiyuanError::NotFound(format!("block {id}")));
+        }
+        Ok(bk)
     }
 
     pub async fn get_child_blocks(&self, id: &BlockId) -> Result<Vec<ChildBlock>, SiyuanError> {

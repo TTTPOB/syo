@@ -13,12 +13,14 @@
 //! # }
 //! ```
 
+mod cleanup;
 mod container;
 mod health;
 mod podman;
 mod port;
 mod workspace;
 
+pub use cleanup::sweep_stale_workspaces;
 pub use container::{SiyuanContainer, SiyuanContainerBuilder};
 
 /// Initialise tracing for tests. Idempotent — safe to call from every test.

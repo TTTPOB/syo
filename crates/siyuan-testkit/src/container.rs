@@ -46,6 +46,12 @@ impl SiyuanContainerBuilder {
     pub async fn start(self) -> Result<SiyuanContainer> {
         podman::require_podman()?;
 
+        // Reap stale workspaces from previous killed/crashed test runs
+        // before allocating a new one. Cheap (one readdir + age check per
+        // entry) and prevents `/tmp` from filling up over many sessions.
+        // See `cleanup` module for the rationale.
+        crate::cleanup::sweep_stale_workspaces();
+
         let workspace = TempWorkspace::new()?;
         let port = allocate_loopback_port()?;
         let base_url = format!("http://127.0.0.1:{port}");
@@ -171,6 +177,25 @@ impl Drop for SiyuanContainer {
         }
         if let Err(err) = podman::force_remove(&id) {
             tracing::error!(?err, container_id = %id, "podman rm -f failed; container may be leaked");
+        }
+
+        // Workspace cleanup. The kernel container wrote files into the
+        // bind-mounted workspace as a sub-uid (rootless podman maps
+        // container UIDs via /etc/subuid), so the host process cannot
+        // delete them with TempDir's plain `remove_dir_all`. Take the
+        // workspace out of TempWorkspace's auto-cleanup path and rm via
+        // `podman unshare`, which re-enters the user namespace where
+        // those files appear as the host user's own.
+        if let Some(ws) = self.workspace.take() {
+            let path = ws.into_persistent();
+            if let Err(err) = podman::unshare_rm_rf(&path) {
+                tracing::error!(
+                    ?err,
+                    path = %path.display(),
+                    "workspace cleanup failed; \
+                     run `podman unshare rm -rf {}` to free /tmp", path.display()
+                );
+            }
         }
     }
 }

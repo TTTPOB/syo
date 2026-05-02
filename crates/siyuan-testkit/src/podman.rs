@@ -87,6 +87,38 @@ pub fn force_remove(container_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// `podman unshare rm -rf <path>`. The kernel container writes files into the
+/// bind-mounted workspace as a sub-uid (rootless podman maps container UIDs
+/// via `/etc/subuid`), so the host process cannot delete them with a plain
+/// `std::fs::remove_dir_all`. `podman unshare` re-enters the user namespace
+/// where those files appear as the host user's own, and `rm -rf` then works.
+///
+/// Best-effort: returns an error on failure but does NOT panic. Callers
+/// (Drop impls, sweep loops) should log and move on.
+pub fn unshare_rm_rf(path: &std::path::Path) -> Result<()> {
+    // Refuse paths that are not absolute, to keep accidental `rm -rf .`
+    // away from a relative-cwd footgun. The testkit always passes
+    // absolute paths from `tempfile::TempDir`, so this is belt-and-
+    // suspenders, not a UX constraint.
+    if !path.is_absolute() {
+        bail!("unshare_rm_rf requires an absolute path; got {:?}", path);
+    }
+    let out = Command::new("podman")
+        .args(["unshare", "rm", "-rf", "--"])
+        .arg(path)
+        .output()
+        .context("spawning `podman unshare rm -rf`")?;
+    if !out.status.success() {
+        bail!(
+            "`podman unshare rm -rf {}` exited {}: {}",
+            path.display(),
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    Ok(())
+}
+
 /// `podman logs <id>`. Returns combined stdout + stderr.
 pub fn logs(container_id: &str) -> Result<String> {
     let out = Command::new("podman")

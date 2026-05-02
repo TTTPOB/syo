@@ -8,11 +8,32 @@ use siyuan_types::BlockId;
 
 use crate::output::OutputFormat;
 
+/// Fetch the raw kramdown source of a single block plus its attributes.
+///
+/// Sibling commands: `siyuan get-doc` returns the rendered document tree —
+/// use this only when you need the storage syntax of ONE block (e.g. to
+/// inspect attributes embedded in kramdown braces). `siyuan search text`
+/// finds candidate ids when you do not have one yet.
+///
+/// Inputs:
+///   --id (required): block id (14-digit timestamp + 7-char suffix). Any
+///     block id is accepted — paragraph, heading, list item, document root,
+///     etc. If the id does not exist, the kernel returns NotFound.
+///   --format (default agent-md): one of `agent-md` (an HTML-comment header
+///     plus the kramdown body), `json`, or `json-pretty`. JSON outputs an
+///     object with `id`, `kramdown`, and `attrs`.
+///
+/// Example:
+///   in:  --id 20260501090000-doc0001 --format json
+///   out: {"id":"20260501090000-doc0001","kramdown":"# Heading\n\nBody\n","attrs":{"title":"Plan"}}
 #[derive(Args, Debug)]
+#[command(verbatim_doc_comment)]
 pub struct GetBlockArgs {
+    /// Block id to fetch (any block type).
     #[arg(long)]
     pub id: String,
 
+    /// Output format: `agent-md` (default), `json`, or `json-pretty`.
     #[arg(long, value_enum, default_value_t = OutputFormat::AgentMd)]
     pub format: OutputFormat,
 }

@@ -6,12 +6,42 @@ use clap::Args;
 use siyuan_client::SiyuanClient;
 use siyuan_types::BlockId;
 
+/// Set one or more attributes on a block (partial update).
+///
+/// Sibling commands: `siyuan doc set-icon` and `siyuan doc set-sort` are
+/// thin wrappers that set the `icon` / `sort` attribute respectively;
+/// reach for them when that is all you need. There is no `get-attrs` CLI —
+/// to read existing attributes use `siyuan get-block --format json` (its
+/// JSON output includes `attrs`).
+///
+/// Inputs:
+///   --id (required): block id whose attributes to mutate.
+///   --attr (repeatable): one `key=value` pair per occurrence. The flag
+///     name is `--attr` (singular), supplied multiple times. Custom keys
+///     MUST start with `custom-`. Setting a value to the empty string
+///     deletes the key. Setting internal keys like `id` or `type` is
+///     silently ignored by the kernel. Keys not listed in this call are
+///     left untouched (partial update).
+///
+/// Prints `ok` on success.
+///
+/// SiYuan indexes mutations asynchronously; SQL-based reads (siyuan sql,
+/// siyuan search text, siyuan tag search) may show stale data for ~100-500 ms
+/// after this call. The kernel is immediately consistent — only the SQL
+/// index lags.
+///
+/// Example:
+///   in:  --id 20260501090000-blk0001 --attr custom-priority=high --attr custom-owner=alice
+///   out: ok
 #[derive(Args, Debug)]
+#[command(verbatim_doc_comment)]
 pub struct SetAttrsArgs {
+    /// Block id whose attributes to mutate.
     #[arg(long)]
     pub id: String,
 
     /// Repeated `key=value` pairs. Custom attrs must be `custom-...`.
+    /// Empty value deletes the key; unlisted keys are preserved.
     #[arg(long = "attr", value_name = "KEY=VALUE")]
     pub attrs: Vec<String>,
 }

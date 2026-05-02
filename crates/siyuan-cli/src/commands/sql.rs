@@ -3,25 +3,42 @@ use clap::Args;
 
 use siyuan_client::SiyuanClient;
 
+/// Run a read-only SQL SELECT directly against the SiYuan SQLite store.
+///
+/// Sibling commands: prefer `siyuan search text`, `siyuan search blocks`,
+/// `siyuan tag search`, or `siyuan graph neighborhood` when they cover the
+/// use case. Reach for sql ONLY when those do not (joins, aggregates, or
+/// access to internal tables like `refs`, `attributes`, `spans`).
+///
+/// Inputs:
+///   --stmt (required): a single SQL SELECT statement. Whitespace-only
+///     input is rejected client-side. The kernel rejects
+///     INSERT/UPDATE/DELETE/DDL; in read-only / publish mode the endpoint
+///     is disabled entirely (you'll get `SqlUnavailable`).
+///
+/// Critical caveat: the kernel does NOT parameterise the query. Single
+/// quotes inside string literals must be doubled (`'O''Brien'`); LIKE
+/// meta-chars (`%`, `_`, `\`) must be escaped by you and paired with an
+/// `ESCAPE '\'` clause. Treat the input as literal SQL text — there is no
+/// auto-escaping. `LIMIT` belongs in your SQL too; there is no `--limit`
+/// flag.
+///
+/// Output is the raw row array as pretty JSON (each row is an object whose
+/// keys are column names). The SQL index lags writes by ~100-500 ms — rows
+/// the user just inserted may not show up immediately even though the
+/// kernel has them.
+///
+/// Example:
+///   in:  --stmt "SELECT id, hpath FROM blocks WHERE box = '20260501000000-nb00001' AND type = 'd' LIMIT 5"
+///   out: [
+///          {"id":"20260501090000-doc0001","hpath":"/Plan"},
+///          ...
+///        ]
 #[derive(Args, Debug)]
+#[command(verbatim_doc_comment)]
 pub struct SqlArgs {
-    /// Read-only SQL SELECT statement to run against the SiYuan SQLite store.
-    ///
-    /// Power-tool escape hatch — prefer `siyuan search`, `siyuan tag`,
-    /// `siyuan graph` etc. when they cover the use case.
-    ///
-    /// Read-only: INSERT/UPDATE/DELETE/DDL are rejected by the kernel. In
-    /// read-only / publish mode the endpoint itself is disabled and you'll
-    /// get a typed `SqlUnavailable` error.
-    ///
-    /// NOT parameterised: single quotes and LIKE meta-characters in your SQL
-    /// must be escaped by you — there is no auto-escaping. Treat the value
-    /// as literal SQL text.
-    ///
-    /// The SQL index lags writes by ~100–500 ms; rows you just inserted may
-    /// not show up immediately.
-    ///
-    /// `LIMIT` belongs inside your SQL — there is no `--limit` flag.
+    /// Read-only SQL SELECT statement (single statement, no `;`-chaining).
+    /// Single quotes and LIKE meta-chars must be escaped by you.
     #[arg(long)]
     pub stmt: String,
 }

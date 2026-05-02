@@ -12,18 +12,45 @@ use siyuan_types::BlockId;
 
 use crate::output::OutputFormat;
 
+/// Fetch a document by id and render as agent-markdown or JSON.
+///
+/// Sibling commands: `siyuan get-block` returns one block's raw kramdown;
+/// `siyuan doc resolve` converts an hpath to an id (this command requires an
+/// id, not an hpath). For full-text scans across many docs use
+/// `siyuan search text` instead of paging through every document.
+///
+/// Inputs:
+///   --id (required): document block id (14-digit timestamp + 7-char suffix,
+///     e.g. `20260501090000-doc0001`). Must be the ROOT block of a document.
+///   --page (default 1): 1-indexed page number in DFS document order.
+///   --page-size (default 50, capped at 1000): blocks per page.
+///   --format (default agent-md): one of `agent-md` (compact markdown with
+///     `<!-- sy:* -->` HTML-comment block markers), `json` (raw structured
+///     bundle), or `json-pretty` (the same bundle, indented).
+///
+/// When `total_pages > page` the JSON output wraps the bundle with a `_hint`
+/// telling you to fetch the next page; agent-md emits the same hint as a
+/// trailing comment.
+///
+/// Example:
+///   in:  --id 20260501090000-doc0001 --format json
+///   out: {"doc":{"id":"20260501090000-doc0001","hpath":"/Plan",...},"blocks":[...],"page":1,"total_pages":1}
 #[derive(Args, Debug)]
+#[command(verbatim_doc_comment)]
 pub struct GetDocArgs {
-    /// Document block id.
+    /// Document block id (root block; not an hpath).
     #[arg(long)]
     pub id: String,
 
+    /// 1-indexed page number; pages are sliced in DFS document order.
     #[arg(long, default_value_t = 1)]
     pub page: usize,
 
+    /// Blocks per page. Default 50, capped at 1000 by the model layer.
     #[arg(long, default_value_t = DEFAULT_PAGE_SIZE)]
     pub page_size: usize,
 
+    /// Output format: `agent-md` (default), `json`, or `json-pretty`.
     #[arg(long, value_enum, default_value_t = OutputFormat::AgentMd)]
     pub format: OutputFormat,
 }

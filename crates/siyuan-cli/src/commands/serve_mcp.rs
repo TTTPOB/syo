@@ -7,11 +7,33 @@ use tracing::warn;
 
 use crate::config::Config;
 
-/// Arguments for the `serve-mcp` subcommand.
+/// Run the Model Context Protocol server on stdio until the client disconnects.
 ///
-/// `--base-url` and `--token` are inherited as global flags on the top-level
-/// `siyuan` CLI; this struct only adds MCP-specific options.
+/// Sibling commands: every other subcommand is a one-shot CLI call against
+/// the kernel; serve-mcp instead exposes those operations as MCP tools to
+/// an LLM/agent over a stdio JSON-RPC channel. Use this when the caller is
+/// a Claude Code-style agent harness.
+///
+/// Inputs:
+///   --base-url, --token (global, inherited): see top-level `siyuan --help`.
+///     Unlike other subcommands, serve-mcp tolerates a missing token — it
+///     boots, logs a warning, and defers auth failures to per-tool kernel
+///     calls.
+///   --timeout-ms (optional, default 30000, env `SIYUAN_TIMEOUT_MS`):
+///     per-HTTP-request timeout in milliseconds. Pass `0` to disable the
+///     timeout entirely (useful when the caller imposes its own deadline).
+///
+/// Behaviour:
+///   - Reads JSON-RPC frames on stdin, writes them on stdout. Tracing logs
+///     are routed to stderr by `init_tracing` so they do not interfere
+///     with the JSON-RPC channel — do NOT pipe stderr into stdin/stdout.
+///   - The process runs until the client closes the channel.
+///
+/// Example:
+///   in:  serve-mcp --timeout-ms 60000   (env: SIYUAN_TOKEN=xxx)
+///   out: <stdio JSON-RPC traffic; LLM client drives requests>
 #[derive(Args, Debug)]
+#[command(verbatim_doc_comment)]
 pub struct ServeMcpArgs {
     /// HTTP request timeout in milliseconds. Pass 0 to disable the timeout
     /// entirely (useful when the caller imposes its own deadline).

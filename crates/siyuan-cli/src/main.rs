@@ -9,10 +9,22 @@ use tracing::info;
 #[command(name = "siyuan", version, about = "Agent harness for SiYuan")]
 struct Cli {
     /// Base URL of the SiYuan kernel HTTP API.
+    ///
+    /// Falls back to the `SIYUAN_BASE_URL` env var, then to
+    /// `http://127.0.0.1:6806` (the kernel's default loopback bind). Format:
+    /// scheme://host:port with no trailing slash, e.g. `http://127.0.0.1:6806`
+    /// or `https://siyuan.example.com`.
     #[arg(long, env = "SIYUAN_BASE_URL", global = true)]
     base_url: Option<String>,
 
     /// API token (Authorization: Token <value>).
+    ///
+    /// Falls back to the `SIYUAN_TOKEN` env var. Required for every
+    /// subcommand EXCEPT `serve-mcp`: if neither flag nor env is set, the CLI
+    /// errors before dispatching the subcommand. `serve-mcp` tolerates a
+    /// missing token (it logs a warning and defers auth failures to per-tool
+    /// kernel calls), so the MCP server can boot first and the user can wire
+    /// the token in later via env.
     #[arg(long, env = "SIYUAN_TOKEN", global = true)]
     token: Option<String>,
 
@@ -22,7 +34,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Cmd {
-    /// Print kernel version (smoke test).
+    /// Print the SiYuan kernel version and confirm the server is reachable.
     Status,
     GetDoc(commands::get_doc::GetDocArgs),
     GetBlock(commands::get_block::GetBlockArgs),
@@ -32,35 +44,37 @@ enum Cmd {
     MoveBlock(commands::move_block::MoveBlockArgs),
     DeleteBlock(commands::delete_block::DeleteBlockArgs),
     SetAttrs(commands::set_attrs::SetAttrsArgs),
+    /// Manage notebooks (list, create, rename, remove).
     Notebook {
         #[command(subcommand)]
         cmd: commands::notebook::NotebookCmd,
     },
+    /// Manage documents (resolve metadata, rename, move, set icon/sort, remove).
     Doc {
         #[command(subcommand)]
         cmd: commands::doc::DocCmd,
     },
+    /// List or search blocks by tag.
     Tag {
         #[command(subcommand)]
         cmd: commands::tag::TagCmd,
     },
+    /// Upload local files as assets and emit markdown references for them.
     Asset {
         #[command(subcommand)]
         cmd: commands::asset::AssetCmd,
     },
+    /// Inspect the link graph: backlinks, outgoing refs, neighborhood walks.
     Graph {
         #[command(subcommand)]
         cmd: commands::graph::GraphCmd,
     },
+    /// Search blocks by full-text or by type/contains predicates.
     Search {
         #[command(subcommand)]
         cmd: commands::search::SearchCmd,
     },
-    /// Run a read-only SQL SELECT directly against the SiYuan SQLite store.
-    /// Power tool — prefer `search`, `tag`, `graph` etc. when they cover the
-    /// use case. Output is the raw row array as pretty JSON.
     Sql(commands::sql::SqlArgs),
-    /// Run the Model Context Protocol server on stdio.
     ServeMcp(commands::serve_mcp::ServeMcpArgs),
 }
 

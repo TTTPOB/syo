@@ -15,7 +15,7 @@ impl<T> SiyuanResponse<T> {
     pub fn into_result(self) -> Result<T, SiyuanError> {
         if self.code == 0 {
             self.data.ok_or_else(|| {
-                SiyuanError::Parse("kernel returned code=0 but no data field".into())
+                SiyuanError::Parse("kernel returned code=0 with null data; the requested endpoint may not support this query or there may be a kernel version mismatch".into())
             })
         } else {
             Err(SiyuanError::Api {
@@ -69,5 +69,25 @@ mod tests {
         let raw = r#"{"code":0,"msg":"","data":null}"#;
         let r: SiyuanResponse<serde_json::Value> = serde_json::from_str(raw).unwrap();
         assert!(r.into_result_or_unit().unwrap().is_none());
+    }
+
+    #[test]
+    fn null_data_err_message_is_actionable() {
+        let raw = r#"{"code":0,"msg":"","data":null}"#;
+        let r: SiyuanResponse<serde_json::Value> = serde_json::from_str(raw).unwrap();
+        let err_msg = match r.into_result() {
+            Err(SiyuanError::Parse(msg)) => msg,
+            other => panic!("unexpected: {other:?}"),
+        };
+        // diagnostic key phrases
+        assert!(
+            err_msg.contains("null data"),
+            "missing 'null data': {err_msg}"
+        );
+        assert!(
+            err_msg.contains("endpoint"),
+            "missing 'endpoint': {err_msg}"
+        );
+        assert!(err_msg.contains("version"), "missing 'version': {err_msg}");
     }
 }

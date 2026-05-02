@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
 
 use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_like};
+use siyuan_model::sql_guard;
 
 use crate::output::OutputFormat;
 
@@ -173,6 +174,12 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
                 "SELECT id, type, markdown FROM blocks \
                  WHERE markdown LIKE '%{needle}%' ESCAPE '\\' LIMIT {limit}"
             );
+            // Defense-in-depth: validate that the assembled SQL is read-only
+            // before sending to the kernel. User input is already escaped, but
+            // the AST guard catches any escaping bug or future regression.
+            if let Err(e) = sql_guard::validate_read_only(&stmt) {
+                bail!("{e}");
+            }
             let rows: Vec<Hit> = client.sql_typed(&stmt).await?;
             emit_hits(rows, a.format)?;
         }
@@ -199,6 +206,12 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
             let limit = a.limit.min(limit_cap);
             let stmt =
                 format!("SELECT id, type, markdown FROM blocks WHERE {where_clause} LIMIT {limit}");
+            // Defense-in-depth: validate that the assembled SQL is read-only
+            // before sending to the kernel. User input is already escaped, but
+            // the AST guard catches any escaping bug or future regression.
+            if let Err(e) = sql_guard::validate_read_only(&stmt) {
+                bail!("{e}");
+            }
             let rows: Vec<Hit> = client.sql_typed(&stmt).await?;
             emit_hits(rows, a.format)?;
         }

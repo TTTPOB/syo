@@ -33,21 +33,34 @@ pub async fn open(client: &SiyuanClient, args: Value) -> Result<Value, McpError>
     let map = ensure_object(args)?;
     let id = parse_notebook_id(&required_string(&map, "id")?)?;
     client.open_notebook(&id).await.map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Notebook is now open. Documents inside it are visible to siyuan_doc_resolve and \
+         SQL-indexed reads. SQL-indexed reads may briefly show stale state for ~100–500 ms.",
+    ))
 }
 
 pub async fn close(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let id = parse_notebook_id(&required_string(&map, "id")?)?;
     client.close_notebook(&id).await.map_err(siyuan_to_mcp)?;
-    Ok(json!({ "ok": true }))
+    Ok(with_hint(
+        json!({ "ok": true }),
+        "Notebook is now closed. Its documents are no longer visible to siyuan_doc_resolve or \
+         SQL queries. Reopen with siyuan_notebook_open.",
+    ))
 }
 
 pub async fn create(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let name = required_string(&map, "name")?;
     let nb = client.create_notebook(&name).await.map_err(siyuan_to_mcp)?;
-    Ok(notebook_to_json(&nb))
+    Ok(with_hint(
+        notebook_to_json(&nb),
+        "Notebook created and opened. The returned id can be used in subsequent calls \
+         (siyuan_doc_create, siyuan_notebook_rename, etc.). It also appears in \
+         siyuan_notebook_ls.",
+    ))
 }
 
 pub async fn rename(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {

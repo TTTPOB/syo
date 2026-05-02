@@ -336,7 +336,8 @@ pub fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static str, Han
              The kernel assigns a unique id automatically; the id is returned in the response \
              alongside the notebook metadata. The new notebook is created in the open state. \
              Use the returned id in subsequent calls that require a `notebook` parameter. \
-             Response: { \"id\": \"...\", \"name\": \"...\", \"icon\": \"...\", \"sort\": N, \"closed\": false }.",
+             Response envelope includes the notebook record under `data` \
+             (`{ \"id\": \"...\", \"name\": \"...\", \"icon\": \"...\", \"sort\": N, \"closed\": false }`).",
             r#"{"type":"object","required":["name"],"properties":{"name":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);

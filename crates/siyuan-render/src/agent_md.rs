@@ -6,10 +6,16 @@ use siyuan_types::{BlockNode, BlockType};
 pub fn render_doc(bundle: &DocBundle) -> String {
     let mut out = String::new();
 
+    // Use JSON encoding for the hpath so non-ASCII paths (CJK, emoji, etc.)
+    // survive as printable codepoints instead of `\u{...}` escapes that the
+    // Rust `Debug` formatter emits. JSON quoting only escapes characters
+    // JSON requires (control chars, `"`, `\`), preserving readability and
+    // letting agents round-trip the marker back into a string.
+    let hpath_json = serde_json::to_string(&bundle.doc.hpath).unwrap_or_default();
     let _ = writeln!(
         out,
-        "<!-- sy:doc id={} hpath={:?} page={} of {} -->",
-        bundle.doc.id, bundle.doc.hpath, bundle.page.page, bundle.page.total_pages,
+        "<!-- sy:doc id={} hpath={} page={} of {} -->",
+        bundle.doc.id, hpath_json, bundle.page.page, bundle.page.total_pages,
     );
     let _ = writeln!(out);
 
@@ -167,6 +173,62 @@ mod tests {
         <!-- sy:block id=20260501000010-h2aaaaa type=h subtype=h2 -->
         ## Hello
         "###);
+    }
+
+    #[test]
+    fn ascii_hpath_renders_as_plain_quoted_string() {
+        let bundle = DocBundle {
+            schema: DocBundle::SCHEMA.into(),
+            doc: DocMeta {
+                id: BlockId::parse("20260501000001-doc0001").unwrap(),
+                notebook_id: NotebookId::parse("20260501000000-nb00001").unwrap(),
+                hpath: "/Demo".into(),
+                title: "Demo".into(),
+            },
+            page: PageInfo {
+                page: 1,
+                page_size: 50,
+                total_blocks: 0,
+                total_pages: 1,
+            },
+            blocks: vec![],
+        };
+        let md = render_doc(&bundle);
+        assert!(
+            md.contains("hpath=\"/Demo\""),
+            "ASCII hpath should appear as a plain JSON string; got: {md}"
+        );
+    }
+
+    #[test]
+    fn cjk_hpath_renders_as_printable_codepoints() {
+        // The Rust `Debug` formatter would emit `\u{7B14}\u{8BB0}` for "笔记";
+        // JSON encoding preserves the printable codepoints.
+        let bundle = DocBundle {
+            schema: DocBundle::SCHEMA.into(),
+            doc: DocMeta {
+                id: BlockId::parse("20260501000001-doc0001").unwrap(),
+                notebook_id: NotebookId::parse("20260501000000-nb00001").unwrap(),
+                hpath: "/笔记".into(),
+                title: "笔记".into(),
+            },
+            page: PageInfo {
+                page: 1,
+                page_size: 50,
+                total_blocks: 0,
+                total_pages: 1,
+            },
+            blocks: vec![],
+        };
+        let md = render_doc(&bundle);
+        assert!(
+            md.contains("hpath=\"/笔记\""),
+            "CJK hpath should appear as printable codepoints; got: {md}"
+        );
+        assert!(
+            !md.contains("\\u{"),
+            "Rust-style `\\u{{..}}` escapes must not leak into the marker; got: {md}"
+        );
     }
 
     #[test]

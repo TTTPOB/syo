@@ -24,7 +24,11 @@ impl SiyuanClient {
     /// e.g. `assets/myimg-20260501093000-abcdefg.png`, suitable for embedding
     /// in markdown as `![alt](assets/...)`.
     pub async fn upload_asset(&self, file_path: &Path) -> Result<String, SiyuanError> {
-        let bytes = std::fs::read(file_path)
+        // Use tokio::fs to keep the executor responsive: std::fs::read blocks
+        // the worker thread, which can starve other tasks on a single-thread
+        // runtime and stall the whole runtime under load on a multi-thread one.
+        let bytes = tokio::fs::read(file_path)
+            .await
             .map_err(|e| SiyuanError::Parse(format!("read {}: {e}", file_path.display())))?;
         let filename = file_path
             .file_name()

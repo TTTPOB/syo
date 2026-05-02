@@ -17,9 +17,9 @@ pub enum SearchCmd {
     /// for arbitrary queries.
     ///
     /// Inputs:
-    ///   --query (required): non-empty search string. LIKE meta-chars
-    ///     (`%`, `_`, `\`) and single quotes in the input are escaped
-    ///     internally before the SQL is constructed; pass plain text.
+    ///   --query (required): non-empty search string. Single quotes are
+    ///     escaped internally; LIKE meta-chars (`%`, `_`, `\\`) are NOT
+    ///     escaped — they behave as wildcards. Pass plain text.
     ///     Whitespace-only inputs are rejected client-side.
     ///   --limit (optional, default 50): maximum hits, capped by
     ///     `MAX_SEARCH_LIMIT`.
@@ -52,7 +52,8 @@ pub enum SearchCmd {
     ///     `s` super-block. Empty (default) means no type filter.
     ///   --contains (optional): substring matched against block `content`
     ///     (visible text, no markdown formatting). Empty (default) means
-    ///     no content filter. LIKE meta-chars are escaped internally.
+    ///     no content filter. LIKE meta-chars (`%`, `_`) are NOT
+    ///     escaped — they behave as wildcards.
     ///   --limit (optional, default 50): maximum hits, capped by
     ///     `MAX_SEARCH_LIMIT`.
     ///   --format (default agent-md): one of `agent-md` (the TSV form
@@ -71,7 +72,8 @@ pub enum SearchCmd {
 
 #[derive(Args, Debug)]
 pub struct TextArgs {
-    /// Substring to search for. Plain text; meta-chars escaped internally.
+    /// Substring to search for. Single quotes are escaped internally;
+    /// LIKE meta-chars are NOT escaped — they behave as wildcards.
     #[arg(long)]
     pub query: String,
 

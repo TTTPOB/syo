@@ -53,6 +53,12 @@ pub enum NotebookCmd {
     Create(NameArgs),
     /// Rename an existing notebook.
     ///
+    /// Sibling commands: `siyuan notebook create` mints a new notebook;
+    /// `siyuan notebook remove` destroys one and all its documents.
+    /// `siyuan notebook rename` changes the display name only — the
+    /// on-disk folder and the notebook id remain stable, so storage
+    /// paths inside it are unaffected.
+    ///
     /// The on-disk folder is NOT renamed; only the display name changes.
     /// Storage paths and the notebook id remain stable.
     ///

@@ -97,7 +97,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Example:\n\
                in:  { \"id\": \"20260501090000-doc0001\", \"format\": \"json\" }\n\
-               out: { \"doc\": {\"id\": \"20260501090000-doc0001\", \"hpath\": \"/Plan\"}, \"blocks\": [...], \"page\": 1, \"total_pages\": 1 }",
+               out (last/only page): { \"format\": \"json\", \"content\": \"<stringified json bundle>\" }\n\
+               out (more pages):     { \"data\": { \"format\": \"json\", \"content\": \"<stringified json bundle>\" }, \"_hint\": \"Pagination: this is page 1 of 3. Call again with page=2 to fetch the next page. ...\" }",
             r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string","description":"Document block id"},"page":{"type":"integer","default":1},"page_size":{"type":"integer","default":50},"format":{"type":"string","enum":["agent-md","json","json-pretty"],"default":"agent-md"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -149,8 +150,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              — hpaths are titles separated by `/`, storage paths look like \
              `/20260501090000-abc1234.sy`. Intermediate folders are auto-created. \
              `markdown` (required) is GFM markdown stored verbatim. The response envelope \
-             contains the new document's root block id under `data.id` (also surfaced as \
-             top-level `id` for convenience).\n\
+             contains the new document's root block id under `data.id`, accompanied by a \
+             `_hint` string.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
              siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
@@ -159,7 +160,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Example:\n\
                in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\", \"markdown\": \"# Plan\\n\" }\n\
-               out: { \"id\": \"20260501090000-doc0001\", \"data\": { \"id\": \"20260501090000-doc0001\" } }",
+               out: { \"data\": { \"id\": \"20260501090000-doc0001\" }, \"_hint\": \"Mutation completed at the kernel. ...\" }",
             r#"{"type":"object","required":["notebook","hpath","markdown"],"properties":{"notebook":{"type":"string"},"hpath":{"type":"string","description":"Human path e.g. /Folder/Title"},"markdown":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -234,7 +235,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Example:\n\
                in:  { \"markdown\": \"New paragraph.\\n\", \"previous_id\": \"20260501090000-blk0001\" }\n\
-               out: { \"id\": \"20260501090500-blk0099\", \"data\": { \"id\": \"20260501090500-blk0099\" } }",
+               out: { \"data\": { \"id\": \"20260501090500-blk0099\" }, \"_hint\": \"Block inserted at the kernel. ...\" }",
             r#"{"type":"object","required":["markdown"],"properties":{"markdown":{"type":"string"},"previous_id":{"type":"string"},"next_id":{"type":"string"},"parent_id":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -267,7 +268,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Example:\n\
                in:  { \"markdown\": \"Final paragraph.\\n\", \"parent_id\": \"20260501090000-doc0001\" }\n\
-               out: { \"id\": \"20260501090500-blk0099\", \"data\": { \"id\": \"20260501090500-blk0099\" } }",
+               out: { \"data\": { \"id\": \"20260501090500-blk0099\" }, \"_hint\": \"Block appended at the kernel. ...\" }",
             r#"{"type":"object","required":["markdown","parent_id"],"properties":{"markdown":{"type":"string"},"parent_id":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -299,7 +300,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Example:\n\
                in:  { \"markdown\": \"Lead paragraph.\\n\", \"parent_id\": \"20260501090000-doc0001\" }\n\
-               out: { \"id\": \"20260501090500-blk0099\", \"data\": { \"id\": \"20260501090500-blk0099\" } }",
+               out: { \"data\": { \"id\": \"20260501090500-blk0099\" }, \"_hint\": \"Block prepended at the kernel. ...\" }",
             r#"{"type":"object","required":["markdown","parent_id"],"properties":{"markdown":{"type":"string"},"parent_id":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -818,7 +819,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Example:\n\
                in:  { \"stmt\": \"SELECT id, hpath FROM blocks WHERE box = '20260501000000-nb00001' AND type = 'd' LIMIT 5\" }\n\
-               out: { \"rows\": [ { \"id\": \"20260501090000-doc0001\", \"hpath\": \"/Plan\" } ] }",
+               out: { \"data\": { \"rows\": [ { \"id\": \"20260501090000-doc0001\", \"hpath\": \"/Plan\" } ] }, \"_hint\": \"Power tool: results are raw rows ...\" }",
             r#"{"type":"object","required":["stmt"],"properties":{"stmt":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -844,12 +845,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              the MCP server (NOT on the SiYuan kernel host if they differ). The process \
              must have read access. The kernel copies the bytes into its `assets/` \
              directory and assigns a stable name; the response surfaces the kernel-relative \
-             asset path under `data.asset_path` (also as top-level `asset_path`). To embed, \
-             include `![alt](assets/<name>.<ext>)` in markdown.\n\
+             asset path under `data.asset_path`. To embed, include \
+             `![alt](assets/<name>.<ext>)` in markdown.\n\
              \n\
              Example:\n\
                in:  { \"file_path\": \"/home/user/diagram.png\" }\n\
-               out: { \"asset_path\": \"assets/diagram-20260501090000-abc.png\", \"data\": { \"asset_path\": \"assets/diagram-20260501090000-abc.png\" } }",
+               out: { \"data\": { \"asset_path\": \"assets/diagram-20260501090000-abc.png\" }, \"_hint\": \"Asset stored at the returned path. ...\" }",
             r#"{"type":"object","required":["file_path"],"properties":{"file_path":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);

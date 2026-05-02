@@ -12,7 +12,7 @@ use std::time::Duration;
 use common::{boot_with_seed, wait_for, wait_for_doc_indexed};
 use siyuan_client::SiyuanClient;
 use siyuan_model::{load::load_doc, pagination::PageRequest};
-use siyuan_types::{BlockId, ErrorKind};
+use siyuan_types::{BlockId, ErrorKind, SiyuanError};
 
 // ---------------------------------------------------------------------------
 // Helper: seed a document containing many paragraphs to force multi-page output.
@@ -294,8 +294,6 @@ async fn invalid_block_id_yields_not_found() {
 #[tokio::test]
 #[ignore]
 async fn missing_doc_load_bails() {
-    use siyuan_types::SiyuanError;
-
     let f = boot_with_seed().await.expect("boot");
 
     let fake_id = BlockId::parse("20000101000000-fake000").expect("fake id parse");

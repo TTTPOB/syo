@@ -1,13 +1,11 @@
 # siyuan-cli
 
-An agent-friendly harness for [SiYuan](https://github.com/siyuan-note/siyuan) built around its kernel HTTP API. Ships two binaries on top of a typed Rust client:
+An agent-friendly harness for [SiYuan](https://github.com/siyuan-note/siyuan), built around its kernel HTTP API. Ships **one binary** (`siyuan`) on top of a typed Rust client. The same binary serves a CLI for human/script use and an MCP (Model Context Protocol) server for LLM agents — invoked as `siyuan serve-mcp`.
 
-- **`siyuan`** — a CLI for block-level reads and writes against a running kernel.
-- **`siyuan-mcp`** — a Model Context Protocol server (stdio transport) that exposes the same surface as MCP tools, so an LLM agent can drive a SiYuan workspace.
-
-Library crates (`siyuan-types`, `siyuan-client`, `siyuan-model`, `siyuan-render`) are reusable independently of either binary.
+Library crates (`siyuan-types`, `siyuan-client`, `siyuan-model`, `siyuan-render`) are reusable independently of the binary.
 
 > 🇨🇳 中文版本见 [`docs/readme/README.cn.md`](docs/readme/README.cn.md).
+> 🧭 Design tradeoffs and reversal triggers are logged in [`docs/decisions.md`](docs/decisions.md).
 
 ## Status
 
@@ -25,29 +23,26 @@ The kernel itself is the source of truth — there is no local cache, snapshot t
 
 ```sh
 cargo build --release
-# binaries land in target/release/
+# binary lands in target/release/siyuan
 ./target/release/siyuan --help
-./target/release/siyuan-mcp --help
 ```
 
-For local hacking `cargo run -p siyuan-cli -- <args>` and `cargo run -p siyuan-mcp` work too.
+For local hacking `cargo run -p siyuan-cli -- <args>` works too.
 
 ## Configure
 
-Both binaries read the same environment:
-
 | Variable            | Default                  | Notes                                                         |
 | ------------------- | ------------------------ | ------------------------------------------------------------- |
-| `SIYUAN_BASE_URL`   | `http://127.0.0.1:6806`  | Kernel HTTP root. Override per-call with `--base-url`.        |
-| `SIYUAN_TOKEN`      | *(required)*             | Sent as `Authorization: Token <value>`.                       |
-| `SIYUAN_TIMEOUT_MS` | `30000` (`siyuan-mcp`)   | Per-request timeout. `0` disables the timeout.                |
-| `RUST_LOG`          | `info`                   | Standard `tracing-subscriber` filter; logs go to stderr.      |
+| `SIYUAN_BASE_URL`   | `http://127.0.0.1:6806`  | Kernel HTTP root. Override with `--base-url`.                 |
+| `SIYUAN_TOKEN`      | *(required)*             | Sent as `Authorization: Token <value>`. Required for every subcommand except `serve-mcp`, where it can be injected at MCP request time instead. |
+| `SIYUAN_TIMEOUT_MS` | `30000` (`serve-mcp`)    | Per-request timeout for the MCP server. `0` disables it. Other subcommands use the client default. |
+| `RUST_LOG`          | `info`                   | Standard `tracing-subscriber` filter; logs always go to stderr (so `serve-mcp` doesn't pollute its stdio JSON-RPC channel). |
 
 The CLI also accepts `--base-url` / `--token` as global flags that override the env.
 
 ## CLI usage
 
-Smoke test the connection:
+Smoke test:
 
 ```sh
 export SIYUAN_TOKEN=...your-token...
@@ -61,10 +56,12 @@ The CLI is organised as flat commands plus a few subcommand groups. Run `siyuan 
 # Notebooks
 siyuan notebook ls
 siyuan notebook create --name "Inbox"
-siyuan notebook open  --id 20260501000000-nb00001
+# (notebook open/close are not exposed; use the SiYuan UI if you need them)
 
-# Resolve a human path to a doc id
+# Resolve a document — accepts EITHER --id OR (--notebook + --hpath)
+siyuan doc resolve --id 20260501090000-doc0001
 siyuan doc resolve --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
+# Output is a JSON array of { id, hpath, notebook_id, notebook_name, title, storage_path }
 
 # Read a doc as agent-readable markdown (default), or as JSON
 siyuan get-doc --id 20260501090000-doc0001
@@ -95,6 +92,9 @@ siyuan tag search --tag project
 siyuan search text   --query "load_doc" --limit 20
 siyuan search blocks --type h --contains "Roadmap"
 
+# Raw SQL escape hatch (read-only; caller escapes single quotes)
+siyuan sql --stmt "SELECT id, hpath FROM blocks WHERE type = 'd' LIMIT 5"
+
 # Link graph (BFS up to N hops, capped at 500 nodes / 1000 edges)
 siyuan graph backlinks    --id <block-id>
 siyuan graph outgoing     --id <block-id>
@@ -112,7 +112,7 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 - `agent-md` *(default)* — markdown with `<!-- sy:doc … -->` / `<!-- sy:block … -->` HTML-comment markers carrying ids, types and pagination metadata. Designed for LLMs to round-trip reads back into block-targeted writes.
 - `json` / `json-pretty` — the canonical structured bundle (`DocBundle`) including full block metadata.
 
-Other commands print a single id or a tab-separated list for easy piping.
+`doc resolve` and `sql` always emit pretty JSON. Other commands print a single id or a tab-separated list for piping.
 
 ### Position kinds
 
@@ -133,7 +133,7 @@ Other commands print a single id or a tab-separated list for easy piping.
 
 ## MCP server usage
 
-`siyuan-mcp` speaks JSON-RPC over **stdio**. Wire it into any MCP-aware client (Claude Desktop, Claude Code, custom hosts) by spawning the binary with the SiYuan env injected.
+`siyuan serve-mcp` speaks JSON-RPC over **stdio**. Wire it into any MCP-aware client (Claude Desktop, Claude Code, custom hosts) by spawning the binary with the SiYuan env injected.
 
 ### Claude Desktop / Claude Code
 
@@ -141,7 +141,8 @@ Other commands print a single id or a tab-separated list for easy piping.
 {
   "mcpServers": {
     "siyuan": {
-      "command": "/abs/path/to/siyuan-mcp",
+      "command": "/abs/path/to/siyuan",
+      "args": ["serve-mcp"],
       "env": {
         "SIYUAN_BASE_URL": "http://127.0.0.1:6806",
         "SIYUAN_TOKEN": "your-token-here"
@@ -151,7 +152,9 @@ Other commands print a single id or a tab-separated list for easy piping.
 }
 ```
 
-Tools exposed (one-line summary; full descriptions live in `crates/siyuan-mcp/src/registry.rs`):
+To set the request timeout per server, add `"args": ["serve-mcp", "--timeout-ms", "60000"]`.
+
+Tools exposed (one-line summary; full agent-friendly descriptions live in `crates/siyuan-mcp/src/registry.rs`):
 
 | Tool                       | Purpose                                              |
 | -------------------------- | ---------------------------------------------------- |
@@ -164,13 +167,16 @@ Tools exposed (one-line summary; full descriptions live in `crates/siyuan-mcp/sr
 | `siyuan_move_block`        | Reposition a block (keeps id + children).            |
 | `siyuan_delete_block`      | Permanently delete a block + subtree.                |
 | `siyuan_get_attrs` / `siyuan_set_attrs` | Read / partial-update block attributes. |
-| `siyuan_notebook_ls` / `_open` / `_close` / `_create` / `_rename` / `_remove` | Notebook management. |
-| `siyuan_doc_resolve` / `_hpath_by_id` / `_rename` / `_move` / `_remove` | Filetree ops (note: `_rename` / `_move` / `_remove` take *storage* `.sy` paths, not hpaths). |
+| `siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | Notebook management. (open/close not exposed.) |
+| `siyuan_doc_resolve`       | Unified lookup by id OR (notebook + hpath); returns array of doc metadata including `storage_path`. |
+| `siyuan_doc_rename` / `_move` / `_remove` | Filetree ops. Take *storage* `.sy` paths, NOT hpaths. |
 | `siyuan_tag_ls` / `siyuan_tag_search` | Enumerate tags / find blocks by tag. |
 | `siyuan_search_text`       | LIKE-substring search across the `blocks` table.     |
 | `siyuan_sql`               | Read-only raw SQL. Power tool — escape values yourself. |
 | `siyuan_asset_upload`      | Upload a local file as a SiYuan asset.               |
 | `siyuan_graph_neighborhood`| BFS over the link graph (depth ≤ 8, capped 500 nodes / 1000 edges). |
+
+Mutating tools wrap their response as `{"data": <payload>, "_hint": "..."}`. The hint surfaces post-call expectations (SQL index lag, follow-up tool to call, etc.) and is informational only.
 
 Errors map to typed MCP errors (`InvalidParams`, `NotFound`, `Unauthorized`, etc.) when the kernel returns a recognised error code; otherwise they surface as `InternalError` with the kernel message.
 
@@ -191,7 +197,7 @@ let v = client.system_version().await?;
 println!("kernel = {v}");
 ```
 
-`siyuan-model` adds higher-level pipelines (`load_doc`, sectioning, pagination, link-graph BFS, tags). `siyuan-render` turns a `DocBundle` into agent-md or canonical JSON.
+`siyuan-model` adds higher-level pipelines (`load_doc`, sectioning, pagination, link-graph BFS, tags, doc-meta resolve). `siyuan-render` turns a `DocBundle` into agent-md or canonical JSON.
 
 ## Testing
 
@@ -208,6 +214,7 @@ The v1 surface deliberately omits the following — they are out of scope for th
 
 - **Two-phase plan / apply** and `--dry-run` modes. Every write hits the kernel directly.
 - **Concurrency guards** (`expected_hash`, snapshot tokens). Last-writer-wins.
+- **Notebook open/close.** Removed from the public surface; the harness does not handle user-closed notebooks. See `docs/decisions.md` §2.
 - **Attribute view (AV) editing** — read access is available via `siyuan_sql`, mutations are not.
 - **Super-block creation and layout mutations.** Existing super-blocks are surfaced as a read-only `:::sy-superblock` fence.
 - **WebSocket / push notifications.** All calls are synchronous HTTP.
@@ -226,14 +233,15 @@ If you need any of these, the kernel HTTP API is well-documented; `siyuan-client
 crates/
   siyuan-types/    # BlockId, BlockType, Position, errors — no deps
   siyuan-client/   # typed reqwest wrapper over the kernel HTTP API
-  siyuan-model/    # DocBundle, load_doc, sectioning, pagination, graph BFS, tags
+  siyuan-model/    # DocBundle, load_doc, sectioning, pagination, graph BFS, tags, doc-meta resolve
   siyuan-render/   # agent-md + canonical JSON renderers
-  siyuan-cli/      # `siyuan` binary (clap)
-  siyuan-mcp/      # `siyuan-mcp` binary (rmcp, stdio transport)
+  siyuan-cli/      # `siyuan` binary (clap) — provides both CLI and `serve-mcp`
+  siyuan-mcp/      # library crate consumed by siyuan-cli's `serve-mcp` subcommand
   siyuan-testkit/  # Podman-driven disposable SiYuan instances
 docs/
-  superpowers/plans/  # design notes & implementation plans
-  readme/             # translated READMEs
+  decisions.md          # design tradeoffs log
+  superpowers/plans/    # design notes & implementation plans
+  readme/               # translated READMEs
 ```
 
 ## License

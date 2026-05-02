@@ -1,10 +1,14 @@
 # siyuan-mcp
 
-An MCP (Model Context Protocol) server that exposes the SiYuan note-taking kernel's API as a set of structured tools consumable by LLM agents. The server communicates over stdio using JSON-RPC 2.0 and implements the MCP `tools/list` and `tools/call` protocol surface. It is backed by `siyuan-client`, `siyuan-model`, and `siyuan-render` crates from the same workspace.
+The library crate that powers the `siyuan serve-mcp` subcommand. It exposes the SiYuan note-taking kernel's API as a set of structured MCP (Model Context Protocol) tools consumable by LLM agents. Communication is JSON-RPC 2.0 over stdio; the surface implements `tools/list` and `tools/call`. Backed by `siyuan-client`, `siyuan-model`, and `siyuan-render` from the same workspace.
+
+This crate is **not** a binary. To run the server, install the workspace and invoke `siyuan serve-mcp`. See the [top-level README](../../README.md#mcp-server-usage) for host configuration.
 
 ## Response envelope
 
-Most tools return the payload directly as a bare JSON object. Tools where post-call expectations matter (mutations with SQL index lag, paginated reads, search results, graph traversals) wrap their payload in a hint envelope:
+Read-only tools (`siyuan_status`, `siyuan_get_doc`, `siyuan_get_block`, `siyuan_get_attrs`, `siyuan_doc_resolve`) return their payload directly as a bare JSON object.
+
+Mutating and post-call-sensitive tools wrap the payload to surface follow-up expectations:
 
 ```json
 {
@@ -13,9 +17,9 @@ Most tools return the payload directly as a bare JSON object. Tools where post-c
 }
 ```
 
-Tools that do **not** add a hint return the bare payload with no `data` or `_hint` wrapper. Agents should check for the presence of `_hint` rather than assuming a fixed shape.
+The hint is informational only — never required for correctness. It surfaces kernel quirks (SQL index lag, truncation limits, filesystem vs. SQL consistency) so agents can decide whether to retry, paginate, or narrow a query.
 
-The hint is informational only — it is never required for correctness. It surfaces kernel quirks (SQL index lag, truncation limits, filesystem vs. SQL consistency) so that agents can decide whether to retry, paginate, or narrow a query.
+Agents should check for the presence of `_hint` rather than assuming a fixed shape.
 
 ## Tool catalogue
 
@@ -32,52 +36,59 @@ The hint is informational only — it is never required for correctness. It surf
 | `siyuan_move_block` | Move a block to a new position in the tree. |
 | `siyuan_delete_block` | Permanently delete a block and all its children. |
 | `siyuan_get_attrs` | Read all attributes of a block. |
-| `siyuan_set_attrs` | Partially update attributes on a block (custom- prefix required). |
+| `siyuan_set_attrs` | Partially update attributes on a block (`custom-` prefix required for custom keys). |
 | `siyuan_notebook_ls` | List all notebooks (open and closed). |
 | `siyuan_notebook_create` | Create a new notebook. |
 | `siyuan_notebook_rename` | Rename a notebook. |
 | `siyuan_notebook_remove` | Permanently remove a notebook and all its documents. |
-| `siyuan_doc_resolve` | Convert an hpath to document block id(s). |
-| `siyuan_doc_hpath_by_id` | Convert a block id to its human-readable hpath. |
-| `siyuan_doc_rename` | Rename a document (requires storage .sy path, not hpath). |
-| `siyuan_doc_move` | Move documents to a different notebook/path. |
-| `siyuan_doc_remove` | Permanently remove a document (requires storage .sy path). |
+| `siyuan_doc_resolve` | Unified lookup by id OR (notebook + hpath); returns array of doc metadata including `storage_path`. |
+| `siyuan_doc_rename` | Rename a document (requires storage `.sy` path, NOT hpath). |
+| `siyuan_doc_move` | Move documents to a different notebook/path (storage paths). |
+| `siyuan_doc_remove` | Permanently remove a document (requires storage `.sy` path). |
 | `siyuan_tag_ls` | List all tags in the workspace. |
-| `siyuan_tag_search` | Find blocks carrying a specific tag (without # prefix). |
+| `siyuan_tag_search` | Find blocks carrying a specific tag (without `#` prefix). |
 | `siyuan_search_text` | LIKE substring search across block markdown content. |
 | `siyuan_sql` | Execute a raw read-only SQL SELECT against the SiYuan database. |
 | `siyuan_asset_upload` | Upload a local file as a SiYuan asset; returns the asset path. |
 | `siyuan_graph_neighborhood` | Compute the link-graph neighborhood around a block. |
 
+`notebook_open` and `notebook_close` are intentionally not exposed; see `docs/decisions.md §2` for the rationale.
+
 ## Configuration
 
-### Environment variables
+Both env vars and CLI flags are inherited from the parent `siyuan` binary:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SIYUAN_BASE_URL` | Base URL of the SiYuan kernel HTTP API | `http://127.0.0.1:6806` |
-| `SIYUAN_TOKEN` | API token (set in SiYuan Settings > About) | _(none)_ |
-| `SIYUAN_TIMEOUT_MS` | HTTP request timeout in milliseconds | `30000` |
+| `SIYUAN_TOKEN` | API token (set in SiYuan Settings → About) | _(none, but tolerated for serve-mcp)_ |
+| `SIYUAN_TIMEOUT_MS` | HTTP request timeout in milliseconds (`0` = no timeout) | `30000` |
 
-### CLI flags
+Per-invocation flags:
 
 ```
-siyuan-mcp [OPTIONS]
+siyuan serve-mcp [OPTIONS]
 
 Options:
-  --base-url <URL>        SiYuan kernel base URL [env: SIYUAN_BASE_URL]
-  --token <TOKEN>         API authentication token [env: SIYUAN_TOKEN]
-  --timeout-ms <MS>       HTTP timeout in milliseconds [env: SIYUAN_TIMEOUT_MS]
+  --timeout-ms <MS>       HTTP timeout in milliseconds (overrides SIYUAN_TIMEOUT_MS)
+
+Inherited globals (from `siyuan`):
+  --base-url <URL>        Kernel base URL                       [env: SIYUAN_BASE_URL]
+  --token <TOKEN>         API authentication token              [env: SIYUAN_TOKEN]
 ```
 
-### MCP host configuration (Claude / claude.json style)
+## MCP host configuration (Claude / claude.json style)
 
 ```json
 {
   "mcpServers": {
     "siyuan": {
-      "command": "/path/to/siyuan-mcp",
-      "args": ["--base-url", "http://127.0.0.1:6806", "--token", "your-token-here"],
+      "command": "/abs/path/to/siyuan",
+      "args": ["serve-mcp"],
+      "env": {
+        "SIYUAN_BASE_URL": "http://127.0.0.1:6806",
+        "SIYUAN_TOKEN": "your-token-here"
+      },
       "transport": "stdio"
     }
   }

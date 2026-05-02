@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 
 use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient};
-use siyuan_model::tag::{list_tags, search_by_tag};
+use siyuan_model::tag::{TagBlockHit, list_tags, search_by_tag};
 
 use crate::output::OutputFormat;
 
@@ -117,31 +117,44 @@ pub async fn run(client: &SiyuanClient, cmd: TagCmd) -> Result<()> {
             let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
             let limit = a.limit.min(limit_cap);
             let hits = search_by_tag(client, &a.tag, limit).await?;
-            match a.format {
-                OutputFormat::AgentMd => {
-                    for hit in hits {
-                        println!("{}\t{}", hit.block_id, hit.markdown_preview);
-                    }
-                }
-                OutputFormat::Json | OutputFormat::JsonPretty => {
-                    let views: Vec<TagSearchView> = hits
-                        .into_iter()
-                        .map(|h| TagSearchView {
-                            block_id: h.block_id.to_string(),
-                            markdown_preview: h.markdown_preview,
-                        })
-                        .collect();
-                    let s = if a.format == OutputFormat::JsonPretty {
-                        serde_json::to_string_pretty(&views)?
-                    } else {
-                        serde_json::to_string(&views)?
-                    };
-                    println!("{s}");
-                }
-            }
+            println!("{}", format_search_results(&hits, a.format)?);
         }
     }
     Ok(())
+}
+
+/// Render tag-search hits into a string for the requested output format.
+///
+/// Agent-md prints a human-readable message when the result set is empty
+/// so the user can tell the command executed successfully (JSON already
+/// emits `[]`, which is unambiguous).
+fn format_search_results(hits: &[TagBlockHit], format: OutputFormat) -> Result<String> {
+    match format {
+        OutputFormat::AgentMd => {
+            if hits.is_empty() {
+                return Ok("No blocks found".to_string());
+            }
+            let lines: Vec<String> = hits
+                .iter()
+                .map(|h| format!("{}\t{}", h.block_id, h.markdown_preview))
+                .collect();
+            Ok(lines.join("\n"))
+        }
+        OutputFormat::Json | OutputFormat::JsonPretty => {
+            let views: Vec<TagSearchView> = hits
+                .iter()
+                .map(|h| TagSearchView {
+                    block_id: h.block_id.to_string(),
+                    markdown_preview: h.markdown_preview.clone(),
+                })
+                .collect();
+            if format == OutputFormat::JsonPretty {
+                Ok(serde_json::to_string_pretty(&views)?)
+            } else {
+                Ok(serde_json::to_string(&views)?)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -170,5 +183,66 @@ mod tests {
                 markdown_preview: "Plan kickoff #project".to_string(),
             }
         );
+    }
+
+    // -- format_search_results tests -------------------------------------
+
+    fn make_hit(id: &str, preview: &str) -> TagBlockHit {
+        TagBlockHit {
+            block_id: siyuan_types::BlockId::parse(id).expect("valid test block id"),
+            root_id: siyuan_types::BlockId::parse("20260501090000-7ab0001").expect("valid root id"),
+            markdown_preview: preview.to_string(),
+        }
+    }
+
+    #[test]
+    fn format_empty_agent_md_shows_message() {
+        let hits: Vec<TagBlockHit> = vec![];
+        let output = format_search_results(&hits, OutputFormat::AgentMd).unwrap();
+        assert!(
+            output.contains("No blocks found"),
+            "empty agent-md must print a user-facing message; got: {output:?}"
+        );
+        assert!(!output.is_empty());
+    }
+
+    #[test]
+    fn format_empty_json_emits_empty_array() {
+        let hits: Vec<TagBlockHit> = vec![];
+        let output = format_search_results(&hits, OutputFormat::Json).unwrap();
+        assert_eq!(output, "[]", "empty JSON must be `[]`");
+    }
+
+    #[test]
+    fn format_empty_json_pretty_emits_empty_array() {
+        let hits: Vec<TagBlockHit> = vec![];
+        let output = format_search_results(&hits, OutputFormat::JsonPretty).unwrap();
+        assert_eq!(output, "[]", "empty json-pretty must be `[]`");
+    }
+
+    #[test]
+    fn format_non_empty_agent_md_uses_tsv() {
+        let hits = vec![
+            make_hit("20260501090000-blk0001", "hello world"),
+            make_hit("20260501090000-blk0002", "foo bar"),
+        ];
+        let output = format_search_results(&hits, OutputFormat::AgentMd).unwrap();
+        assert!(output.contains("20260501090000-blk0001"));
+        assert!(output.contains("hello world"));
+        assert!(output.contains("20260501090000-blk0002"));
+        assert!(output.contains("foo bar"));
+        assert!(output.contains('\t'), "agent-md must be TSV");
+        // Two lines separated by newline
+        assert_eq!(output.lines().count(), 2);
+    }
+
+    #[test]
+    fn format_non_empty_json_round_trips() {
+        let hits = vec![make_hit("20260501090000-blk0001", "preview")];
+        let output = format_search_results(&hits, OutputFormat::Json).unwrap();
+        let parsed: Vec<TagSearchViewOwned> = serde_json::from_str(&output).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].block_id, "20260501090000-blk0001");
+        assert_eq!(parsed[0].markdown_preview, "preview");
     }
 }

@@ -501,8 +501,16 @@ pub fn render_agent_md(root: &TreeNode, depth: Depth) -> String {
         Depth::All => "all".to_string(),
         Depth::N(n) => n.to_string(),
     };
+    let truncated_str = if truncated {
+        match depth {
+            Depth::N(n) => format!("true (depth limit: {n}, use --depth all to see full tree)"),
+            Depth::All => "true (node limit reached)".to_string(),
+        }
+    } else {
+        "false".to_string()
+    };
     buf.push_str(&format!(
-        "<!-- sy:tree depth={depth_label} total_loaded={total_loaded} truncated={truncated} -->\n"
+        "<!-- sy:tree depth={depth_label} total_loaded={total_loaded} truncated={truncated_str} -->\n"
     ));
     buf
 }
@@ -812,5 +820,46 @@ mod tests {
             "expected truncated=false; got:\n{s}"
         );
         assert!(s.contains("<!-- sy:tree depth=all"), "got: {s}");
+    }
+
+    // Render check: when truncated=true and depth=N, footer explains the depth
+    // limit and suggests --depth all as remedy.
+    #[test]
+    fn render_agent_md_truncated_depth_limit_message() {
+        let rows = nested_rows();
+        let tree = assemble(
+            &rows,
+            &nb(),
+            "Inbox",
+            Some("/20260501090000-doc0001.sy"),
+            Depth::N(1),
+        );
+        let s = render_agent_md(&tree, Depth::N(1));
+        assert!(
+            s.contains("truncated=true (depth limit: 1, use --depth all to see full tree)"),
+            "expected actionable depth-limit message; got:\n{s}"
+        );
+    }
+
+    // Render check: depth=all but truncated=true (defensive path; tree was
+    // assembled with a depth budget so nodes are missing even though the
+    // renderer was told "all").  Footer should not suggest --depth all
+    // since it is already in use.
+    #[test]
+    fn render_agent_md_truncated_all_no_depth_hint() {
+        let rows = nested_rows();
+        let tree = assemble(
+            &rows,
+            &nb(),
+            "Inbox",
+            Some("/20260501090000-doc0001.sy"),
+            Depth::N(1),
+        );
+        // Render with Depth::All even though the tree is truncated.
+        let s = render_agent_md(&tree, Depth::All);
+        assert!(
+            s.contains("truncated=true (node limit reached)"),
+            "expected defensive truncated message; got:\n{s}"
+        );
     }
 }

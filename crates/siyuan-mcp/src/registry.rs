@@ -316,13 +316,19 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "Move an existing block to a new position within the document tree.\n\
              \n\
              Sibling tools: `siyuan_insert_block` / `siyuan_append_block` / \
-             `siyuan_prepend_block` create NEW blocks (different ids); `siyuan_doc_move` \
-             moves whole documents on disk (`.sy` files). siyuan_move_block keeps the \
-             block's id and all its children — only its parent and sibling order change.\n\
+             `siyuan_prepend_block` create NEW blocks (different ids) and cover the position \
+             kinds that move-block does NOT — namely `before_block`, `append_section`, and \
+             `prepend_section`; reach for those when the equivalent move would otherwise be \
+             unsupported. `siyuan_doc_move` moves whole documents on disk (`.sy` files). \
+             siyuan_move_block keeps the block's id and all its children — only its parent \
+             and sibling order change.\n\
              \n\
              Inputs: `id` (required) is the block id to move. EXACTLY ONE of `previous_id` \
-             or `parent_id` must be supplied; supplying zero or both is an error. The \
-             position kinds:\n\
+             or `parent_id` must be supplied; supplying zero or both is an error. There is \
+             no separate `position` string field — the chosen anchor field IS the kind. \
+             Sending a stray `position` argument (e.g. ported from an older CLI mental \
+             model) is rejected with `invalid_params` and a hint pointing at \
+             `siyuan_insert_block`. The supported kinds are:\n\
                previous_id  → moved block becomes a sibling immediately AFTER previous_id\n\
                               (anchor = any block id; this is the kernel's only relative-move\n\
                               direction — there is no `next_id` for move; use the previous\n\

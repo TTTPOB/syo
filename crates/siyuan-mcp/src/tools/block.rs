@@ -112,6 +112,22 @@ pub async fn move_block(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
     let map = ensure_object(args)?;
     let id = parse_block_id(&required_string(&map, "id")?)?;
 
+    // The MCP shape models the kernel's anchor fields directly; we never
+    // accepted a `position` string. If the caller sends one (e.g. porting a
+    // mental model from the CLI's older free-form `--position`), reject it
+    // with a hint that points at the right surface for each former kind.
+    if let Some(pos) = optional_string(&map, "position") {
+        return Err(McpError::invalid_params(
+            format!(
+                "`position` is not accepted; set `previous_id` or `parent_id` instead. \
+                 For position kinds not supported by move \
+                 (before_block, append_section, prepend_section), see `siyuan_insert_block` \
+                 (got position={pos:?})"
+            ),
+            None,
+        ));
+    }
+
     let previous_id = optional_string(&map, "previous_id")
         .map(|s| parse_block_id(&s))
         .transpose()?;
@@ -152,4 +168,72 @@ pub async fn delete_block(client: &SiyuanClient, args: Value) -> Result<Value, M
         "Block permanently deleted at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) \
          may briefly show stale state for ~100–500 ms after deletion.",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_client() -> SiyuanClient {
+        SiyuanClient::new("http://127.0.0.1:1", "tok").expect("dummy client builds")
+    }
+
+    #[tokio::test]
+    async fn move_block_rejects_legacy_position_field() {
+        // The dummy client points at an unreachable port, so a parser
+        // regression that forwarded the request would surface a network
+        // error instead of `invalid_params`. Pinning to the message keeps
+        // that contract obvious.
+        let client = dummy_client();
+        let args = json!({
+            "id": "20260501090000-blk0001",
+            "position": "before_block",
+            "previous_id": "20260501090000-blk0002",
+        });
+        let err = move_block(&client, args)
+            .await
+            .expect_err("position field must be rejected client-side");
+        assert!(
+            err.message.contains("`position` is not accepted"),
+            "error should explain that `position` is not accepted; got: {}",
+            err.message
+        );
+        assert!(
+            err.message.contains("siyuan_insert_block"),
+            "error should point at siyuan_insert_block for the unsupported kinds; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn move_block_rejects_zero_anchors() {
+        let client = dummy_client();
+        let args = json!({ "id": "20260501090000-blk0001" });
+        let err = move_block(&client, args)
+            .await
+            .expect_err("missing anchor must be rejected");
+        assert!(
+            err.message.contains("previous_id"),
+            "error should mention previous_id/parent_id; got: {}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn move_block_rejects_both_anchors() {
+        let client = dummy_client();
+        let args = json!({
+            "id": "20260501090000-blk0001",
+            "previous_id": "20260501090000-blk0002",
+            "parent_id": "20260501090000-blk0003",
+        });
+        let err = move_block(&client, args)
+            .await
+            .expect_err("two anchors must be rejected");
+        assert!(
+            err.message.contains("exactly one"),
+            "error should require exactly one anchor; got: {}",
+            err.message
+        );
+    }
 }

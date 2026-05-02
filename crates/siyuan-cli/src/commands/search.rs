@@ -166,13 +166,14 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
             if a.query.trim().is_empty() {
                 bail!("--query must not be empty");
             }
-            // Escape LIKE meta-characters and quotes, and use ESCAPE '\' so
-            // the backslashes we inject neutralise %, _ and \ in user input.
+            // Escape single quotes for SQL string-literal safety. The SiYuan
+            // kernel's SQL engine does not support ESCAPE '\' in LIKE
+            // patterns, so % and _ in user input behave as LIKE wildcards.
             let needle = escape_sql_like(&a.query);
             let limit = a.limit.min(limit_cap);
             let stmt = format!(
                 "SELECT id, type, markdown FROM blocks \
-                 WHERE markdown LIKE '%{needle}%' ESCAPE '\\' LIMIT {limit}"
+                 WHERE markdown LIKE '%{needle}%' LIMIT {limit}"
             );
             // Defense-in-depth: validate that the assembled SQL is read-only
             // before sending to the kernel. User input is already escaped, but
@@ -191,12 +192,9 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
                 conds.push(format!("type = '{}'", a.r#type.replace('\'', "''")));
             }
             if !a.contains.is_empty() {
-                // content uses LIKE, so apply the full meta-char escape and
-                // pair it with ESCAPE '\' below.
-                conds.push(format!(
-                    "content LIKE '%{}%' ESCAPE '\\'",
-                    escape_sql_like(&a.contains)
-                ));
+                // content uses LIKE; only single-quote escaping is effective
+                // since the SiYuan SQL engine does not support ESCAPE '\'.
+                conds.push(format!("content LIKE '%{}%'", escape_sql_like(&a.contains)));
             }
             let where_clause = if conds.is_empty() {
                 "1=1".into()

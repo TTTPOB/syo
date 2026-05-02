@@ -908,8 +908,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Critical caveats:\n\
                * No parameterisation. Single quotes inside string literals must be doubled \
-             (`'O''Brien'`); LIKE meta-chars (`%`, `_`, `\\`) must be escaped by the caller \
-             and paired with an `ESCAPE '\\\\'` clause. `LIMIT` belongs inside the statement.\n\
+             (`'O''Brien'`). The SiYuan SQL engine does **not** support `ESCAPE`, so `%` and \
+             `_` in LIKE patterns always behave as wildcards. `LIMIT` belongs inside the statement.\n\
                * Use SQLite syntax. The kernel parses through a MySQL grammar as a fallback \
              and may re-serialise the AST before execution, so MySQL-flavoured constructs \
              (`CONCAT(...)`, `NOW()`, backtick identifiers, `LIMIT m, n`, `IF(c,a,b)`) may \

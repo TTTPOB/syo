@@ -1,10 +1,13 @@
-//! Helpers for safely composing SQLite queries against the SiYuan kernel.
+//! Helpers for safely composing SQL queries against the SiYuan kernel.
 //!
 //! The kernel's `/api/query/sql` endpoint accepts a raw SQL string, so all
-//! interpolation happens client-side. These helpers exist to keep that
-//! interpolation honest: callers must escape both single quotes (so the
-//! string literal closes where intended) and LIKE meta-characters (`%`,
-//! `_`, `\`) so a substring search behaves as a substring search.
+//! interpolation happens client-side. Single quotes are doubled for SQL
+//! string-literal safety.
+//!
+//! Note: the SiYuan kernel's SQL engine does **not** support `ESCAPE '\'`
+//! in `LIKE` patterns. The `%` and `_` characters in user input therefore
+//! always behave as LIKE wildcards -- there is no way to escape them
+//! server-side. This is a known engine limitation.
 
 /// Hard cap applied to user-supplied `LIMIT` values in search tools.
 ///
@@ -15,29 +18,19 @@
 /// results under any reasonable token budget.
 pub const MAX_SEARCH_LIMIT: u64 = 1000;
 
-/// Escape a substring for safe inclusion in a SQLite `LIKE` pattern.
+/// Escape a value for safe inclusion in a SQL string literal.
 ///
-/// The returned string is meant to be wrapped in `'%...%'` and used with an
-/// explicit `ESCAPE '\\'` clause, e.g.:
+/// Only single quotes are doubled (`'` → `''`). The SiYuan kernel's SQL
+/// engine does not support `ESCAPE '\'`, so LIKE meta-characters (`%`, `_`)
+/// cannot be escaped -- they will behave as wildcards in `LIKE` patterns.
+/// Callers that need exact-match semantics should use `=` instead of `LIKE`.
 ///
-/// ```text
-/// markdown LIKE '%foo\_bar%' ESCAPE '\'
-/// ```
-///
-/// Order matters: backslash must be escaped first, otherwise the
-/// backslashes we introduce when escaping `%` and `_` would themselves
-/// be doubled.
-///
-/// Single quotes are also doubled so the result is safe to drop into a
-/// string literal without further processing.
+/// A backslash (`\`) in the input is left as-is; without `ESCAPE` support
+/// it carries no special meaning in the kernel's LIKE engine.
 pub fn escape_sql_like(s: &str) -> String {
-    // Capacity guess: most strings need no escaping; a few need a handful.
     let mut out = String::with_capacity(s.len() + 4);
     for ch in s.chars() {
         match ch {
-            '\\' => out.push_str("\\\\"),
-            '%' => out.push_str("\\%"),
-            '_' => out.push_str("\\_"),
             '\'' => out.push_str("''"),
             other => out.push(other),
         }
@@ -60,27 +53,27 @@ mod tests {
     }
 
     #[test]
-    fn backslash_is_doubled_first() {
-        // The single backslash in input must become exactly two backslashes
-        // in output, not four (which would happen if `\` were escaped after
-        // `%`/`_`, since the escape sequences themselves contain backslashes).
-        assert_eq!(escape_sql_like(r"a\b"), r"a\\b");
+    fn backslash_unchanged() {
+        // Without ESCAPE support, backslash carries no special meaning.
+        assert_eq!(escape_sql_like(r"a\b"), r"a\b");
     }
 
     #[test]
-    fn percent_is_escaped() {
-        assert_eq!(escape_sql_like("100%"), r"100\%");
+    fn percent_unchanged() {
+        // % cannot be escaped -- it behaves as a LIKE wildcard.
+        assert_eq!(escape_sql_like("100%"), "100%");
     }
 
     #[test]
-    fn underscore_is_escaped() {
-        assert_eq!(escape_sql_like("foo_bar"), r"foo\_bar");
+    fn underscore_unchanged() {
+        // _ cannot be escaped -- it behaves as a LIKE wildcard.
+        assert_eq!(escape_sql_like("foo_bar"), "foo_bar");
     }
 
     #[test]
     fn combined_meta_characters() {
-        // Order: a ' \\ % _ z  ->  a '' \\\\ \\% \\_ z
-        assert_eq!(escape_sql_like(r"a'\%_z"), r"a''\\\%\_z");
+        // Only single quotes are doubled.
+        assert_eq!(escape_sql_like(r"a'\%_z"), r"a''\%_z");
     }
 
     #[test]

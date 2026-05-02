@@ -36,8 +36,9 @@ use siyuan_model::sql_guard;
 ///
 /// Critical caveats:
 ///   * No parameterisation. Single quotes inside string literals must be
-///     doubled (`'O''Brien'`); LIKE meta-chars (`%`, `_`, `\`) must be
-///     escaped by you and paired with `ESCAPE '\'`. `LIMIT` belongs in
+///     doubled (`'O''Brien'`). The SiYuan SQL engine does **not** support
+///     `ESCAPE` for `LIKE`, so `%` and `_` always behave as wildcards.
+///     `LIMIT` belongs in
 ///     your SQL — there is no `--limit` flag.
 ///   * Use SQLite syntax. The kernel parses through a MySQL grammar as
 ///     a fallback and may re-serialise the AST before execution, so

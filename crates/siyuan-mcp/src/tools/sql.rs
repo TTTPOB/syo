@@ -44,14 +44,13 @@ pub async fn search_text(client: &SiyuanClient, args: Value) -> Result<Value, Mc
         .unwrap_or(50)
         .min(MAX_SEARCH_LIMIT);
 
-    // Escape both single quotes (for the SQL string literal) and LIKE meta-
-    // characters %, _, \ (so a substring search behaves as a substring
-    // search even when the query contains those characters). The matching
-    // ESCAPE '\\' clause makes our backslash-escapes effective.
+    // Escape single quotes for SQL string-literal safety. The SiYuan
+    // kernel's SQL engine does not support ESCAPE '\' in LIKE patterns,
+    // so % and _ in user input behave as LIKE wildcards.
     let escaped = escape_sql_like(&query);
     let stmt = format!(
         "SELECT id, root_id, markdown FROM blocks \
-         WHERE markdown LIKE '%{escaped}%' ESCAPE '\\' LIMIT {limit}"
+         WHERE markdown LIKE '%{escaped}%' LIMIT {limit}"
     );
 
     let rows = client.sql(&stmt).await.map_err(siyuan_to_mcp)?;

@@ -40,7 +40,7 @@ async fn search_text_finds_matching_blocks() {
             let rows: Vec<Hit> = client
                 .sql_typed(
                     "SELECT id, type, markdown FROM blocks \
-                     WHERE markdown LIKE '%RNA%' ESCAPE '\\' LIMIT 50",
+                     WHERE markdown LIKE '%RNA%' LIMIT 50",
                 )
                 .await?;
             if !rows.is_empty() {
@@ -84,7 +84,7 @@ async fn search_blocks_by_type_filters_correctly() {
             let rows: Vec<Hit> = client
                 .sql_typed(
                     "SELECT id, type, markdown FROM blocks \
-                     WHERE type = 'h' AND content LIKE '%transcription%' ESCAPE '\\' LIMIT 50",
+                     WHERE type = 'h' AND content LIKE '%transcription%' LIMIT 50",
                 )
                 .await?;
             if !rows.is_empty() {
@@ -127,7 +127,7 @@ async fn search_no_matches_returns_empty() {
         .client
         .sql_typed(
             "SELECT id, type, markdown FROM blocks \
-             WHERE markdown LIKE '%xyznonexistent12345%' ESCAPE '\\' LIMIT 10",
+             WHERE markdown LIKE '%xyznonexistent12345%' LIMIT 10",
         )
         .await
         .expect("search with no matches must succeed, not error");
@@ -160,7 +160,7 @@ async fn search_blocks_by_content_substring() {
             let rows: Vec<Hit> = client
                 .sql_typed(
                     "SELECT id, type, markdown FROM blocks \
-                     WHERE content LIKE '%Telomerase%' ESCAPE '\\' LIMIT 50",
+                     WHERE content LIKE '%Telomerase%' LIMIT 50",
                 )
                 .await?;
             if !rows.is_empty() {

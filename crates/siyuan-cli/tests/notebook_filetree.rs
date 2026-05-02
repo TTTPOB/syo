@@ -4,9 +4,17 @@
 
 mod common;
 
+use std::process::Command;
 use std::time::Duration;
 
+use serde::Deserialize;
+
 use common::{Fixture, boot_with_seed, wait_for};
+
+/// Path to the compiled `siyuan` binary (cargo sets `CARGO_BIN_EXE_siyuan` for tests).
+fn binary_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_siyuan"))
+}
 
 // ---------------------------------------------------------------------------
 // Notebook lifecycle
@@ -237,5 +245,62 @@ async fn remove_doc_makes_lookup_empty() {
     assert!(
         ids.is_empty(),
         "get_ids_by_hpath should return empty after remove_doc"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// `--format json` end-to-end (covers Task C)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore]
+async fn notebook_ls_format_json_emits_parseable_array() {
+    let f: Fixture = boot_with_seed().await.expect("boot");
+
+    // Mirror the production CLI invocation: drive the compiled binary so we
+    // exercise the actual stdout path the agent sees.
+    let output = Command::new(binary_path())
+        .args([
+            "--base-url",
+            f.container.base_url(),
+            "--token",
+            f.container.token(),
+            "notebook",
+            "ls",
+            "--format",
+            "json",
+        ])
+        .output()
+        .expect("spawn siyuan notebook ls --format json");
+
+    assert!(
+        output.status.success(),
+        "siyuan notebook ls --format json exited non-zero: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    #[derive(Debug, Deserialize)]
+    struct Row {
+        status: String,
+        id: String,
+        #[allow(dead_code)]
+        name: String,
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let rows: Vec<Row> = serde_json::from_str(stdout.trim()).unwrap_or_else(|e| {
+        panic!("output must parse as Vec<{{status,id,name}}>: {e}; raw: {stdout}")
+    });
+
+    // The seeded notebook must appear, and `status` must be the canonical
+    // unpadded "open"/"closed" form (not the TSV's two-space-padded variant).
+    let seeded = rows
+        .iter()
+        .find(|r| r.id == f.notebook_id.to_string())
+        .expect("seeded notebook id must appear in --format json output");
+    assert!(
+        matches!(seeded.status.as_str(), "open" | "closed"),
+        "status must be canonical 'open'/'closed'; got {:?}",
+        seeded.status
     );
 }

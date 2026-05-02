@@ -1,8 +1,10 @@
 use anyhow::{Result, bail};
 use clap::{Args, Subcommand};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_like};
+
+use crate::output::OutputFormat;
 
 #[derive(Subcommand, Debug)]
 pub enum SearchCmd {
@@ -20,6 +22,9 @@ pub enum SearchCmd {
     ///     Whitespace-only inputs are rejected client-side.
     ///   --limit (optional, default 50): maximum hits, capped by
     ///     `MAX_SEARCH_LIMIT`.
+    ///   --format (default agent-md): one of `agent-md` (the TSV form
+    ///     described above), `json` (compact array of
+    ///     `{id, type, markdown_preview}`), or `json-pretty` (indented).
     ///
     /// Output is one hit per line: `<id>\t<type>\t<markdown-preview>`
     /// (preview truncated to 80 chars on a single line). The SQL index
@@ -49,6 +54,9 @@ pub enum SearchCmd {
     ///     no content filter. LIKE meta-chars are escaped internally.
     ///   --limit (optional, default 50): maximum hits, capped by
     ///     `MAX_SEARCH_LIMIT`.
+    ///   --format (default agent-md): one of `agent-md` (the TSV form
+    ///     described above), `json` (compact array of
+    ///     `{id, type, markdown_preview}`), or `json-pretty` (indented).
     ///
     /// Output is one hit per line: `<id>\t<type>\t<markdown-preview>`.
     /// SQL index lag (~100-500 ms) applies.
@@ -69,6 +77,11 @@ pub struct TextArgs {
     /// Maximum hits returned. Default 50, capped by `MAX_SEARCH_LIMIT`.
     #[arg(long, default_value_t = 50)]
     pub limit: usize,
+
+    /// Output format: `agent-md` (default; TSV `id\ttype\tmarkdown_preview`),
+    /// `json`, or `json-pretty`.
+    #[arg(long, value_enum, default_value_t = OutputFormat::AgentMd)]
+    pub format: OutputFormat,
 }
 
 #[derive(Args, Debug)]
@@ -84,6 +97,11 @@ pub struct BlocksArgs {
     /// Maximum hits returned. Default 50, capped by `MAX_SEARCH_LIMIT`.
     #[arg(long, default_value_t = 50)]
     pub limit: usize,
+
+    /// Output format: `agent-md` (default; TSV `id\ttype\tmarkdown_preview`),
+    /// `json`, or `json-pretty`.
+    #[arg(long, value_enum, default_value_t = OutputFormat::AgentMd)]
+    pub format: OutputFormat,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,6 +111,47 @@ struct Hit {
     block_type: String,
     #[serde(default)]
     markdown: String,
+}
+
+/// Serializable view of a search hit for `--format json`.
+///
+/// Field is named `markdown_preview` (not `markdown`) because the value is
+/// passed through `oneline` — newlines are folded and the string is
+/// truncated to 80 chars with a horizontal-ellipsis marker, so it is no
+/// longer the verbatim markdown column.
+#[derive(Debug, Serialize)]
+struct HitView {
+    id: String,
+    #[serde(rename = "type")]
+    block_type: String,
+    markdown_preview: String,
+}
+
+fn emit_hits(rows: Vec<Hit>, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::AgentMd => {
+            for r in rows {
+                println!("{}\t{}\t{}", r.id, r.block_type, oneline(&r.markdown));
+            }
+        }
+        OutputFormat::Json | OutputFormat::JsonPretty => {
+            let views: Vec<HitView> = rows
+                .into_iter()
+                .map(|r| HitView {
+                    id: r.id,
+                    block_type: r.block_type,
+                    markdown_preview: oneline(&r.markdown),
+                })
+                .collect();
+            let s = if format == OutputFormat::JsonPretty {
+                serde_json::to_string_pretty(&views)?
+            } else {
+                serde_json::to_string(&views)?
+            };
+            println!("{s}");
+        }
+    }
+    Ok(())
 }
 
 pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
@@ -115,9 +174,7 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
                  WHERE markdown LIKE '%{needle}%' ESCAPE '\\' LIMIT {limit}"
             );
             let rows: Vec<Hit> = client.sql_typed(&stmt).await?;
-            for r in rows {
-                println!("{}\t{}\t{}", r.id, r.block_type, oneline(&r.markdown));
-            }
+            emit_hits(rows, a.format)?;
         }
         SearchCmd::Blocks(a) => {
             let mut conds = Vec::new();
@@ -143,9 +200,7 @@ pub async fn run(client: &SiyuanClient, cmd: SearchCmd) -> Result<()> {
             let stmt =
                 format!("SELECT id, type, markdown FROM blocks WHERE {where_clause} LIMIT {limit}");
             let rows: Vec<Hit> = client.sql_typed(&stmt).await?;
-            for r in rows {
-                println!("{}\t{}\t{}", r.id, r.block_type, oneline(&r.markdown));
-            }
+            emit_hits(rows, a.format)?;
         }
     }
     Ok(())
@@ -158,5 +213,54 @@ fn oneline(s: &str) -> String {
     } else {
         let truncated: String = one.chars().take(80).collect();
         format!("{truncated}\u{2026}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mirror of `HitView` with `Deserialize` so the round-trip test can
+    /// parse the JSON we emit. Production `HitView` is `Serialize`-only —
+    /// JSON is an output format, not an input format for the CLI.
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct HitViewOwned {
+        id: String,
+        #[serde(rename = "type")]
+        block_type: String,
+        markdown_preview: String,
+    }
+
+    #[test]
+    fn hit_view_serializes_with_renamed_type_field() {
+        let view = HitView {
+            id: "20260501090000-blk0001".to_string(),
+            block_type: "p".to_string(),
+            markdown_preview: "Plan kickoff for Q3".to_string(),
+        };
+        let json = serde_json::to_string(&view).unwrap();
+        // `block_type` must surface as `"type"` in JSON to match the SQL
+        // column name and the TSV column name.
+        assert!(json.contains("\"type\":\"p\""), "got {json}");
+        assert!(json.contains("\"markdown_preview\""), "got {json}");
+    }
+
+    #[test]
+    fn hit_view_round_trips_through_json() {
+        let view = HitView {
+            id: "20260501090000-blk0001".to_string(),
+            block_type: "h".to_string(),
+            markdown_preview: "# Plan".to_string(),
+        };
+        let json = serde_json::to_string(&view).unwrap();
+        let parsed: HitViewOwned = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed,
+            HitViewOwned {
+                id: "20260501090000-blk0001".to_string(),
+                block_type: "h".to_string(),
+                markdown_preview: "# Plan".to_string(),
+            }
+        );
     }
 }

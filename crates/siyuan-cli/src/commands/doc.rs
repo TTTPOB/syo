@@ -1,9 +1,11 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::{ArgGroup, Args, Subcommand};
 
 use siyuan_client::SiyuanClient;
 use siyuan_model::doc_meta::{DocLookup, resolve as resolve_doc_meta};
 use siyuan_types::{BlockId, NotebookId};
+
+use crate::output::OutputFormat;
 
 #[derive(Subcommand, Debug)]
 pub enum DocCmd {
@@ -29,6 +31,11 @@ pub enum DocCmd {
     /// `storage_path` (`.sy`-suffixed) is what the rename/move/remove
     /// commands take as their `--path` / `--from-paths` argument — those
     /// commands take STORAGE paths, not hpaths.
+    ///
+    /// Inputs:
+    ///   --format (default json-pretty): `json-pretty` (the indented form
+    ///     shown above), or `json` (the same array, compact). `agent-md`
+    ///     is rejected — this output is structured metadata, not prose.
     ///
     /// Example:
     ///   in:  --id 20260501090000-doc0001
@@ -186,6 +193,12 @@ pub struct ResolveArgs {
     /// Human path inside the notebook, e.g. `/Projects/Plan`.
     #[arg(long, requires = "notebook")]
     pub hpath: Option<String>,
+
+    /// Output format: `json-pretty` (default), or `json` (compact).
+    /// `agent-md` is not supported for resolve — the output is structured
+    /// metadata, not prose.
+    #[arg(long, value_enum, default_value_t = OutputFormat::JsonPretty)]
+    pub format: OutputFormat,
 }
 
 #[derive(Args, Debug)]
@@ -273,9 +286,21 @@ pub async fn run(client: &SiyuanClient, cmd: DocCmd) -> Result<()> {
                 }
             };
             let docs = resolve_doc_meta(client, lookup).await?;
-            // Emit a single pretty JSON array so downstream tooling can pipe
-            // through `jq` without a per-line shimmying.
-            println!("{}", serde_json::to_string_pretty(&docs)?);
+            // `resolve` output is structured metadata; the `agent-md`
+            // variant has no sensible mapping (we'd be inventing prose
+            // around already-structured fields). Reject it loudly so the
+            // user picks a JSON variant rather than getting a silent
+            // pretty-printed default that masks the misuse.
+            let s = match a.format {
+                OutputFormat::AgentMd => {
+                    bail!(
+                        "doc resolve does not support --format agent-md; use json or json-pretty"
+                    );
+                }
+                OutputFormat::Json => serde_json::to_string(&docs)?,
+                OutputFormat::JsonPretty => serde_json::to_string_pretty(&docs)?,
+            };
+            println!("{s}");
         }
         DocCmd::Rename(a) => {
             let nb = NotebookId::parse(&a.notebook).context("--notebook")?;

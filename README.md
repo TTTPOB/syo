@@ -112,7 +112,9 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 - `agent-md` *(default)* — markdown with `<!-- sy:doc … -->` / `<!-- sy:block … -->` HTML-comment markers carrying ids, types and pagination metadata. Designed for LLMs to round-trip reads back into block-targeted writes.
 - `json` / `json-pretty` — the canonical structured bundle (`DocBundle`) including full block metadata.
 
-`doc resolve` and `sql` always emit pretty JSON. Other commands print a single id or a tab-separated list for piping.
+`notebook ls`, `tag ls`, `tag search`, `search text`, and `search blocks` also accept `--format`. Their default `agent-md` is the legacy TSV (or one-per-line for `tag ls`) for backward compatibility; `json` / `json-pretty` emit a structured array of the same fields (`{status,id,name}`, tag strings, `{block_id,markdown_preview}`, or `{id,type,markdown_preview}` respectively).
+
+`doc resolve` accepts `--format json` / `--format json-pretty` (default `json-pretty`); `agent-md` is rejected because the output is structured metadata. `sql` always emits pretty JSON. Mutating commands print a single id or `ok`.
 
 ### Position kinds
 

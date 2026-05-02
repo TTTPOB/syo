@@ -112,7 +112,9 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 - `agent-md`（默认）—— markdown，外加 `<!-- sy:doc … -->` / `<!-- sy:block … -->` HTML 注释标记，承载 id、type、分页元数据。设计目标是让 LLM 读完之后能直接生成精确指向某个块的写入指令。
 - `json` / `json-pretty` —— 标准结构化 bundle（`DocBundle`），含完整块元数据。
 
-`doc resolve` 与 `sql` 始终输出 pretty JSON。其他命令统一打印一个 id 或制表符分隔的列表，方便管道。
+`notebook ls`、`tag ls`、`tag search`、`search text`、`search blocks` 也接受 `--format`。默认仍为 `agent-md`（即原有 TSV / 每行一项的形式，向后兼容）；`json` / `json-pretty` 输出同字段的结构化数组（分别为 `{status,id,name}`、tag 字符串、`{block_id,markdown_preview}`、`{id,type,markdown_preview}`）。
+
+`doc resolve` 接受 `--format json` / `--format json-pretty`（默认 `json-pretty`），不支持 `agent-md`，因为输出本身就是结构化元数据。`sql` 始终输出 pretty JSON。变更类命令仍只打印一个 id 或 `ok`。
 
 ### Position 类型
 

@@ -3,14 +3,15 @@ use clap::Args;
 
 use siyuan_client::SiyuanClient;
 use siyuan_model::section::populate_section_children;
+use siyuan_types::position::PositionKind;
 use siyuan_types::{BlockId, BlockType, Position};
 
 /// Insert a new markdown block (or blocks) at a position relative to an anchor.
 ///
-/// Sibling commands: `siyuan move-block` moves an EXISTING block (keeps id);
-/// `siyuan update-block` overwrites a block in place; `siyuan create-doc`
-/// mints a whole new document. Use insert-blocks only to add NEW blocks
-/// inside an existing document.
+/// Sibling commands: `siyuan block move` moves an EXISTING block (keeps id);
+/// `siyuan block update` overwrites a block in place; `siyuan create-doc`
+/// mints a whole new document. Use `siyuan block insert` only to add NEW
+/// blocks inside an existing document.
 ///
 /// Inputs:
 ///   --position (required): one of the eight kinds below.
@@ -62,8 +63,8 @@ pub struct InsertBlocksArgs {
     /// Position kind. One of: after_block, before_block, append_child,
     /// prepend_child, append_section, prepend_section, append_doc, prepend_doc.
     /// See command help for the meaning of each.
-    #[arg(long)]
-    pub position: String,
+    #[arg(long, value_parser = super::parse_position)]
+    pub position: PositionKind,
 
     /// Anchor block id. Interpretation depends on --position (see help).
     #[arg(long)]
@@ -77,7 +78,7 @@ pub struct InsertBlocksArgs {
 pub async fn run(client: &SiyuanClient, args: InsertBlocksArgs) -> Result<()> {
     let anchor = BlockId::parse(&args.anchor).context("--anchor")?;
     let markdown = super::read_markdown_input(&args.markdown_file)?;
-    let position = parse_position(&args.position, anchor.clone())?;
+    let position = Position::from((args.position, anchor.clone()));
 
     let new_id = match position {
         Position::AfterBlock { block_id } => {
@@ -121,29 +122,14 @@ pub async fn run(client: &SiyuanClient, args: InsertBlocksArgs) -> Result<()> {
     Ok(())
 }
 
-fn parse_position(kind: &str, anchor: BlockId) -> Result<Position> {
-    Ok(match kind {
-        "after_block" => Position::AfterBlock { block_id: anchor },
-        "before_block" => Position::BeforeBlock { block_id: anchor },
-        "append_child" => Position::AppendChild {
-            container_id: anchor,
-        },
-        "prepend_child" => Position::PrependChild {
-            container_id: anchor,
-        },
-        "append_section" => Position::AppendSection { heading_id: anchor },
-        "prepend_section" => Position::PrependSection { heading_id: anchor },
-        "append_doc" => Position::AppendDoc { doc_id: anchor },
-        "prepend_doc" => Position::PrependDoc { doc_id: anchor },
-        other => bail!("unknown --position kind: {other}"),
-    })
-}
-
 /// Find the last block in the section owned by `heading_id`. We do this by
 /// loading the heading's doc and running our section detector — sufficient for
 /// v1 (small docs). For huge docs this should be optimised by querying SQL
 /// directly for the heading's section range.
-async fn resolve_section_end(client: &SiyuanClient, heading_id: &BlockId) -> Result<BlockId> {
+pub(crate) async fn resolve_section_end(
+    client: &SiyuanClient,
+    heading_id: &BlockId,
+) -> Result<BlockId> {
     use siyuan_model::load::load_doc;
     use siyuan_model::pagination::PageRequest;
 

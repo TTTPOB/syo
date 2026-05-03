@@ -37,12 +37,12 @@ enum Cmd {
     /// Print the SiYuan kernel version and confirm the server is reachable.
     Status,
     GetDoc(commands::get_doc::GetDocArgs),
-    GetBlock(commands::get_block::GetBlockArgs),
     CreateDoc(commands::create_doc::CreateDocArgs),
-    UpdateBlock(commands::update_block::UpdateBlockArgs),
-    InsertBlocks(commands::insert_blocks::InsertBlocksArgs),
-    MoveBlock(commands::move_block::MoveBlockArgs),
-    DeleteBlock(commands::delete_block::DeleteBlockArgs),
+    /// Read, write, move, and delete individual blocks.
+    Block {
+        #[command(subcommand)]
+        cmd: commands::block::BlockCmd,
+    },
     SetAttrs(commands::set_attrs::SetAttrsArgs),
     /// Manage notebooks (list, create, rename, remove).
     Notebook {
@@ -102,12 +102,8 @@ async fn main() -> anyhow::Result<()> {
             println!("{v}");
         }
         Cmd::GetDoc(a) => commands::get_doc::run(&client, a).await?,
-        Cmd::GetBlock(a) => commands::get_block::run(&client, a).await?,
         Cmd::CreateDoc(a) => commands::create_doc::run(&client, a).await?,
-        Cmd::UpdateBlock(a) => commands::update_block::run(&client, a).await?,
-        Cmd::InsertBlocks(a) => commands::insert_blocks::run(&client, a).await?,
-        Cmd::MoveBlock(a) => commands::move_block::run(&client, a).await?,
-        Cmd::DeleteBlock(a) => commands::delete_block::run(&client, a).await?,
+        Cmd::Block { cmd } => commands::block::run(&client, cmd).await?,
         Cmd::SetAttrs(a) => commands::set_attrs::run(&client, a).await?,
         Cmd::Notebook { cmd } => commands::notebook::run(&client, cmd).await?,
         Cmd::Doc { cmd } => commands::doc::run(&client, cmd).await?,

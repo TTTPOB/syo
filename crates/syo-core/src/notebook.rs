@@ -47,3 +47,35 @@ pub async fn remove(client: &SiyuanClient, input: RemoveInput) -> Result<()> {
     client.remove_notebook(&input.id).await?;
     Ok(())
 }
+
+/// Resolve a user-supplied string to a [`NotebookId`].
+///
+/// If `input` matches the notebook-id format it is returned immediately —
+/// no network call is made. Otherwise `ls_notebooks()` is called and the
+/// input is matched by exact display name. Duplicate names are rejected
+/// with a diagnostic listing all matching ids.
+pub async fn resolve_notebook_id(client: &SiyuanClient, input: &str) -> anyhow::Result<NotebookId> {
+    // If it parses as a valid notebook id, return it directly.
+    if let Ok(id) = NotebookId::parse(input) {
+        return Ok(id);
+    }
+
+    let notebooks = client.ls_notebooks().await?;
+    let mut matches: Vec<&siyuan_client::api::notebook::Notebook> =
+        notebooks.iter().filter(|n| n.name == input).collect();
+
+    match matches.len() {
+        0 => anyhow::bail!("notebook {input:?} not found"),
+        1 => Ok(matches.remove(0).id.clone()),
+        _ => {
+            let ids: Vec<String> = matches
+                .iter()
+                .map(|n| format!("{} ({})", n.id.as_str(), n.name))
+                .collect();
+            anyhow::bail!(
+                "ambiguous notebook name {input:?} — matches: {}",
+                ids.join(", ")
+            );
+        }
+    }
+}

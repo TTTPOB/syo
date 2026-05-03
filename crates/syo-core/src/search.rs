@@ -8,7 +8,7 @@ use siyuan_model::sql_guard;
 // Public types
 // ---------------------------------------------------------------------------
 
-/// A single search result from a fulltext or blocks query.
+/// A single search result from a type/content block search.
 ///
 /// Deserialized from SQL rows; the `type` column is remapped to `block_type`
 /// so the struct field is idiomatic Rust.
@@ -21,6 +21,11 @@ pub struct SearchHit {
     pub markdown: String,
 }
 
+/// Input for [`search()`].
+///
+/// `block_type` filters by exact block type (e.g. `"h"` for heading).
+/// `contains` does a SQL LIKE substring match against the `content` column.
+/// When both are empty all blocks are returned up to `limit`.
 #[derive(Debug)]
 pub struct SearchInput {
     pub block_type: String,

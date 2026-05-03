@@ -1,7 +1,7 @@
 use anyhow::Result;
 use siyuan_client::SiyuanClient;
 use siyuan_client::api::notebook::Notebook;
-use siyuan_types::NotebookId;
+use siyuan_types::{NotebookId, SiyuanError};
 
 // --- ls ---
 pub struct LsOutput {
@@ -54,28 +54,32 @@ pub async fn remove(client: &SiyuanClient, input: RemoveInput) -> Result<()> {
 /// no network call is made. Otherwise `ls_notebooks()` is called and the
 /// input is matched by exact display name. Duplicate names are rejected
 /// with a diagnostic listing all matching ids.
-pub async fn resolve_notebook_id(client: &SiyuanClient, input: &str) -> anyhow::Result<NotebookId> {
+pub async fn resolve_notebook_id(
+    client: &SiyuanClient,
+    input: &str,
+) -> std::result::Result<NotebookId, SiyuanError> {
     // If it parses as a valid notebook id, return it directly.
     if let Ok(id) = NotebookId::parse(input) {
         return Ok(id);
     }
 
     let notebooks = client.ls_notebooks().await?;
-    let mut matches: Vec<&siyuan_client::api::notebook::Notebook> =
-        notebooks.iter().filter(|n| n.name == input).collect();
+    let mut matches: Vec<&Notebook> = notebooks.iter().filter(|n| n.name == input).collect();
 
     match matches.len() {
-        0 => anyhow::bail!("notebook {input:?} not found"),
-        1 => Ok(matches.remove(0).id.clone()),
+        0 => Err(SiyuanError::NotebookNotFound {
+            name: input.to_string(),
+        }),
+        1 => Ok(matches.pop().unwrap().id.clone()),
         _ => {
             let ids: Vec<String> = matches
                 .iter()
                 .map(|n| format!("{} ({})", n.id.as_str(), n.name))
                 .collect();
-            anyhow::bail!(
-                "ambiguous notebook name {input:?} — matches: {}",
-                ids.join(", ")
-            );
+            Err(SiyuanError::AmbiguousNotebook {
+                name: input.to_string(),
+                candidates: ids.join(", "),
+            })
         }
     }
 }

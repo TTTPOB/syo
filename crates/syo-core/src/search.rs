@@ -22,13 +22,7 @@ pub struct SearchHit {
 }
 
 #[derive(Debug)]
-pub struct FulltextInput {
-    pub query: String,
-    pub limit: usize,
-}
-
-#[derive(Debug)]
-pub struct BlocksInput {
+pub struct SearchInput {
     pub block_type: String,
     pub contains: String,
     pub limit: usize,
@@ -43,34 +37,11 @@ pub struct SearchOutput {
 // Operations
 // ---------------------------------------------------------------------------
 
-/// Run a fulltext (LIKE) search against the `markdown` column.
-///
-/// The query is escaped for SQL string-literal safety. `%` and `_` in the
-/// user input behave as LIKE wildcards (the SiYuan SQL engine does not
-/// support `ESCAPE '\'`).
-pub async fn fulltext(client: &SiyuanClient, input: FulltextInput) -> Result<SearchOutput> {
-    let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
-    if input.query.trim().is_empty() {
-        bail!("--query must not be empty");
-    }
-    let needle = escape_sql_string(&input.query);
-    let limit = input.limit.min(limit_cap);
-    let stmt = format!(
-        "SELECT id, type, markdown FROM blocks \
-         WHERE markdown LIKE '%{needle}%' LIMIT {limit}"
-    );
-    if let Err(e) = sql_guard::validate_read_only(&stmt) {
-        bail!("{e}");
-    }
-    let hits: Vec<SearchHit> = client.sql_typed(&stmt).await?;
-    Ok(SearchOutput { hits })
-}
-
 /// Search for blocks by type (`=`) and content (`LIKE`) filter.
 ///
 /// Empty `block_type` and/or `contains` disable the corresponding filter.
 /// When both are empty the result is equivalent to `SELECT ... WHERE 1=1`.
-pub async fn blocks(client: &SiyuanClient, input: BlocksInput) -> Result<SearchOutput> {
+pub async fn search(client: &SiyuanClient, input: SearchInput) -> Result<SearchOutput> {
     let mut conds = Vec::new();
     if !input.block_type.is_empty() {
         conds.push(format!("type = '{}'", input.block_type.replace('\'', "''")));
@@ -120,18 +91,12 @@ mod tests {
     fn structs_derive_debug() {
         fn _assert_debug<T: std::fmt::Debug>(_t: &T) {}
 
-        let fi = FulltextInput {
-            query: "hello".into(),
-            limit: 10,
-        };
-        _assert_debug(&fi);
-
-        let bi = BlocksInput {
+        let si = SearchInput {
             block_type: "p".into(),
             contains: "hello".into(),
             limit: 10,
         };
-        _assert_debug(&bi);
+        _assert_debug(&si);
 
         let so = SearchOutput { hits: vec![] };
         _assert_debug(&so);

@@ -3,14 +3,8 @@ use serde_json::{Value, json};
 
 use siyuan_client::SiyuanClient;
 use siyuan_client::api::notebook::Notebook;
-use siyuan_types::NotebookId;
 
 use super::util::{anyhow_to_mcp, ensure_object, required_string, with_hint};
-
-fn parse_notebook_id(s: &str) -> Result<NotebookId, McpError> {
-    NotebookId::parse(s)
-        .map_err(|e| McpError::invalid_params(format!("invalid notebook id: {e}"), None))
-}
 
 // Notebook doesn't impl Serialize in siyuan-client, so convert manually.
 fn notebook_to_json(nb: &Notebook) -> Value {
@@ -48,7 +42,7 @@ pub async fn create(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
 
 pub async fn rename(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
-    let id = parse_notebook_id(&required_string(&map, "id")?)?;
+    let id = super::util::resolve_notebook_id(client, &required_string(&map, "id")?).await?;
     let name = required_string(&map, "name")?;
     syo_core::notebook::rename(client, syo_core::notebook::RenameInput { id, name })
         .await
@@ -62,7 +56,7 @@ pub async fn rename(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
 
 pub async fn remove(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
-    let id = parse_notebook_id(&required_string(&map, "id")?)?;
+    let id = super::util::resolve_notebook_id(client, &required_string(&map, "id")?).await?;
     syo_core::notebook::remove(client, syo_core::notebook::RemoveInput { id })
         .await
         .map_err(anyhow_to_mcp)?;

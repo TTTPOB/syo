@@ -75,8 +75,7 @@ pub async fn create_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
     let hpath = required_string(&map, "hpath")?;
     let markdown = required_string(&map, "markdown")?;
 
-    let notebook = siyuan_types::NotebookId::parse(&notebook_str)
-        .map_err(|e| McpError::invalid_params(format!("invalid notebook id: {e}"), None))?;
+    let notebook = super::util::resolve_notebook_id(client, &notebook_str).await?;
 
     let output = syo_core::doc::create(
         client,

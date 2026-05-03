@@ -1,3 +1,6 @@
+use siyuan_client::SiyuanClient;
+use siyuan_types::NotebookId;
+
 use rmcp::ErrorData as McpError;
 use serde_json::{Map, Value};
 
@@ -78,6 +81,24 @@ pub fn object_field(map: &Map<String, Value>, key: &str) -> Result<Map<String, V
 // Tools that do NOT need a hint should return the bare payload directly.
 pub fn with_hint(payload: Value, hint: &str) -> Value {
     serde_json::json!({ "data": payload, "_hint": hint })
+}
+
+/// Resolve a user-supplied string (id or name) to a [`NotebookId`].
+///
+/// Wraps `syo_core::notebook::resolve_notebook_id` and maps errors to MCP
+/// `invalid_params` so every handler doesn't repeat the error conversion.
+pub async fn resolve_notebook_id(
+    client: &SiyuanClient,
+    input: &str,
+) -> Result<NotebookId, McpError> {
+    syo_core::notebook::resolve_notebook_id(client, input)
+        .await
+        .map_err(|e| McpError::invalid_params(format!("invalid notebook: {:#}", e), None))
+}
+
+/// Treat whitespace-only inputs as absent.
+pub(crate) fn is_present(s: Option<&str>) -> bool {
+    s.is_some_and(|v| !v.trim().is_empty())
 }
 
 #[cfg(test)]

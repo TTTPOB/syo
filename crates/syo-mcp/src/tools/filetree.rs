@@ -7,23 +7,12 @@ use siyuan_model::doc_tree::Depth;
 use siyuan_types::{BlockId, NotebookId};
 
 use super::util::{
-    anyhow_to_mcp, ensure_object, optional_string, required_string, string_array, with_hint,
+    anyhow_to_mcp, ensure_object, is_present, optional_string, required_string, string_array,
+    with_hint,
 };
-
-fn parse_notebook_id(s: &str) -> Result<NotebookId, McpError> {
-    NotebookId::parse(s)
-        .map_err(|e| McpError::invalid_params(format!("invalid notebook id: {e}"), None))
-}
 
 fn parse_block_id(s: &str) -> Result<BlockId, McpError> {
     BlockId::parse(s).map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))
-}
-
-/// Treat whitespace-only inputs as absent. Mirrors the rejection pattern used
-/// elsewhere in this module so agents can't accidentally squeak past the
-/// "exactly one input mode" rule by passing `"   "`.
-fn is_present(s: Option<&str>) -> bool {
-    s.is_some_and(|v| !v.trim().is_empty())
 }
 
 /// Validate the `syo_siyuan_doc_resolve` argument map and produce a [`DocLookup`].
@@ -76,7 +65,8 @@ pub(crate) fn parse_doc_lookup(map: &Map<String, Value>) -> Result<DocLookup, Mc
             None,
         ));
     }
-    let notebook = parse_notebook_id(nb_raw.as_deref().unwrap_or_default().trim())?;
+    let notebook = NotebookId::parse(nb_raw.as_deref().unwrap_or_default().trim())
+        .map_err(|e| McpError::invalid_params(format!("invalid notebook id: {e}"), None))?;
     // Preserve the user-supplied hpath verbatim — the kernel uses `/` as
     // the canonical root and we don't want to silently rewrite it.
     let hpath = hp_raw.unwrap_or_default();
@@ -149,7 +139,8 @@ pub(crate) fn parse_doc_lookup_batch(map: &Map<String, Value>) -> Result<Vec<Doc
             None,
         ));
     }
-    let notebook = parse_notebook_id(nb_raw.as_deref().unwrap_or_default().trim())?;
+    let notebook = NotebookId::parse(nb_raw.as_deref().unwrap_or_default().trim())
+        .map_err(|e| McpError::invalid_params(format!("invalid notebook id: {e}"), None))?;
     let mut out = Vec::with_capacity(from_hpaths.len());
     for hp in from_hpaths {
         out.push(DocLookup::ByHpath {
@@ -194,7 +185,8 @@ pub(crate) fn parse_tree_lookup(map: &Map<String, Value>) -> Result<DocLookup, M
         )?));
     }
 
-    let notebook = parse_notebook_id(nb_raw.as_deref().unwrap_or_default().trim())?;
+    let notebook = NotebookId::parse(nb_raw.as_deref().unwrap_or_default().trim())
+        .map_err(|e| McpError::invalid_params(format!("invalid notebook id: {e}"), None))?;
     // Default to `/` (virtual root) when hpath is absent.
     let hpath = hp_raw.unwrap_or_else(|| "/".to_string());
     Ok(DocLookup::ByHpath { notebook, hpath })
@@ -249,7 +241,14 @@ pub(crate) fn parse_depth(map: &Map<String, Value>) -> Result<Depth, McpError> {
 }
 
 pub async fn tree(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
+    let mut map = ensure_object(args)?;
+    // Pre-resolve notebook name→id before passing to pure parser.
+    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
+        if super::util::is_present(Some(nb)) {
+            let resolved = super::util::resolve_notebook_id(client, nb).await?;
+            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
+        }
+    }
     let lookup = parse_tree_lookup(&map)?;
     let depth = parse_depth(&map)?;
     let output = syo_core::doc::tree(client, syo_core::doc::TreeInput { lookup, depth })
@@ -267,7 +266,14 @@ pub async fn tree(client: &SiyuanClient, args: Value) -> Result<Value, McpError>
 }
 
 pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
+    let mut map = ensure_object(args)?;
+    // Pre-resolve notebook name→id before passing to pure parser.
+    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
+        if super::util::is_present(Some(nb)) {
+            let resolved = super::util::resolve_notebook_id(client, nb).await?;
+            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
+        }
+    }
     let lookup = parse_doc_lookup(&map)?;
     let output = syo_core::doc::resolve(client, lookup)
         .await
@@ -276,7 +282,14 @@ pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
 }
 
 pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
+    let mut map = ensure_object(args)?;
+    // Pre-resolve notebook name→id before passing to pure parser.
+    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
+        if super::util::is_present(Some(nb)) {
+            let resolved = super::util::resolve_notebook_id(client, nb).await?;
+            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
+        }
+    }
     let lookup = parse_doc_lookup(&map)?;
     let title = required_string(&map, "title")?;
 
@@ -292,9 +305,26 @@ pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
 }
 
 pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
+    let mut map = ensure_object(args)?;
+    // Pre-resolve notebook name→id before passing to pure parser.
+    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
+        if super::util::is_present(Some(nb)) {
+            let resolved = super::util::resolve_notebook_id(client, nb).await?;
+            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
+        }
+    }
+    if let Some(nb) = map.get("to_notebook").and_then(|v| v.as_str()) {
+        if super::util::is_present(Some(nb)) {
+            let resolved = super::util::resolve_notebook_id(client, nb).await?;
+            map.insert(
+                "to_notebook".to_string(),
+                Value::String(resolved.to_string()),
+            );
+        }
+    }
     let source_lookups = parse_doc_lookup_batch(&map)?;
-    let to_notebook = parse_notebook_id(&required_string(&map, "to_notebook")?)?;
+    let to_notebook = NotebookId::parse(&required_string(&map, "to_notebook")?)
+        .map_err(|e| McpError::invalid_params(format!("invalid to_notebook id: {e}"), None))?;
     let to_path = required_string(&map, "to_path")?;
 
     syo_core::doc::move_docs(
@@ -317,7 +347,14 @@ pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpEr
 }
 
 pub async fn remove_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
+    let mut map = ensure_object(args)?;
+    // Pre-resolve notebook name→id before passing to pure parser.
+    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
+        if super::util::is_present(Some(nb)) {
+            let resolved = super::util::resolve_notebook_id(client, nb).await?;
+            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
+        }
+    }
     let lookup = parse_doc_lookup(&map)?;
 
     syo_core::doc::remove(client, syo_core::doc::RemoveDocInput { lookup })

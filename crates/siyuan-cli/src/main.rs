@@ -36,23 +36,25 @@ struct Cli {
 enum Cmd {
     /// Print the SiYuan kernel version and confirm the server is reachable.
     Status,
-    GetDoc(commands::get_doc::GetDocArgs),
-    CreateDoc(commands::create_doc::CreateDocArgs),
     /// Read, write, move, and delete individual blocks.
     Block {
         #[command(subcommand)]
         cmd: commands::block::BlockCmd,
     },
-    SetAttrs(commands::set_attrs::SetAttrsArgs),
     /// Manage notebooks (list, create, rename, remove).
     Notebook {
         #[command(subcommand)]
         cmd: commands::notebook::NotebookCmd,
     },
-    /// Manage documents (resolve metadata, rename, move, set icon/sort, remove).
+    /// Manage documents (get, create, resolve, rename, move, set icon/sort, remove, tree).
     Doc {
         #[command(subcommand)]
         cmd: commands::doc::DocCmd,
+    },
+    /// Manage block attributes (set).
+    Attrs {
+        #[command(subcommand)]
+        cmd: commands::attrs::AttrsCmd,
     },
     /// List or search blocks by tag.
     Tag {
@@ -101,11 +103,9 @@ async fn main() -> anyhow::Result<()> {
             info!(%v, "siyuan ok");
             println!("{v}");
         }
-        Cmd::GetDoc(a) => commands::get_doc::run(&client, a).await?,
-        Cmd::CreateDoc(a) => commands::create_doc::run(&client, a).await?,
         Cmd::Block { cmd } => commands::block::run(&client, cmd).await?,
-        Cmd::SetAttrs(a) => commands::set_attrs::run(&client, a).await?,
         Cmd::Notebook { cmd } => commands::notebook::run(&client, cmd).await?,
+        Cmd::Attrs { cmd } => commands::attrs::run(&client, cmd).await?,
         Cmd::Doc { cmd } => commands::doc::run(&client, cmd).await?,
         Cmd::Tag { cmd } => commands::tag::run(&client, cmd).await?,
         Cmd::Asset { cmd } => commands::asset::run(&client, cmd).await?,

@@ -8,6 +8,8 @@ use siyuan_types::{BlockId, NotebookId};
 
 use crate::output::OutputFormat;
 
+/// Manage documents: resolve, rename, move, set icon/sort, remove, tree,
+/// get rendered content, and create new documents.
 #[derive(Subcommand, Debug)]
 pub enum DocCmd {
     /// Look up document metadata by id OR by (notebook + hpath).
@@ -232,6 +234,10 @@ pub enum DocCmd {
     ///   out: <virtual root>'s top-level children, one bullet each.
     #[command(verbatim_doc_comment)]
     Tree(TreeArgs),
+    /// Get the rendered content of a document (agent-md, json, or json-bundle).
+    Get(super::get_doc::GetDocArgs),
+    /// Create a new document in a notebook from markdown input.
+    Create(super::create_doc::CreateDocArgs),
 }
 
 /// Arguments for `siyuan doc resolve`.
@@ -579,6 +585,8 @@ pub async fn run(client: &SiyuanClient, cmd: DocCmd) -> Result<()> {
                 println!();
             }
         }
+        DocCmd::Get(a) => super::get_doc::run(client, a).await?,
+        DocCmd::Create(a) => super::create_doc::run(client, a).await?,
     }
     Ok(())
 }

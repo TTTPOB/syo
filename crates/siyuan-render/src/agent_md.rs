@@ -24,6 +24,17 @@ pub fn render_doc(bundle: &DocBundle) -> String {
         let _ = writeln!(out);
     }
 
+    // Append pagination footer for multi-page bundles so agents know there is
+    // more content to fetch.
+    if bundle.page.total_pages > 1 {
+        let blocks_remaining = bundle.page.total_blocks.saturating_sub(bundle.blocks.len());
+        let _ = writeln!(
+            out,
+            "<!-- sy:page {}/{}  blocks remaining: {} -->",
+            bundle.page.page, bundle.page.total_pages, blocks_remaining,
+        );
+    }
+
     out
 }
 
@@ -254,5 +265,63 @@ mod tests {
         <!-- sy:doc id=20260501000001-doc0001 hpath="/Empty" page=1 of 1 -->
 
         "###);
+    }
+
+    #[test]
+    fn renders_pagination_footer_when_multiple_pages() {
+        let bundle = DocBundle {
+            schema: DocBundle::SCHEMA.into(),
+            doc: DocMeta {
+                id: BlockId::parse("20260501000001-doc0001").unwrap(),
+                notebook_id: NotebookId::parse("20260501000000-nb00001").unwrap(),
+                hpath: "/Demo".into(),
+                title: "Demo".into(),
+            },
+            page: PageInfo {
+                page: 1,
+                page_size: 50,
+                total_blocks: 100,
+                total_pages: 2,
+            },
+            blocks: vec![mk_block(
+                "20260501000010-paaaaaa",
+                BlockType::Paragraph,
+                "First page content.",
+            )],
+        };
+        let md = render_doc(&bundle);
+        assert!(
+            md.contains("<!-- sy:page 1/2  blocks remaining: 99 -->"),
+            "multi-page bundle must include a pagination footer; got: {md}"
+        );
+    }
+
+    #[test]
+    fn no_pagination_footer_when_single_page() {
+        let bundle = DocBundle {
+            schema: DocBundle::SCHEMA.into(),
+            doc: DocMeta {
+                id: BlockId::parse("20260501000001-doc0001").unwrap(),
+                notebook_id: NotebookId::parse("20260501000000-nb00001").unwrap(),
+                hpath: "/Demo".into(),
+                title: "Demo".into(),
+            },
+            page: PageInfo {
+                page: 1,
+                page_size: 50,
+                total_blocks: 1,
+                total_pages: 1,
+            },
+            blocks: vec![mk_block(
+                "20260501000010-paaaaaa",
+                BlockType::Paragraph,
+                "Only block.",
+            )],
+        };
+        let md = render_doc(&bundle);
+        assert!(
+            !md.contains("<!-- sy:page"),
+            "single-page bundle must NOT include a pagination footer; got: {md}"
+        );
     }
 }

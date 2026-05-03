@@ -46,7 +46,7 @@ pub async fn block_update(client: &SiyuanClient, args: Value) -> Result<Value, M
         .map_err(siyuan_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
-        "Mutation completed at the kernel. SQL-indexed reads (siyuan_doc_get, siyuan_sql) may \
+        "Mutation completed at the kernel. SQL-indexed reads (syo_siyuan_doc_get, syo_siyuan_sql) may \
          briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
          retry once.",
     ))
@@ -107,7 +107,7 @@ pub async fn block_insert(client: &SiyuanClient, args: Value) -> Result<Value, M
 
     Ok(with_hint(
         json!({ "id": new_id }),
-        "Block inserted at the kernel. SQL-indexed reads (siyuan_doc_get, siyuan_sql) may \
+        "Block inserted at the kernel. SQL-indexed reads (syo_siyuan_doc_get, syo_siyuan_sql) may \
          briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
          retry once. The returned id is the new block's id.",
     ))
@@ -130,7 +130,7 @@ pub async fn block_move(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
         other => {
             return Err(McpError::invalid_params(
                 format!(
-                    "position '{other:?}' is not supported for siyuan_block_move; \
+                    "position '{other:?}' is not supported for syo_siyuan_block_move; \
                      use `after_block` or `append_child`",
                 ),
                 None,
@@ -144,7 +144,7 @@ pub async fn block_move(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
         .map_err(siyuan_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
-        "Block moved at the kernel. SQL-indexed reads (siyuan_doc_get, siyuan_sql) may briefly \
+        "Block moved at the kernel. SQL-indexed reads (syo_siyuan_doc_get, syo_siyuan_sql) may briefly \
          show stale state for ~100–500 ms; if a follow-up read returns unexpected data, retry once.",
     ))
 }
@@ -158,7 +158,7 @@ pub async fn block_delete(client: &SiyuanClient, args: Value) -> Result<Value, M
     client.delete_block(&id).await.map_err(siyuan_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
-        "Block permanently deleted at the kernel. SQL-indexed reads (siyuan_doc_get, siyuan_sql) \
+        "Block permanently deleted at the kernel. SQL-indexed reads (syo_siyuan_doc_get, syo_siyuan_sql) \
          may briefly show stale state for ~100–500 ms after deletion.",
     ))
 }
@@ -287,7 +287,8 @@ mod tests {
                 .await
                 .expect_err(&format!("position {kind} must be rejected for block_move"));
             assert!(
-                err.message.contains("not supported for siyuan_block_move"),
+                err.message
+                    .contains("not supported for syo_siyuan_block_move"),
                 "error should explain that position {kind} is not supported; got: {}",
                 err.message
             );

@@ -1,6 +1,6 @@
 //! End-to-end CLI integration tests.
 //!
-//! Run with: `cargo test -p siyuan-cli --test cli_integration -- --ignored --nocapture`
+//! Run with: `cargo test -p syo --test cli_integration -- --ignored --nocapture`
 
 mod common;
 
@@ -333,7 +333,7 @@ async fn doc_move_rejects_missing_target_folder() {
 
     // Try to move it to a path where the parent folder doesn't exist.
     // The CLI handler should give a clear error, not a cryptic "block not found".
-    let args = siyuan_cli::commands::doc::MoveArgs {
+    let args = syo::commands::doc::MoveArgs {
         from_ids: vec![doc_id.to_string()],
         notebook: None,
         from_hpaths: vec![],
@@ -341,8 +341,8 @@ async fn doc_move_rejects_missing_target_folder() {
         to_path: "/NonExistentFolder/Target".to_string(),
     };
 
-    let cmd = siyuan_cli::commands::doc::DocCmd::Move(args);
-    let result = siyuan_cli::commands::doc::run(&f.client, cmd).await;
+    let cmd = syo::commands::doc::DocCmd::Move(args);
+    let result = syo::commands::doc::run(&f.client, cmd).await;
 
     match result {
         Err(e) => {
@@ -377,13 +377,13 @@ async fn create_doc_rejects_duplicate_hpath() {
         .expect("create first doc");
 
     // Try creating again at the same hpath without --force
-    let args = siyuan_cli::commands::doc::CreateDocArgs {
+    let args = syo::commands::doc::CreateDocArgs {
         notebook: f.notebook_id.to_string(),
         hpath: "/ConflictTest".to_string(),
         markdown_file: "-".to_string(),
         force: false,
     };
-    let result = siyuan_cli::commands::doc::create::run(&f.client, args).await;
+    let result = syo::commands::doc::create::run(&f.client, args).await;
 
     match result {
         Err(e) => {
@@ -410,13 +410,13 @@ async fn create_doc_force_overrides_hpath_conflict() {
         .expect("create first doc");
 
     // Try creating again at the same hpath WITH --force
-    let args = siyuan_cli::commands::doc::CreateDocArgs {
+    let args = syo::commands::doc::CreateDocArgs {
         notebook: f.notebook_id.to_string(),
         hpath: "/ForceTest".to_string(),
         markdown_file: "-".to_string(),
         force: true,
     };
-    let result = siyuan_cli::commands::doc::create::run(&f.client, args).await;
+    let result = syo::commands::doc::create::run(&f.client, args).await;
 
     // --force should skip the conflict check, but the kernel may still reject
     // duplicate hpaths or may allow overwriting. We just verify it doesn't

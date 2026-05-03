@@ -95,7 +95,7 @@ pub async fn create_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
 
     Ok(with_hint(
         json!({ "id": new_id }),
-        "Mutation completed at the kernel. SQL-indexed reads (siyuan_doc_get, siyuan_sql) may \
+        "Mutation completed at the kernel. SQL-indexed reads (syo_siyuan_doc_get, syo_siyuan_sql) may \
          briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
          retry once. The returned id is the new document's root block id.",
     ))

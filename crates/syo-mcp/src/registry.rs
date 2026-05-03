@@ -54,7 +54,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_status",
+            "syo_siyuan_status",
             "Return the SiYuan kernel version and confirm the server is reachable.\n\
              \n\
              Sibling tools: this is the only health-check tool — every other tool \
@@ -78,14 +78,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_doc_get",
+            "syo_siyuan_doc_get",
             "Load a SiYuan document by its ROOT block id and return it as agent-markdown \
              or a structured JSON bundle.\n\
              \n\
-             Sibling tools: `siyuan_block_get` returns ONE block's raw kramdown — use that \
+             Sibling tools: `syo_siyuan_block_get` returns ONE block's raw kramdown — use that \
              when you need a single block's storage syntax, not a whole document. \
-             `siyuan_doc_resolve` translates hpath<->id (this tool requires an id, not an \
-             hpath). `siyuan_search_text` finds candidate ids by content.\n\
+             `syo_siyuan_doc_resolve` translates hpath<->id (this tool requires an id, not an \
+             hpath). `syo_siyuan_search_text` finds candidate ids by content.\n\
              \n\
              Inputs: `id` (required) is a document ROOT block id (14-digit timestamp + \
              7-char suffix); not an hpath. `page` (optional, default 1) is 1-indexed in \
@@ -110,12 +110,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_block_get",
+            "syo_siyuan_block_get",
             "Fetch the raw kramdown source of a single block by id.\n\
              \n\
-             Sibling tools: `siyuan_doc_get` returns the rendered document tree — reach for \
-             that to read a whole document. `siyuan_attrs_get` returns just the attribute \
-             map; this tool returns the kramdown body. `siyuan_search_text` finds candidate \
+             Sibling tools: `syo_siyuan_doc_get` returns the rendered document tree — reach for \
+             that to read a whole document. `syo_siyuan_attrs_get` returns just the attribute \
+             map; this tool returns the kramdown body. `syo_siyuan_search_text` finds candidate \
              ids when you do not have one yet.\n\
              \n\
              Inputs: `id` (required) is any block id (paragraph, heading, list item, \
@@ -136,14 +136,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_doc_create",
+            "syo_siyuan_doc_create",
             "Create a new document in a notebook from GFM markdown.\n\
              \n\
-             Sibling tools: `siyuan_block_update` replaces an existing block in place; \
-             `siyuan_block_insert` adds blocks under an existing document. \
-             Reach for siyuan_doc_create only to mint a NEW document.\n\
+             Sibling tools: `syo_siyuan_block_update` replaces an existing block in place; \
+             `syo_siyuan_block_insert` adds blocks under an existing document. \
+             Reach for syo_siyuan_doc_create only to mint a NEW document.\n\
              \n\
-             Inputs: `notebook` (required) is a notebook id from `siyuan_notebook_ls`. \
+             Inputs: `notebook` (required) is a notebook id from `syo_siyuan_notebook_ls`. \
              `hpath` (required) is a HUMAN path inside the notebook, e.g. `/Folder/Title`; \
              must start with `/`. NOT to be confused with on-disk storage paths (`.sy`-suffixed) \
              — hpaths are titles separated by `/`, storage paths look like \
@@ -152,8 +152,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              contains the new document's root block id under `data.id`, accompanied by a \
              `_hint` string.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -172,21 +172,21 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_block_update",
+            "syo_siyuan_block_update",
             "Replace the full content of an existing block with new GFM markdown.\n\
              \n\
-             Sibling tools: `siyuan_block_insert` adds NEW blocks at a position relative to \
-             an anchor; `siyuan_block_delete` removes a block; `siyuan_attrs_set` mutates \
-             attributes (not body). siyuan_block_update is for in-place full-body overwrite. \
-             Partial edits are NOT supported — read with `siyuan_block_get` first if part of \
+             Sibling tools: `syo_siyuan_block_insert` adds NEW blocks at a position relative to \
+             an anchor; `syo_siyuan_block_delete` removes a block; `syo_siyuan_attrs_set` mutates \
+             attributes (not body). syo_siyuan_block_update is for in-place full-body overwrite. \
+             Partial edits are NOT supported — read with `syo_siyuan_block_get` first if part of \
              the existing content must be preserved.\n\
              \n\
-             Inputs: `id` (required) is the block id to overwrite (use `siyuan_doc_get` or \
-             `siyuan_search_text` to find it). `markdown` (required) is GFM markdown that \
+             Inputs: `id` (required) is the block id to overwrite (use `syo_siyuan_doc_get` or \
+             `syo_siyuan_search_text` to find it). `markdown` (required) is GFM markdown that \
              replaces the entire block body.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -204,12 +204,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_block_insert",
+            "syo_siyuan_block_insert",
             "Insert a new markdown block at a position relative to an anchor block.\n\
              \n\
-             Sibling tools: `siyuan_block_move` moves an EXISTING block (keeps id); \
-             `siyuan_block_update` overwrites a block in place; `siyuan_doc_create` mints \
-             a new document. siyuan_block_insert covers all eight insertion positions \
+             Sibling tools: `syo_siyuan_block_move` moves an EXISTING block (keeps id); \
+             `syo_siyuan_block_update` overwrites a block in place; `syo_siyuan_doc_create` mints \
+             a new document. syo_siyuan_block_insert covers all eight insertion positions \
              previously split across three separate tools.\n\
              \n\
              Inputs: `markdown` (required) is the GFM markdown body for the new block. \
@@ -236,8 +236,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              The kernel returns the new block's id; the response envelope surfaces it \
              as `data.id`.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -255,25 +255,25 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_block_move",
+            "syo_siyuan_block_move",
             "Move an existing block to a new position within the document tree.\n\
              \n\
-             Sibling tools: `siyuan_block_insert` creates NEW blocks (different ids) and \
-             covers all eight position kinds; `siyuan_doc_move` moves whole documents on \
-             disk (`.sy` files). siyuan_block_move keeps the block's id and all its \
+             Sibling tools: `syo_siyuan_block_insert` creates NEW blocks (different ids) and \
+             covers all eight position kinds; `syo_siyuan_doc_move` moves whole documents on \
+             disk (`.sy` files). syo_siyuan_block_move keeps the block's id and all its \
              children — only its parent and sibling order change.\n\
              \n\
              Inputs: `id` (required) is the block id to move. `position` (required) is \
              one of `after_block` (moved block becomes a sibling immediately AFTER anchor) \
              or `append_child` (moved block becomes the LAST child of container anchor). \
-             `anchor` (required) is the anchor block id. Unlike siyuan_block_insert, only \
-             `after_block` and `append_child` are supported — use siyuan_block_insert for \
+             `anchor` (required) is the anchor block id. Unlike syo_siyuan_block_insert, only \
+             `after_block` and `append_child` are supported — use syo_siyuan_block_insert for \
              the other six position kinds.\n\
              \n\
              The moved block keeps its id and entire subtree intact.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale position data for \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale position data for \
              ~100-500 ms after this call. The kernel is immediately consistent — only \
              the SQL index lags.\n\
              \n\
@@ -291,20 +291,20 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_block_delete",
+            "syo_siyuan_block_delete",
             "Permanently delete a block and all of its children.\n\
              \n\
-             Sibling tools: `siyuan_block_update` with empty body clears a block in place \
-             but keeps it; `siyuan_doc_remove` deletes a whole document by storage path \
+             Sibling tools: `syo_siyuan_block_update` with empty body clears a block in place \
+             but keeps it; `syo_siyuan_doc_remove` deletes a whole document by storage path \
              (and you can also delete a document by passing its root id here). \
-             siyuan_block_delete removes the block and its subtree irreversibly.\n\
+             syo_siyuan_block_delete removes the block and its subtree irreversibly.\n\
              \n\
              Inputs: `id` (required) is the block id to delete. Any block type is accepted, \
              including a document ROOT id (deletes the whole document). The action is \
              irreversible at the kernel level.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may briefly still return the block for \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may briefly still return the block for \
              ~100-500 ms after this call. The kernel is immediately consistent — only the \
              SQL index lags.\n\
              \n\
@@ -323,12 +323,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_attrs_get",
+            "syo_siyuan_attrs_get",
             "Read all attributes (built-in and custom) of a block by id.\n\
              \n\
-             Sibling tools: `siyuan_attrs_set` mutates attributes (partial update); call \
-             siyuan_attrs_get first if you need to inspect existing values without \
-             overwriting them. `siyuan_block_get` returns the block's kramdown body \
+             Sibling tools: `syo_siyuan_attrs_set` mutates attributes (partial update); call \
+             syo_siyuan_attrs_get first if you need to inspect existing values without \
+             overwriting them. `syo_siyuan_block_get` returns the block's kramdown body \
              (different concept).\n\
              \n\
              Inputs: `id` (required) is the block id. The response is a flat key-value \
@@ -349,10 +349,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_attrs_set",
+            "syo_siyuan_attrs_set",
             "Set one or more attributes on a block (partial update).\n\
              \n\
-             Sibling tools: `siyuan_attrs_get` reads the current map; `siyuan_block_update` \
+             Sibling tools: `syo_siyuan_attrs_get` reads the current map; `syo_siyuan_block_update` \
              mutates the body, not attributes. There is no convenience tool for icon/sort \
              at the MCP layer (the CLI has them) — use this with `icon` / `sort` keys \
              directly.\n\
@@ -362,8 +362,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Empty value deletes the key. Custom keys MUST start with `custom-`; attempts \
              to set internal keys like `id` or `type` are silently ignored by the kernel.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -382,13 +382,13 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_notebook_ls",
+            "syo_siyuan_notebook_ls",
             "List all notebooks in the workspace, both open and closed.\n\
              \n\
-             Sibling tools: `siyuan_doc_resolve` looks up a single document by id or \
+             Sibling tools: `syo_siyuan_doc_resolve` looks up a single document by id or \
              hpath; this tool enumerates whole notebooks. Use it to discover notebook ids \
              before calling tools that need a `notebook` parameter \
-             (`siyuan_doc_create`, `siyuan_doc_resolve`, etc.).\n\
+             (`syo_siyuan_doc_create`, `syo_siyuan_doc_resolve`, etc.).\n\
              \n\
              Inputs: none required (extra properties ignored). Each notebook entry \
              includes `id`, `name`, `icon`, `sort`, and a `closed` boolean. Notebooks \
@@ -410,10 +410,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_notebook_create",
+            "syo_siyuan_notebook_create",
             "Create a new notebook with the given display name.\n\
              \n\
-             Sibling tools: `siyuan_notebook_rename` only changes the display name of an \
+             Sibling tools: `syo_siyuan_notebook_rename` only changes the display name of an \
              existing notebook. There is no programmatic open/close — the user opens or \
              closes notebooks in the SiYuan UI.\n\
              \n\
@@ -421,14 +421,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              are allowed (the kernel disambiguates by id). The kernel assigns a unique id \
              automatically and surfaces it as `id` in the response (also under `data.id`).\n\
              \n\
-             The new notebook is reachable for subsequent calls (`siyuan_doc_resolve`, \
-             `siyuan_doc_create`, etc.). NOTE: some kernel versions create the notebook \
-             in a CLOSED state — the harness still resolves it through `siyuan_doc_resolve` \
-             and similar kernel-direct tools, but reads via `siyuan_sql` / \
-             `siyuan_search_text` may return empty until the user opens it in the SiYuan UI.\n\
+             The new notebook is reachable for subsequent calls (`syo_siyuan_doc_resolve`, \
+             `syo_siyuan_doc_create`, etc.). NOTE: some kernel versions create the notebook \
+             in a CLOSED state — the harness still resolves it through `syo_siyuan_doc_resolve` \
+             and similar kernel-direct tools, but reads via `syo_siyuan_sql` / \
+             `syo_siyuan_search_text` may return empty until the user opens it in the SiYuan UI.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -446,21 +446,21 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_notebook_rename",
+            "syo_siyuan_notebook_rename",
             "Rename an existing notebook (display name only).\n\
              \n\
-             Sibling tools: `siyuan_notebook_create` mints a new notebook; \
-             `siyuan_notebook_remove` destroys one and all its documents. siyuan_notebook_rename \
+             Sibling tools: `syo_siyuan_notebook_create` mints a new notebook; \
+             `syo_siyuan_notebook_remove` destroys one and all its documents. syo_siyuan_notebook_rename \
              changes the display name only — the on-disk folder and the notebook id remain \
              stable, so storage paths inside it are unaffected.\n\
              \n\
-             Inputs: `id` (required) is the notebook id (from `siyuan_notebook_ls`); \
+             Inputs: `id` (required) is the notebook id (from `syo_siyuan_notebook_ls`); \
              `name` (required) is the new display name.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
-             lags. `siyuan_notebook_ls` itself reflects the new name immediately.\n\
+             lags. `syo_siyuan_notebook_ls` itself reflects the new name immediately.\n\
              \n\
              Example:\n\
                in:  { \"id\": \"20260501000000-nb00001\", \"name\": \"Triage\" }\n\
@@ -476,17 +476,17 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_notebook_remove",
+            "syo_siyuan_notebook_remove",
             "Permanently remove a notebook AND every document it contains.\n\
              \n\
-             Sibling tools: `siyuan_doc_remove` removes a single document by storage path; \
+             Sibling tools: `syo_siyuan_doc_remove` removes a single document by storage path; \
              this tool destroys the whole notebook and is irreversible. Verify the \
-             notebook id from `siyuan_notebook_ls` before calling.\n\
+             notebook id from `syo_siyuan_notebook_ls` before calling.\n\
              \n\
              Inputs: `id` (required) is the notebook id.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -505,14 +505,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_doc_resolve",
+            "syo_siyuan_doc_resolve",
             "Look up document metadata by EITHER block id OR (notebook + hpath).\n\
              \n\
-             Sibling tools: `siyuan_doc_get` returns the rendered document content (and \
+             Sibling tools: `syo_siyuan_doc_get` returns the rendered document content (and \
              requires an id); this tool returns ONLY the metadata (id, hpath, notebook_id, \
              notebook_name, title, storage_path) and is the canonical hpath<->id translator. \
-             `siyuan_notebook_ls` enumerates whole notebooks. As of the dual-mode locator \
-             rollout, `siyuan_doc_rename`/`_remove`/`_move` accept the same id-or-hpath \
+             `syo_siyuan_notebook_ls` enumerates whole notebooks. As of the dual-mode locator \
+             rollout, `syo_siyuan_doc_rename`/`_remove`/`_move` accept the same id-or-hpath \
              addressing natively, so resolve is no longer a mandatory pre-step — use it \
              when you need the metadata itself (e.g. `storage_path` for diagnostics).\n\
              \n\
@@ -547,12 +547,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_doc_rename",
+            "syo_siyuan_doc_rename",
             "Rename a document by changing its display title.\n\
              \n\
-             Sibling tools: `siyuan_doc_move` changes the parent folder of a document; \
-             this tool changes only its title (the last hpath segment). `siyuan_attrs_set` \
-             with key `icon` is the analogous icon mutator. `siyuan_doc_resolve` is no \
+             Sibling tools: `syo_siyuan_doc_move` changes the parent folder of a document; \
+             this tool changes only its title (the last hpath segment). `syo_siyuan_attrs_set` \
+             with key `icon` is the analogous icon mutator. `syo_siyuan_doc_resolve` is no \
              longer required as a pre-step — this tool accepts the same id-or-hpath \
              locator natively.\n\
              \n\
@@ -566,8 +566,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Storage `.sy` paths are NOT accepted — the legacy `path` argument is gone \
              and the tool resolves the storage path internally before calling the kernel.\n\
              \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -588,12 +588,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_doc_move",
+            "syo_siyuan_doc_move",
             "Move one or more documents to a different notebook/folder.\n\
              \n\
-             Sibling tools: `siyuan_block_move` moves a block within a document tree \
-             (block-level); `siyuan_doc_rename` only retitles. siyuan_doc_move relocates \
-             whole `.sy` files in the file tree. `siyuan_doc_resolve` is no longer a \
+             Sibling tools: `syo_siyuan_block_move` moves a block within a document tree \
+             (block-level); `syo_siyuan_doc_rename` only retitles. syo_siyuan_doc_move relocates \
+             whole `.sy` files in the file tree. `syo_siyuan_doc_resolve` is no longer a \
              required pre-step — this tool accepts the same id-or-hpath addressing \
              natively (in batch form).\n\
              \n\
@@ -614,9 +614,9 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              argument is gone and the tool resolves storage paths internally before \
              calling the kernel.\n\
              \n\
-             After the move, `siyuan_doc_resolve` reflects the new location immediately. \
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             After the move, `syo_siyuan_doc_resolve` reflects the new location immediately. \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -637,15 +637,15 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_doc_tree",
+            "syo_siyuan_doc_tree",
             "List documents under a notebook/folder root as a tree.\n\
              \n\
-             Sibling tools: `siyuan_doc_resolve` looks up ONE document's metadata; \
-             this tool enumerates a SUBTREE. `siyuan_notebook_ls` enumerates whole \
-             notebooks (no nesting). `siyuan_doc_get` returns rendered content for \
-             one doc; `siyuan_doc_tree` is filetree-only — block-level children \
-             live under `siyuan_block_get` or `siyuan_sql`. Use this instead of \
-             hand-rolled `siyuan_sql` queries against the `blocks` table for \
+             Sibling tools: `syo_siyuan_doc_resolve` looks up ONE document's metadata; \
+             this tool enumerates a SUBTREE. `syo_siyuan_notebook_ls` enumerates whole \
+             notebooks (no nesting). `syo_siyuan_doc_get` returns rendered content for \
+             one doc; `syo_siyuan_doc_tree` is filetree-only — block-level children \
+             live under `syo_siyuan_block_get` or `syo_siyuan_sql`. Use this instead of \
+             hand-rolled `syo_siyuan_sql` queries against the `blocks` table for \
              navigation.\n\
              \n\
              Inputs: provide EXACTLY ONE address mode. Either `id` (string) to \
@@ -685,13 +685,13 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_doc_remove",
+            "syo_siyuan_doc_remove",
             "Permanently remove a document and all its child blocks.\n\
              \n\
-             Sibling tools: `siyuan_block_delete` with the document root id deletes the \
-             same content via the block API; `siyuan_doc_move` relocates instead of \
-             deleting; `siyuan_notebook_remove` destroys an entire notebook. \
-             siyuan_doc_remove is the per-document destroyer. `siyuan_doc_resolve` is no \
+             Sibling tools: `syo_siyuan_block_delete` with the document root id deletes the \
+             same content via the block API; `syo_siyuan_doc_move` relocates instead of \
+             deleting; `syo_siyuan_notebook_remove` destroys an entire notebook. \
+             syo_siyuan_doc_remove is the per-document destroyer. `syo_siyuan_doc_resolve` is no \
              longer a required pre-step — this tool accepts the same id-or-hpath \
              locator natively.\n\
              \n\
@@ -702,9 +702,9 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Storage `.sy` paths are NOT accepted — the legacy `path` argument is gone \
              and the tool resolves the storage path internally before calling the kernel.\n\
              \n\
-             After removal, `siyuan_doc_resolve` no longer finds this document. \
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
+             After removal, `syo_siyuan_doc_resolve` no longer finds this document. \
+             SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
+             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -726,16 +726,16 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_tag_ls",
+            "syo_siyuan_tag_ls",
             "List all distinct tags used anywhere in the workspace.\n\
              \n\
-             Sibling tools: `siyuan_tag_search` finds blocks tagged with one specific tag; \
-             this tool enumerates the available tags. `siyuan_search_text` is for free-text \
+             Sibling tools: `syo_siyuan_tag_search` finds blocks tagged with one specific tag; \
+             this tool enumerates the available tags. `syo_siyuan_search_text` is for free-text \
              content search, not tags.\n\
              \n\
              Inputs: none required. The output is a flat array of tag strings WITHOUT the \
              surrounding `#` characters — pass each value directly as the `tag` argument to \
-             `siyuan_tag_search`. The list is derived from the SQL index and is eventually \
+             `syo_siyuan_tag_search`. The list is derived from the SQL index and is eventually \
              consistent: freshly-created tags may take ~100-500 ms to appear (the kernel \
              itself is consistent immediately).\n\
              \n\
@@ -753,10 +753,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_tag_search",
+            "syo_siyuan_tag_search",
             "Find all blocks that carry a specific tag.\n\
              \n\
-             Sibling tools: `siyuan_tag_ls` enumerates available tags; `siyuan_search_text` \
+             Sibling tools: `syo_siyuan_tag_ls` enumerates available tags; `syo_siyuan_search_text` \
              does free-text matching instead of tag-exact match.\n\
              \n\
              Inputs: `tag` (required) is the tag content WITHOUT the surrounding `#` \
@@ -783,13 +783,13 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_search_text",
+            "syo_siyuan_search_text",
             "Full-text search across all blocks using a SQL LIKE substring match.\n\
              \n\
-             Sibling tools: `siyuan_tag_search` is exact tag match; `siyuan_sql` is the raw \
-             escape hatch for arbitrary queries (joins, aggregates). siyuan_search_text \
+             Sibling tools: `syo_siyuan_tag_search` is exact tag match; `syo_siyuan_sql` is the raw \
+             escape hatch for arbitrary queries (joins, aggregates). syo_siyuan_search_text \
              matches against the `markdown` column (includes inline syntax markers) — for \
-             a `content` (visible-text) match, build the LIKE manually via `siyuan_sql`.\n\
+             a `content` (visible-text) match, build the LIKE manually via `syo_siyuan_sql`.\n\
              \n\
              Inputs: `query` (required, non-empty) is the substring. Single quotes are \
              escaped internally; LIKE meta-chars (`%`, `_`, `\\`) are NOT escaped — they \
@@ -814,14 +814,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_sql",
+            "syo_siyuan_sql",
             "Execute a single read-only SQL statement against the SiYuan SQLite database.\n\
              \n\
-             Sibling tools: prefer `siyuan_search_text`, `siyuan_tag_search`, or \
-             `siyuan_graph_neighborhood` when they cover the use case. Reach for siyuan_sql \
+             Sibling tools: prefer `syo_siyuan_search_text`, `syo_siyuan_tag_search`, or \
+             `syo_siyuan_graph_neighborhood` when they cover the use case. Reach for syo_siyuan_sql \
              ONLY for queries those do not (joins, aggregations, or access to internal \
              tables like `refs`, `attributes`, `spans`). The CLI exposes the same operation \
-             as `siyuan sql --stmt ...`.\n\
+             as `syo sql --stmt ...`.\n\
              \n\
              READ-ONLY ONLY. The statement is parsed locally with sqlparser-rs (SQLite \
              dialect, single-statement) and rejected if the AST is anything other than a \
@@ -873,13 +873,13 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_asset_upload",
+            "syo_siyuan_asset_upload",
             "Upload a local file as a SiYuan asset.\n\
              \n\
              Sibling tools: there is no separate `reference` tool at the MCP layer (the CLI \
-             has `siyuan asset reference` which is a pure formatter). Use the returned \
-             asset path inside markdown that you pass to `siyuan_block_insert`, \
-             `siyuan_block_update`, or `siyuan_doc_create`.\n\
+             has `syo asset reference` which is a pure formatter). Use the returned \
+             asset path inside markdown that you pass to `syo_siyuan_block_insert`, \
+             `syo_siyuan_block_update`, or `syo_siyuan_doc_create`.\n\
              \n\
              Inputs: `file_path` (required) is an ABSOLUTE path on the machine running \
              the MCP server (NOT on the SiYuan kernel host if they differ). The process \
@@ -903,13 +903,13 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_graph_neighborhood",
+            "syo_siyuan_graph_neighborhood",
             "Compute the link-graph neighborhood around a center block up to a given depth.\n\
              \n\
-             Sibling tools: `siyuan_sql` against the `refs` table gives unbounded results \
+             Sibling tools: `syo_siyuan_sql` against the `refs` table gives unbounded results \
              when this tool's caps are insufficient. There are no separate backlinks / \
              outgoing tools at the MCP layer — set `direction` to `incoming` or `outgoing` \
-             here to get those. The CLI exposes `siyuan graph backlinks` / `outgoing` as \
+             here to get those. The CLI exposes `syo graph backlinks` / `outgoing` as \
              depth-1 single-direction shortcuts.\n\
              \n\
              Inputs: `center` (required) is the center block id. `depth` (optional, default \
@@ -920,7 +920,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Traversal stops at 500 nodes or 1000 edges per call. When either cap is hit, \
              `data.truncated` is `true` and the result is partial — narrow the query \
              (reduce depth, switch to a single direction, choose a more specific center) or \
-             fall back to `siyuan_sql`. The response envelope contains `data.nodes`, \
+             fall back to `syo_siyuan_sql`. The response envelope contains `data.nodes`, \
              `data.edges`, and `data.truncated`.\n\
              \n\
              Example:\n\

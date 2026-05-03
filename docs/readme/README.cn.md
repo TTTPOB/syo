@@ -1,8 +1,8 @@
-# Siyuan Operations CLI
+# syo
 
 为 [SiYuan（思源笔记）](https://github.com/siyuan-note/siyuan) 内核 HTTP API 打造的 Agent 友好工具集。**单一二进制**（`syo`），基于一份 typed Rust client，同时承担 CLI（人类/脚本使用）与 MCP（Model Context Protocol）服务（供 LLM agent 调用）两种角色 —— MCP 通过 `syo serve-mcp` 子命令启动。
 
-底层 crate（`siyuan-types`、`siyuan-client`、`siyuan-model`、`siyuan-render`）也可独立作为库使用。
+底层 crate（`siyuan-types`、`siyuan-client`、`siyuan-model`、`siyuan-render`、`syo-mcp`）也可独立作为库使用。
 
 > 🇬🇧 English version: [`../../README.md`](../../README.md).
 > 🧭 设计取舍与回退条件见 [`../decisions.md`](../decisions.md)。
@@ -10,7 +10,7 @@
 ## 状态
 
 v1，单工作区、单用户场景，对应 2026-05 时点的 SiYuan 内核 HTTP API。
-内核本身就是事实来源 —— 项目内部不维护本地缓存、snapshot token、两阶段提交。SQL 索引相关的读取（search、tag、`siyuan_sql` 等）是最终一致的，写入后大约 100–500 ms 内可能读到旧数据。
+内核本身就是事实来源 —— 项目内部不维护本地缓存、snapshot token、两阶段提交。SQL 索引相关的读取（search、tag、`syo_siyuan_sql` 等）是最终一致的，写入后大约 100–500 ms 内可能读到旧数据。
 
 ## 前置条件
 
@@ -27,7 +27,7 @@ cargo build --release
 ./target/release/syo --help
 ```
 
-本地开发期间，`cargo run -p siyuan-cli -- <args>` 同样可用。
+本地开发期间，`cargo run -p syo -- <args>` 同样可用。
 
 ## 配置
 
@@ -162,7 +162,7 @@ syo asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 ```json
 {
   "mcpServers": {
-    "siyuan": {
+    "syo-siyuan": {
       "command": "/abs/path/to/syo",
       "args": ["serve-mcp"],
       "env": {
@@ -176,28 +176,28 @@ syo asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 如果想为某个 server 单独设置请求超时，把 args 改成 `["serve-mcp", "--timeout-ms", "60000"]`。
 
-暴露的 tool（一行简介，完整 agent-friendly 描述见 `crates/siyuan-mcp/src/registry.rs`）：
+暴露的 tool（一行简介，完整 agent-friendly 描述见 `crates/syo-mcp/src/registry.rs`）：
 
 | Tool                       | 用途                                                                |
 | -------------------------- | ------------------------------------------------------------------- |
-| `siyuan_status`            | 内核可达性 + 版本检查。                                             |
-| `siyuan_doc_get`           | 读文档，默认 agent-md，支持 JSON 与分页。                           |
-| `siyuan_block_get`         | 读单块原始 kramdown。                                               |
-| `siyuan_doc_create`        | 用 GFM markdown 创建文档。                                          |
-| `siyuan_block_update`      | 整体替换块内容。                                                    |
-| `siyuan_block_insert`      | 新增块。                                                            |
-| `siyuan_block_move`        | 移动块（保留原 id 与子块）。                                        |
-| `siyuan_block_delete`      | 永久删除块及其子树。                                                |
-| `siyuan_attrs_get` / `siyuan_attrs_set` | 读 / 增量更新块属性。                                  |
-| `siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | 笔记本管理（不暴露 open/close）。      |
-| `siyuan_doc_resolve`       | 统一查询：可按 id 或 (notebook + hpath) 反查；返回数组，含 `storage_path`。 |
-| `siyuan_doc_tree`          | 以树形列出 notebook / 文件夹子树（id 与 notebook[+hpath] 二选一，`depth` 取 1..N 或 `all`）。 |
-| `siyuan_doc_rename` / `_move` / `_remove` | 文件树操作。接受 id 或 (notebook + hpath) 二选一，harness 内部把存储 `.sy` 路径解析出来。 |
-| `siyuan_tag_ls` / `siyuan_tag_search` | 列 tag / 按 tag 找块。                                  |
-| `siyuan_search_text`       | 在 `blocks` 表上做 LIKE 子串搜索。                                  |
-| `siyuan_sql`               | 只读 raw SQL，进阶工具，需自行转义参数。                            |
-| `siyuan_asset_upload`      | 上传本地文件为 SiYuan asset。                                       |
-| `siyuan_graph_neighborhood`| 引用关系图 BFS（depth ≤ 8，500 节点 / 1000 边封顶）。               |
+| `syo_siyuan_status`            | 内核可达性 + 版本检查。                                             |
+| `syo_siyuan_doc_get`           | 读文档，默认 agent-md，支持 JSON 与分页。                           |
+| `syo_siyuan_block_get`         | 读单块原始 kramdown。                                               |
+| `syo_siyuan_doc_create`        | 用 GFM markdown 创建文档。                                          |
+| `syo_siyuan_block_update`      | 整体替换块内容。                                                    |
+| `syo_siyuan_block_insert`      | 新增块。                                                            |
+| `syo_siyuan_block_move`        | 移动块（保留原 id 与子块）。                                        |
+| `syo_siyuan_block_delete`      | 永久删除块及其子树。                                                |
+| `syo_siyuan_attrs_get` / `syo_siyuan_attrs_set` | 读 / 增量更新块属性。                                  |
+| `syo_siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | 笔记本管理（不暴露 open/close）。      |
+| `syo_siyuan_doc_resolve`       | 统一查询：可按 id 或 (notebook + hpath) 反查；返回数组，含 `storage_path`。 |
+| `syo_siyuan_doc_tree`          | 以树形列出 notebook / 文件夹子树（id 与 notebook[+hpath] 二选一，`depth` 取 1..N 或 `all`）。 |
+| `syo_siyuan_doc_rename` / `_move` / `_remove` | 文件树操作。接受 id 或 (notebook + hpath) 二选一，harness 内部把存储 `.sy` 路径解析出来。 |
+| `syo_siyuan_tag_ls` / `syo_siyuan_tag_search` | 列 tag / 按 tag 找块。                                  |
+| `syo_siyuan_search_text`       | 在 `blocks` 表上做 LIKE 子串搜索。                                  |
+| `syo_siyuan_sql`               | 只读 raw SQL，进阶工具，需自行转义参数。                            |
+| `syo_siyuan_asset_upload`      | 上传本地文件为 SiYuan asset。                                       |
+| `syo_siyuan_graph_neighborhood`| 引用关系图 BFS（depth ≤ 8，500 节点 / 1000 边封顶）。               |
 
 写入类工具的响应统一被包装成 `{"data": <payload>, "_hint": "..."}`；`_hint` 提示后续行为（SQL 索引滞后、应当跟进调用哪个工具等），仅供参考，不影响正确性。
 
@@ -209,8 +209,8 @@ syo asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 ```toml
 [dependencies]
-siyuan-client = { git = "https://github.com/tpob/siyuan-cli" }
-siyuan-types  = { git = "https://github.com/tpob/siyuan-cli" }
+siyuan-client = { git = "https://github.com/tpob/syo" }
+siyuan-types  = { git = "https://github.com/tpob/syo" }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -238,7 +238,7 @@ v1 显式不做以下事，请按需自行扩展：
 - **两阶段 plan / apply、`--dry-run`**：所有写入直接打到内核。
 - **并发保护**（`expected_hash`、snapshot token）：最后写入者赢。
 - **Notebook open/close**：已从公开表面移除；harness 不处理用户主动关闭的 notebook，详见 `docs/decisions.md §2`。
-- **属性视图（AV）写入**：可通过 `siyuan_sql` 读，但不提供写。
+- **属性视图（AV）写入**：可通过 `syo_siyuan_sql` 读，但不提供写。
 - **超级块的创建与 layout 修改**：已存在的超级块以只读 `:::sy-superblock` 围栏形式呈现。
 - **WebSocket / 推送通知**：所有调用都是同步 HTTP。
 - **历史、回收站、daily note、模板**：思源 UI 已经原生覆盖，这里不重复实现。
@@ -256,8 +256,8 @@ crates/
   siyuan-client/   # 基于 reqwest 的 typed 内核 HTTP 包装
   siyuan-model/    # DocBundle、load_doc、章节、分页、图 BFS、tag、doc-meta 解析
   siyuan-render/   # agent-md + 标准 JSON 渲染器
-  siyuan-cli/      # `syo` 二进制（clap），既提供 CLI 也提供 `serve-mcp`
-  siyuan-mcp/      # 库 crate；被 siyuan-cli 的 `serve-mcp` 子命令消费
+  syo/             # `syo` 二进制（clap），既提供 CLI 也提供 `serve-mcp`
+  syo-mcp/         # 库 crate；被 syo 的 `serve-mcp` 子命令消费
   siyuan-testkit/  # 用 Podman 起一次性 SiYuan 实例
 docs/
   decisions.md          # 设计取舍记录

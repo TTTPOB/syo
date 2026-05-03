@@ -20,6 +20,6 @@ mod tools;
 /// by the caller — stdout is reserved for JSON-RPC framing.
 pub async fn serve(client: Arc<SiyuanClient>) -> anyhow::Result<()> {
     let (tools, handlers) = registry::build(Arc::clone(&client));
-    let srv = server::SiyuanMcpServer::new(client, tools, handlers);
+    let srv = server::SyoMcpServer::new(client, tools, handlers);
     srv.run().await
 }

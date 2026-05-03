@@ -6,7 +6,7 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/tpob/siyuan-cli"
+repository = "https://github.com/tpob/syo"
 
 [workspace.dependencies]
 # rmcp: Rust SDK for MCP; "server" enables ServerHandler, "transport-io" enables the stdio() transport
@@ -39,4 +39,4 @@ siyuan-client = { path = "crates/siyuan-client" }
 siyuan-model = { path = "crates/siyuan-model" }
 siyuan-render = { path = "crates/siyuan-render" }
 siyuan-testkit = { path = "crates/siyuan-testkit" }
-siyuan-mcp = { path = "crates/siyuan-mcp" }
+syo-mcp = { path = "crates/syo-mcp" }

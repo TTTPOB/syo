@@ -1,6 +1,6 @@
 //! Doc-tree listing: enumerate documents under a notebook/folder root.
 //!
-//! Single-source backend for `siyuan doc tree` (CLI) and `siyuan_doc_tree`
+//! Single-source backend for `syo doc tree` (CLI) and `syo_siyuan_doc_tree`
 //! (MCP). The kernel exposes no list-children endpoint at the filetree HTTP
 //! API, so this module pulls the relevant subset of `blocks` rows via a
 //! single SQL query and assembles the tree in memory.

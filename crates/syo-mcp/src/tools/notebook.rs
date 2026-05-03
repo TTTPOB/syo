@@ -36,8 +36,8 @@ pub async fn create(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
     Ok(with_hint(
         notebook_to_json(&nb),
         "Notebook created and opened. The returned id can be used in subsequent calls \
-         (siyuan_doc_create, siyuan_notebook_rename, etc.). It also appears in \
-         siyuan_notebook_ls.",
+         (syo_siyuan_doc_create, syo_siyuan_notebook_rename, etc.). It also appears in \
+         syo_siyuan_notebook_ls.",
     ))
 }
 
@@ -51,7 +51,7 @@ pub async fn rename(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
         .map_err(siyuan_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
-        "Notebook renamed at the kernel. The change is reflected immediately in siyuan_notebook_ls. \
+        "Notebook renamed at the kernel. The change is reflected immediately in syo_siyuan_notebook_ls. \
          SQL-indexed reads may briefly show the old name for ~100–500 ms.",
     ))
 }
@@ -63,6 +63,6 @@ pub async fn remove(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
     Ok(with_hint(
         json!({ "ok": true }),
         "Notebook permanently removed, including all its documents. This action is irreversible. \
-         The notebook will no longer appear in siyuan_notebook_ls.",
+         The notebook will no longer appear in syo_siyuan_notebook_ls.",
     ))
 }

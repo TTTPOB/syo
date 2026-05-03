@@ -1,6 +1,6 @@
 //! Integration tests for notebook + filetree APIs.
 //!
-//! Run with: `cargo test -p siyuan-cli --test notebook_filetree -- --ignored --test-threads=1`
+//! Run with: `cargo test -p syo --test notebook_filetree -- --ignored --test-threads=1`
 
 mod common;
 

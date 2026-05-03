@@ -57,5 +57,5 @@ pub async fn run(cfg: Config, args: ServeMcpArgs) -> Result<()> {
     let client = siyuan_client::SiyuanClient::new_with_timeout(&cfg.base_url, &cfg.token, timeout)
         .with_context(|| format!("failed to build SiyuanClient for {}", cfg.base_url))?;
 
-    siyuan_mcp::serve(Arc::new(client)).await
+    syo_mcp::serve(Arc::new(client)).await
 }

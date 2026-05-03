@@ -1,6 +1,6 @@
 //! Integration tests for asset upload/embedding and graph neighborhood traversal.
 //!
-//! Run with: `cargo test -p siyuan-cli --test asset_graph -- --ignored --test-threads=1`
+//! Run with: `cargo test -p syo --test asset_graph -- --ignored --test-threads=1`
 
 mod common;
 

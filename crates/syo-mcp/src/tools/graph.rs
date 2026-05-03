@@ -41,7 +41,7 @@ pub async fn neighborhood(client: &SiyuanClient, args: Value) -> Result<Value, M
         "Graph traversal hit the per-call node/edge limit (500 nodes / 1000 edges) — \
          `truncated` is true. The result is a partial view. Narrow the search by reducing \
          depth, switching to a single direction (outgoing or incoming), or querying a \
-         more specific center block. Alternatively, use siyuan_sql to query the refs table \
+         more specific center block. Alternatively, use syo_siyuan_sql to query the refs table \
          directly for unbounded results."
     } else {
         "Graph is complete within the requested depth and direction. `truncated` is false."

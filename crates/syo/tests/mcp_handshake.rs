@@ -71,8 +71,8 @@ fn mcp_initialize_and_tools_list() {
 
     let server_name = &init_resp["result"]["serverInfo"]["name"];
     assert_eq!(
-        server_name, "siyuan-mcp",
-        "serverInfo.name must be 'siyuan-mcp', got: {server_name}"
+        server_name, "syo-mcp",
+        "serverInfo.name must be 'syo-mcp', got: {server_name}"
     );
 
     // Send initialized notification (required by MCP spec §2.3 after initialize).
@@ -111,13 +111,13 @@ fn mcp_initialize_and_tools_list() {
         tools.len()
     );
 
-    // Verify all tools have the siyuan_ prefix, unique names, and substantive descriptions.
+    // Verify all tools have the syo_siyuan_ prefix, unique names, and substantive descriptions.
     let mut seen_names = std::collections::HashSet::new();
     for tool in tools {
         let name = tool["name"].as_str().expect("tool name must be a string");
         assert!(
-            name.starts_with("siyuan_"),
-            "tool {name} must start with 'siyuan_'"
+            name.starts_with("syo_siyuan_"),
+            "tool {name} must start with 'syo_siyuan_'"
         );
         assert!(
             seen_names.insert(name.to_owned()),
@@ -139,13 +139,13 @@ fn mcp_initialize_and_tools_list() {
     }
 
     // --- tools/call dispatch smoke test ---
-    // siyuan_status against port 1 must return an error (no kernel), proving dispatch works.
+    // syo_siyuan_status against port 1 must return an error (no kernel), proving dispatch works.
     let call_req = json!({
         "jsonrpc": "2.0",
         "id": 3,
         "method": "tools/call",
         "params": {
-            "name": "siyuan_status",
+            "name": "syo_siyuan_status",
             "arguments": {}
         }
     });
@@ -155,7 +155,7 @@ fn mcp_initialize_and_tools_list() {
     // it either as a JSON-RPC `error` or as a successful response carrying
     // `isError: true`. We deliberately do NOT accept "non-empty content" as
     // a proxy for failure: successful tool calls also have non-empty content,
-    // which would make the assertion vacuous if siyuan_status ever started
+    // which would make the assertion vacuous if syo_siyuan_status ever started
     // succeeding against 127.0.0.1:1.
     let has_error =
         !call_resp["error"].is_null() || call_resp["result"]["isError"].as_bool().unwrap_or(false);

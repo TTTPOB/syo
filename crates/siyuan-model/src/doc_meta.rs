@@ -21,7 +21,7 @@ use siyuan_types::{BlockId, NotebookId, SiyuanError};
 /// Per-document metadata returned by [`resolve`].
 ///
 /// The serde representation maps directly to the JSON payload exposed by
-/// the MCP `siyuan_doc_resolve` tool and the `siyuan doc resolve` CLI
+/// the MCP `syo_siyuan_doc_resolve` tool and the `syo doc resolve` CLI
 /// subcommand — no field-level renames are needed because the snake_case
 /// field names are already the desired output keys.
 ///
@@ -36,7 +36,7 @@ pub struct ResolvedDoc {
     /// Empty when the notebook id is not in the live notebook list (e.g. the
     /// notebook was removed between the SQL row being written and this
     /// lookup running). Indistinguishable from a literally-empty notebook
-    /// name without cross-referencing `siyuan_notebook_ls` output.
+    /// name without cross-referencing `syo_siyuan_notebook_ls` output.
     pub notebook_name: String,
     /// Last `/`-delimited segment of `hpath`. Empty when `hpath` is empty
     /// or exactly `/` (the kernel's canonical root).
@@ -241,7 +241,7 @@ mod tests {
     // `pick_one_storage`. The pure dispatch is the interesting failure-mode
     // surface (0/1/>1 hits → which error variant?), so we test the dispatch
     // directly. Exercising `resolve_one_storage` through a live kernel is
-    // covered by the integration tests in `crates/siyuan-cli/tests/`.
+    // covered by the integration tests in `crates/syo/tests/`.
 
     fn nb() -> NotebookId {
         NotebookId::parse("20260501000000-nb00001").unwrap()

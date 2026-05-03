@@ -26,7 +26,7 @@ fn is_present(s: Option<&str>) -> bool {
     s.is_some_and(|v| !v.trim().is_empty())
 }
 
-/// Validate the `siyuan_doc_resolve` argument map and produce a [`DocLookup`].
+/// Validate the `syo_siyuan_doc_resolve` argument map and produce a [`DocLookup`].
 ///
 /// Enforces the "exactly one of `id` or (`notebook` + `hpath`)" invariant at
 /// the boundary so the model layer can stay enum-driven. Whitespace-only
@@ -83,7 +83,7 @@ pub(crate) fn parse_doc_lookup(map: &Map<String, Value>) -> Result<DocLookup, Mc
     Ok(DocLookup::ByHpath { notebook, hpath })
 }
 
-/// Validate the `siyuan_doc_move` argument map and produce one
+/// Validate the `syo_siyuan_doc_move` argument map and produce one
 /// [`DocLookup`] per source document.
 ///
 /// Mirrors [`parse_doc_lookup`]'s id-XOR-(notebook+hpath) rule, but for the
@@ -160,7 +160,7 @@ pub(crate) fn parse_doc_lookup_batch(map: &Map<String, Value>) -> Result<Vec<Doc
     Ok(out)
 }
 
-/// Validate `siyuan_doc_tree` arguments and produce a [`DocLookup`].
+/// Validate `syo_siyuan_doc_tree` arguments and produce a [`DocLookup`].
 ///
 /// Same rule as `parse_doc_lookup` (id XOR notebook+hpath) with one
 /// relaxation: in `--notebook` mode `hpath` is OPTIONAL and defaults to
@@ -289,7 +289,7 @@ pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
         .map_err(siyuan_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
-        "Filesystem-level mutation: document title updated. siyuan_doc_resolve reflects \
+        "Filesystem-level mutation: document title updated. syo_siyuan_doc_resolve reflects \
          the new title immediately. Address the document by id or (notebook + hpath) — \
          storage `.sy` paths are no longer accepted on this tool.",
     ))
@@ -320,7 +320,7 @@ pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpEr
     Ok(with_hint(
         json!({ "ok": true }),
         "Filesystem-level mutation: documents moved to the target notebook/path. \
-         siyuan_doc_resolve reflects the change immediately. Address sources by ids \
+         syo_siyuan_doc_resolve reflects the change immediately. Address sources by ids \
          (`from_ids`) or by (notebook + `from_hpaths`) — storage `.sy` paths are no \
          longer accepted on this tool.",
     ))
@@ -340,7 +340,7 @@ pub async fn remove_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
     Ok(with_hint(
         json!({ "ok": true }),
         "Filesystem-level mutation: document permanently removed including all child \
-         blocks. This action is irreversible. siyuan_doc_resolve will no longer find \
+         blocks. This action is irreversible. syo_siyuan_doc_resolve will no longer find \
          this document.",
     ))
 }
@@ -507,7 +507,7 @@ mod tests {
 
     // ---- parse_doc_lookup_batch ------------------------------------------
     //
-    // The batch helper drives `siyuan_doc_move`. Mirrors the rules of
+    // The batch helper drives `syo_siyuan_doc_move`. Mirrors the rules of
     // `parse_doc_lookup` for the multi-source case: id-mode XOR hpath-mode,
     // both empty is an error, and the hpath mode requires BOTH `notebook`
     // and `from_hpaths` together. Whitespace-only `notebook` counts as
@@ -680,7 +680,7 @@ mod tests {
         );
     }
 
-    // ---- siyuan_doc_tree arg parsing -------------------------------------
+    // ---- syo_siyuan_doc_tree arg parsing -------------------------------------
     //
     // The tree handler's lookup parser accepts an `id` OR a `notebook` (with
     // optional `hpath`, default `/`). Depth is a separate parser that takes

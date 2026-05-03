@@ -9,19 +9,19 @@
 - `crates/siyuan-client`：SiYuan kernel HTTP API 的 typed client。这里负责请求/响应封装、API endpoint 和 SQL 字符串转义。
 - `crates/siyuan-model`：面向业务语义的模型层，组合 client 调用并提供文档加载、分页、文档树、标签、关系图等能力。
 - `crates/siyuan-render`：把模型层数据渲染成 agent-md 或 JSON bundle。
-- `crates/siyuan-cli`：`syo` 二进制入口，包含 CLI 命令、输出格式和 MCP stdio 启动入口。
-- `crates/siyuan-mcp`：MCP server、tool registry 和 MCP tool 实现。
+- `crates/syo`：`syo` 二进制入口，包含 CLI 命令、输出格式和 MCP stdio 启动入口。
+- `crates/syo-mcp`：MCP server、tool registry 和 MCP tool 实现。
 - `crates/siyuan-testkit`：基于 Podman 的一次性 SiYuan kernel 测试容器和集成测试工具。
 
 ## CLI 入口
 
-`crates/siyuan-cli/src/main.rs` 只负责：
+`crates/syo/src/main.rs` 只负责：
 
 - 定义顶层 clap 参数和顶层命令枚举。
 - 解析配置并创建 `SiyuanClient`。
-- 将命令分派到 `crates/siyuan-cli/src/commands/`。
+- 将命令分派到 `crates/syo/src/commands/`。
 
-`crates/siyuan-cli/src/commands/mod.rs` 只暴露顶层命令模块，并放置跨命令复用的小工具：
+`crates/syo/src/commands/mod.rs` 只暴露顶层命令模块，并放置跨命令复用的小工具：
 
 - `read_markdown_input`
 - `parse_position`
@@ -40,7 +40,7 @@ CLI 模块组织必须和命令形式对齐。命令树是模块树的来源。
 当前 CLI 命令模块形状：
 
 ```text
-crates/siyuan-cli/src/commands/
+crates/syo/src/commands/
 ├── asset/
 │   ├── mod.rs
 │   ├── reference.rs
@@ -95,6 +95,6 @@ crates/siyuan-cli/src/commands/
 
 ## 测试
 
-- 默认本地测试：`cargo test -p siyuan-cli`
-- 真实 SiYuan kernel 集成测试：`cargo test -p siyuan-cli -- --ignored --test-threads=1`
+- 默认本地测试：`cargo test -p syo`
+- 真实 SiYuan kernel 集成测试：`cargo test -p syo -- --ignored --test-threads=1`
 - 集成测试通过 `siyuan-testkit` 启动 Podman 容器；需要本机 `podman` 可用。

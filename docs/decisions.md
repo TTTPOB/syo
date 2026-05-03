@@ -12,11 +12,11 @@ Entry format:
 
 ---
 
-## 1. Single-binary harness (`siyuan serve-mcp`)
+## 1. Single-binary harness (`syo serve-mcp`)
 
-**Context.** The harness originally shipped two binaries: `siyuan` (CLI) and `siyuan-mcp` (MCP server over stdio). Both statically linked the same dependency closure — tokio, reqwest+rustls, serde, tracing, clap, plus every internal crate (`siyuan-types`, `siyuan-client`, `siyuan-model`, `siyuan-render`). On disk, `target/debug/` showed `siyuan` ≈ 100 MB and `siyuan-mcp` ≈ 127 MB; the delta was almost entirely `rmcp`.
+**Context.** The harness originally shipped two binaries: `syo` (CLI) and `syo-mcp` (MCP server over stdio). Both statically linked the same dependency closure — tokio, reqwest+rustls, serde, tracing, clap, plus every internal crate (`siyuan-types`, `siyuan-client`, `siyuan-model`, `siyuan-render`). On disk, `target/debug/` showed `syo` ≈ 100 MB and `syo-mcp` ≈ 127 MB; the delta was almost entirely `rmcp`.
 
-**Decision.** Merge `siyuan-mcp` into `siyuan` as a `serve-mcp` subcommand. Drop the standalone binary entirely. No backwards-compatibility shim, no Cargo feature gate.
+**Decision.** Merge `syo-mcp` into `siyuan` as a `serve-mcp` subcommand. Drop the standalone binary entirely. No backwards-compatibility shim, no Cargo feature gate.
 
 **Rationale.** Two near-identical binaries doubled disk footprint, doubled compile time, and forced users (and MCP client configs) to track which one to invoke for what. A subcommand is the conventional way to bundle related modes (`git fetch` vs `git push`, `cargo build` vs `cargo run`). Stderr was already the right destination for `tracing` logs in a CLI; making the MCP variant work just required ensuring `init_tracing` doesn't write to stdout (the JSON-RPC channel).
 
@@ -28,13 +28,13 @@ Entry format:
 
 ## 2. Drop `notebook_open` and `notebook_close` from the public surface
 
-**Context.** The original surface mirrored the kernel HTTP API verbatim: `siyuan_notebook_open` / `siyuan_notebook_close` (MCP) and `siyuan notebook open` / `notebook close` (CLI). We considered keeping them and adding an internal `ensure_notebook_opened` helper that auto-opens any closed notebook before high-level operations touch it.
+**Context.** The original surface mirrored the kernel HTTP API verbatim: `syo_siyuan_notebook_open` / `syo_siyuan_notebook_close` (MCP) and `syo notebook open` / `notebook close` (CLI). We considered keeping them and adding an internal `ensure_notebook_opened` helper that auto-opens any closed notebook before high-level operations touch it.
 
 **Decision.** Remove both from the public surface AND do not add any auto-open helper. The harness simply does not handle user-closed notebooks. Kernel errors (e.g. `opened notebook [<id>] not found`, mapped to `invalid_params`) and empty SQL results propagate up unchanged.
 
 **Rationale.** Walking the SiYuan frontend code (`app/src/menus/navigation.ts`, `app/src/layout/dock/Files.ts`) showed that even SiYuan's own UI buries close behind a notebook right-click → Close menu item, and open lives in a collapsible "Closed notebooks" drawer that is empty for users who never closed anything. An agent harness exposing these as first-class operations gives them more weight than the upstream UI does. The kernel-level effect of close (`Unindex` in `kernel/model/mount.go`) is genuine memory release, not a UI flag — auto-opening would silently override a user's deliberate decision to drop a notebook from the working set. Better to fail loudly.
 
-**Tradeoff.** Agents calling `siyuan_doc_create` against a closed notebook see a typed `invalid_params` error rather than a transparent recovery. They cannot programmatically close a notebook to free index memory; if a workflow needs that, it goes through the SiYuan UI.
+**Tradeoff.** Agents calling `syo_siyuan_doc_create` against a closed notebook see a typed `invalid_params` error rather than a transparent recovery. They cannot programmatically close a notebook to free index memory; if a workflow needs that, it goes through the SiYuan UI.
 
 **Reversal trigger.** A real workflow surfaces where agents legitimately need to manage notebook open/close state — e.g. long-running automation that must reduce kernel memory pressure, or batch operations across notebooks where agent-side close/reopen avoids index thrash.
 
@@ -44,35 +44,35 @@ Entry format:
 
 **Context.** Considered dropping `notebook_create` on the same "rare admin op" reasoning that justified removing open/close.
 
-**Decision.** Keep it. CLI `siyuan notebook create` and MCP `siyuan_notebook_create` stay.
+**Decision.** Keep it. CLI `syo notebook create` and MCP `syo_siyuan_notebook_create` stay.
 
 **Rationale.** Unlike open/close — which manage state of *existing* notebooks — creation is a one-shot scaffolding operation. An agent bootstrapping a project structure ("create a new notebook called X, add docs Y and Z") would otherwise need to break the loop and ask the user to open the SiYuan UI. That's a worse experience than letting the agent run.
 
-**Tradeoff.** In some kernel versions the new notebook lands with `closed: true` and is invisible to subsequent `siyuan_doc_get` / `siyuan_sql` reads until the user opens it in the UI. We cannot auto-open (decision #2). The MCP tool description was softened to acknowledge this honestly.
+**Tradeoff.** In some kernel versions the new notebook lands with `closed: true` and is invisible to subsequent `syo_siyuan_doc_get` / `syo_siyuan_sql` reads until the user opens it in the UI. We cannot auto-open (decision #2). The MCP tool description was softened to acknowledge this honestly.
 
 **Reversal trigger.** `notebook_create` produces "ghost" notebooks (created-then-closed) often enough that the create-and-can't-use-it footgun outweighs the bootstrap convenience.
 
 ---
 
-## 4. Unified `siyuan_doc_resolve` (replaced `_resolve` + `_hpath_by_id`)
+## 4. Unified `syo_siyuan_doc_resolve` (replaced `_resolve` + `_hpath_by_id`)
 
-**Context.** Original surface had two separate tools doing inverse lookups: `siyuan_doc_resolve(notebook, hpath) -> { ids: [...] }` and `siyuan_doc_hpath_by_id(id) -> { hpath: "..." }`. The CLI only had the hpath direction. Operations like `siyuan_doc_rename` / `_move` / `_remove` need *storage* `.sy` paths, not hpaths, so callers typically had to follow `siyuan_doc_resolve` with a manual SQL hop to fetch the storage path.
+**Context.** Original surface had two separate tools doing inverse lookups: `syo_siyuan_doc_resolve(notebook, hpath) -> { ids: [...] }` and `syo_siyuan_doc_hpath_by_id(id) -> { hpath: "..." }`. The CLI only had the hpath direction. Operations like `syo_siyuan_doc_rename` / `_move` / `_remove` need *storage* `.sy` paths, not hpaths, so callers typically had to follow `syo_siyuan_doc_resolve` with a manual SQL hop to fetch the storage path.
 
-**Decision.** Collapse into one MCP tool / one CLI subcommand named `siyuan_doc_resolve`. Accepts EITHER `id` XOR `(notebook + hpath)`. Returns an array of `ResolvedDoc { id, hpath, notebook_id, notebook_name, title, storage_path }`.
+**Decision.** Collapse into one MCP tool / one CLI subcommand named `syo_siyuan_doc_resolve`. Accepts EITHER `id` XOR `(notebook + hpath)`. Returns an array of `ResolvedDoc { id, hpath, notebook_id, notebook_name, title, storage_path }`.
 
 **Rationale.** Two tools doing inverse lookups of the same metadata is duplicate surface. Returning richer metadata up-front saves a SQL round-trip for the common follow-up (rename/move/remove all need storage_path). Mutual-exclusion is enforced in three layers — the `DocLookup` enum makes invalid states unrepresentable inside the library; clap's `ArgGroup` rejects bad CLI input at parse; the MCP handler validates and returns `invalid_params` with a field-naming message. Empty array (not error) on no-match means callers handle "didn't find it" the same way regardless of input direction.
 
-**Tradeoff.** Agents must check `docs.length > 0` rather than rely on errors. The library does one SQL `IN (...)` query joining a single `lsNotebooks` call in-memory; if a notebook id has been removed between calls, `notebook_name` is empty (indistinguishable from a literally-empty notebook name except by cross-checking `siyuan_notebook_ls`). Documented in the field doc-comment.
+**Tradeoff.** Agents must check `docs.length > 0` rather than rely on errors. The library does one SQL `IN (...)` query joining a single `lsNotebooks` call in-memory; if a notebook id has been removed between calls, `notebook_name` is empty (indistinguishable from a literally-empty notebook name except by cross-checking `syo_siyuan_notebook_ls`). Documented in the field doc-comment.
 
 **Reversal trigger.** Agents commonly want strict "exactly one match" semantics — at which point we'd add a separate tool that errors on `len != 1` rather than burdening the general case.
 
 ---
 
-## 5. CLI parity: `siyuan sql` raw SQL command
+## 5. CLI parity: `syo sql` raw SQL command
 
-**Context.** MCP had `siyuan_sql` as a read-only SQL escape hatch. CLI users had no equivalent and were limited to the typed wrappers (`siyuan search text`, `siyuan tag search`, etc.).
+**Context.** MCP had `syo_siyuan_sql` as a read-only SQL escape hatch. CLI users had no equivalent and were limited to the typed wrappers (`syo search text`, `syo tag search`, etc.).
 
-**Decision.** Add `siyuan sql --stmt "<SELECT ...>"`. Pretty-prints rows as JSON. Same read-only semantics as the MCP tool.
+**Decision.** Add `syo sql --stmt "<SELECT ...>"`. Pretty-prints rows as JSON. Same read-only semantics as the MCP tool.
 
 **Rationale.** Capability parity. An agent (or a human operator) driving both surfaces should not have to switch transports just to run an ad-hoc query.
 
@@ -106,7 +106,7 @@ Position-aware operations (`block_insert` family, `block_move`, CLI `block inser
 
 ## 7. CLI tracing always to stderr
 
-**Context.** `siyuan-cli` originally used `tracing_subscriber::fmt()` with the default writer, which goes to stdout. After merging `siyuan-mcp` into `siyuan` (decision #1), the same binary now handles JSON-RPC framing over stdio for `serve-mcp`. Stdout pollution would break the MCP transport.
+**Context.** `syo` originally used `tracing_subscriber::fmt()` with the default writer, which goes to stdout. After merging `syo-mcp` into `siyuan` (decision #1), the same binary now handles JSON-RPC framing over stdio for `serve-mcp`. Stdout pollution would break the MCP transport.
 
 **Decision.** `init_tracing` writes to stderr unconditionally. All subcommands inherit this.
 
@@ -128,13 +128,13 @@ Position-aware operations (`block_insert` family, `block_move`, CLI `block inser
 
 **Tradeoff.** Operations against closed notebooks fail with kernel errors that the agent must understand. Ergonomics regression for any workflow that wants the auto-open semantic.
 
-**Reversal trigger.** Frequent "I called `siyuan_doc_create` and it failed because the notebook was closed" reports — at which point the right fix is probably a typed error class (`SiyuanError::NotebookClosed`) plus an explicit `--ensure-opened` flag, not a silent helper.
+**Reversal trigger.** Frequent "I called `syo_siyuan_doc_create` and it failed because the notebook was closed" reports — at which point the right fix is probably a typed error class (`SiyuanError::NotebookClosed`) plus an explicit `--ensure-opened` flag, not a silent helper.
 
 ---
 
 ## 9. `serve-mcp` token tolerance carve-out
 
-**Context.** Every CLI subcommand requires `SIYUAN_TOKEN` (or `--token`); the strict `Config::resolve` errors out before dispatch when it's missing. The original standalone `siyuan-mcp` binary, in contrast, warned about a missing token and started anyway — an MCP host might be configured to inject the token at request time rather than at process spawn.
+**Context.** Every CLI subcommand requires `SIYUAN_TOKEN` (or `--token`); the strict `Config::resolve` errors out before dispatch when it's missing. The original standalone `syo-mcp` binary, in contrast, warned about a missing token and started anyway — an MCP host might be configured to inject the token at request time rather than at process spawn.
 
 **Decision.** Preserve that behaviour. The `Cmd::ServeMcp` arm runs through a separate `Config::resolve_optional_token` path that accepts `None`. All other subcommands use the strict path.
 
@@ -148,7 +148,7 @@ Position-aware operations (`block_insert` family, `block_move`, CLI `block inser
 
 ## 10. Ergonomic stage: dual-mode doc locator + format flag + doc tree
 
-**Context.** Dogfooding surfaced three rough edges. (a) `doc rename` / `doc remove` / `doc move` leaked storage paths — every call required a prior `doc resolve` and pasting back unreadable `/<nb>/<doc>.sy` strings. (b) Output-format conventions drifted across read commands: TSV from `notebook ls` / `tag ls` / `tag search` / `search text` / `search blocks`, `json-pretty` from `doc resolve`, JSON-only from `sql`, no opt-in. (c) No `doc tree` primitive existed — agents fell back to raw `siyuan sql` for filetree navigation. Plus four smaller fixes: missing `tag search --limit`, `block move` position kinds that bailed at runtime, `doc get` returning a misleading "empty doc" message for a missing id, and `sql`'s unverified read-only claim.
+**Context.** Dogfooding surfaced three rough edges. (a) `doc rename` / `doc remove` / `doc move` leaked storage paths — every call required a prior `doc resolve` and pasting back unreadable `/<nb>/<doc>.sy` strings. (b) Output-format conventions drifted across read commands: TSV from `notebook ls` / `tag ls` / `tag search` / `search text` / `search blocks`, `json-pretty` from `doc resolve`, JSON-only from `sql`, no opt-in. (c) No `doc tree` primitive existed — agents fell back to raw `syo sql` for filetree navigation. Plus four smaller fixes: missing `tag search --limit`, `block move` position kinds that bailed at runtime, `doc get` returning a misleading "empty doc" message for a missing id, and `sql`'s unverified read-only claim.
 
 **Decision.** Land all seven items (A–G in the spec) as atomic semantic commits. Reuse the `DocLookup` enum and `parse_doc_lookup` helper from `doc resolve` on rename/remove/move, plus a new `resolve_one_storage(client, lookup) -> Result<(NotebookId, String), SiyuanError>` that maps 0 hits to `NotFound` and >1 to `AmbiguousPath`. Add `siyuan-model::doc_tree`, which pulls the subtree via one bounded `SELECT`, builds the tree from `path` parent-prefix relationships, slices to depth, and computes `doc_count_recursive` from the FULL preload so a depth=1 view still reports correct descendant counts. Propagate `--format <agent-md|json|json-pretty>` to the five list commands and `doc resolve`, preserving each command's current default byte shape exactly (`agent-md` is rejected for `doc resolve` since its output is structured metadata).
 
@@ -162,7 +162,7 @@ Position-aware operations (`block_insert` family, `block_move`, CLI `block inser
 
 ## 11. SQL read-only enforcement is the harness's job, not the kernel's
 
-**Context.** `siyuan sql` / `siyuan_sql` originally rejected non-read-only input with a trim/lowercase leading-keyword check (`select` or `with`). The surrounding documentation said "the kernel rejects INSERT/UPDATE/DELETE/DDL", with the implication that our client-side check was just a UX nicety. An empirical probe and a source-code read of the SiYuan kernel together disproved that.
+**Context.** `syo sql` / `syo_siyuan_sql` originally rejected non-read-only input with a trim/lowercase leading-keyword check (`select` or `with`). The surrounding documentation said "the kernel rejects INSERT/UPDATE/DELETE/DDL", with the implication that our client-side check was just a UX nicety. An empirical probe and a source-code read of the SiYuan kernel together disproved that.
 
 The kernel's `/api/query/sql` handler dispatches to `sql.Query(stmt, limit)`, which tries two SQL parsers in sequence (rqlite/sql for SQLite-leaning input, vitess sqlparser as MySQL-leaning fallback) and falls through to `db.Query(stmt)` for anything that doesn't classify as a `Select`/`Union`. The 88250 fork of `mattn/go-sqlite3` performs a lazy `sqlite3_step` — it only steps when `Rows::Next` is called — so a DML/DDL statement reaching `db.Query` is *prepared* but never *executed* if the kernel's wrapper sees zero result columns and exits early. That is the entire reason a probe of `DELETE FROM blocks WHERE 1=1` left the row count untouched: not because the kernel filters writes, but because three independent components (SQLite parser fall-through, kernel's `nil cols → return`, driver's lazy step) happen to short-circuit before the write effect lands. SiYuan security advisories GHSA-jqwg-75qf-vmf9 and GHSA-j7wh-x834-p3r7 confirm `/api/query/sql` historically *did* execute writes; the current kernel only gates the endpoint via admin-role + non-publish-mode middleware, neither of which is a SQL-level filter.
 

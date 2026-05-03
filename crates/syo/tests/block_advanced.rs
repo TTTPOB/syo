@@ -1,7 +1,7 @@
 //! Advanced block API integration tests.
 //!
 //! Run with:
-//!   cargo test -p siyuan-cli --test block_advanced -- --ignored --test-threads=1
+//!   cargo test -p syo --test block_advanced -- --ignored --test-threads=1
 
 mod common;
 
@@ -749,10 +749,10 @@ async fn delete_block_rejects_document_root() {
     let f = boot_with_seed().await.expect("boot");
 
     // Try to delete the document root block via delete_block — must be rejected.
-    let args = siyuan_cli::commands::block::delete::DeleteBlockArgs {
+    let args = syo::commands::block::delete::DeleteBlockArgs {
         id: f.doc_id.to_string(),
     };
-    let result = siyuan_cli::commands::block::delete::run(&f.client, args).await;
+    let result = syo::commands::block::delete::run(&f.client, args).await;
 
     match result {
         Err(e) => {
@@ -783,10 +783,10 @@ async fn delete_block_allows_non_document_blocks() {
         .find(|b| b.markdown == "A target paragraph.")
         .expect("seed contains 'A target paragraph.'");
 
-    let args = siyuan_cli::commands::block::delete::DeleteBlockArgs {
+    let args = syo::commands::block::delete::DeleteBlockArgs {
         id: para.id.to_string(),
     };
-    let result = siyuan_cli::commands::block::delete::run(&f.client, args).await;
+    let result = syo::commands::block::delete::run(&f.client, args).await;
 
     assert!(result.is_ok(), "should allow deletion of a paragraph block");
 }

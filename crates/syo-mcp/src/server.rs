@@ -12,13 +12,13 @@ use siyuan_client::SiyuanClient;
 
 use crate::registry::Handler;
 
-pub(crate) struct SiyuanMcpServer {
+pub(crate) struct SyoMcpServer {
     client: Arc<SiyuanClient>,
     tools: Vec<Tool>,
     handlers: HashMap<&'static str, Handler>,
 }
 
-impl SiyuanMcpServer {
+impl SyoMcpServer {
     pub(crate) fn new(
         client: Arc<SiyuanClient>,
         tools: Vec<Tool>,
@@ -41,10 +41,10 @@ impl SiyuanMcpServer {
     }
 }
 
-impl ServerHandler for SiyuanMcpServer {
+impl ServerHandler for SyoMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("siyuan-mcp", env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new("syo-mcp", env!("CARGO_PKG_VERSION")))
     }
 
     async fn list_tools(

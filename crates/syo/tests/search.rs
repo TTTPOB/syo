@@ -1,6 +1,6 @@
 //! Integration tests for search text and search blocks.
 //!
-//! Run with: `cargo test -p siyuan-cli --test search -- --ignored --test-threads=1`
+//! Run with: `cargo test -p syo --test search -- --ignored --test-threads=1`
 
 mod common;
 

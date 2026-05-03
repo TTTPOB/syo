@@ -1,8 +1,8 @@
-# Siyuan Operations CLI
+# syo
 
 An agent-friendly harness for [SiYuan](https://github.com/siyuan-note/siyuan), built around its kernel HTTP API. Ships **one binary** (`syo`) on top of a typed Rust client. The same binary serves a CLI for human/script use and an MCP (Model Context Protocol) server for LLM agents — invoked as `syo serve-mcp`.
 
-Library crates (`siyuan-types`, `siyuan-client`, `siyuan-model`, `siyuan-render`) are reusable independently of the binary.
+Library crates (`siyuan-types`, `siyuan-client`, `siyuan-model`, `siyuan-render`, `syo-mcp`) are reusable independently of the binary.
 
 > 🇨🇳 中文版本见 [`docs/readme/README.cn.md`](docs/readme/README.cn.md).
 > 🧭 Design tradeoffs and reversal triggers are logged in [`docs/decisions.md`](docs/decisions.md).
@@ -10,7 +10,7 @@ Library crates (`siyuan-types`, `siyuan-client`, `siyuan-model`, `siyuan-render`
 ## Status
 
 v1, single-workspace, single-user. Targets the SiYuan kernel HTTP API as of 2026-05.
-The kernel itself is the source of truth — there is no local cache, snapshot token, or two-phase commit. SQL-indexed reads (search, tag, raw `siyuan_sql`) are eventually consistent and may lag mutations by ~100–500 ms.
+The kernel itself is the source of truth — there is no local cache, snapshot token, or two-phase commit. SQL-indexed reads (search, tag, raw `syo_siyuan_sql`) are eventually consistent and may lag mutations by ~100–500 ms.
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ cargo build --release
 ./target/release/syo --help
 ```
 
-For local hacking `cargo run -p siyuan-cli -- <args>` works too.
+For local hacking `cargo run -p syo -- <args>` works too.
 
 ## Configure
 
@@ -162,7 +162,7 @@ syo asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 ```json
 {
   "mcpServers": {
-    "siyuan": {
+    "syo-siyuan": {
       "command": "/abs/path/to/syo",
       "args": ["serve-mcp"],
       "env": {
@@ -176,28 +176,28 @@ syo asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 To set the request timeout per server, add `"args": ["serve-mcp", "--timeout-ms", "60000"]`.
 
-Tools exposed (one-line summary; full agent-friendly descriptions live in `crates/siyuan-mcp/src/registry.rs`):
+Tools exposed (one-line summary; full agent-friendly descriptions live in `crates/syo-mcp/src/registry.rs`):
 
 | Tool                       | Purpose                                              |
 | -------------------------- | ---------------------------------------------------- |
-| `siyuan_status`            | Kernel reachability + version.                       |
-| `siyuan_doc_get`           | Load a doc as agent-md (default) or JSON, paginated. |
-| `siyuan_block_get`         | Raw kramdown of one block.                           |
-| `siyuan_doc_create`        | Create a doc from GFM markdown.                      |
-| `siyuan_block_update`      | Replace block content.                               |
-| `siyuan_block_insert`      | Add a new block.                                    |
-| `siyuan_block_move`        | Reposition a block (keeps id + children).            |
-| `siyuan_block_delete`      | Permanently delete a block + subtree.                |
-| `siyuan_attrs_get` / `siyuan_attrs_set` | Read / partial-update block attributes. |
-| `siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | Notebook management. (open/close not exposed.) |
-| `siyuan_doc_resolve`       | Unified lookup by id OR (notebook + hpath); returns array of doc metadata including `storage_path`. |
-| `siyuan_doc_tree`          | List a notebook/folder subtree as a tree (id XOR notebook[+hpath], `depth` 1..N or `all`). |
-| `siyuan_doc_rename` / `_move` / `_remove` | Filetree ops. Accept id XOR (notebook + hpath); the harness resolves storage `.sy` paths internally. |
-| `siyuan_tag_ls` / `siyuan_tag_search` | Enumerate tags / find blocks by tag. |
-| `siyuan_search_text`       | LIKE-substring search across the `blocks` table.     |
-| `siyuan_sql`               | Read-only raw SQL. Power tool — escape values yourself. |
-| `siyuan_asset_upload`      | Upload a local file as a SiYuan asset.               |
-| `siyuan_graph_neighborhood`| BFS over the link graph (depth ≤ 8, capped 500 nodes / 1000 edges). |
+| `syo_siyuan_status`            | Kernel reachability + version.                       |
+| `syo_siyuan_doc_get`           | Load a doc as agent-md (default) or JSON, paginated. |
+| `syo_siyuan_block_get`         | Raw kramdown of one block.                           |
+| `syo_siyuan_doc_create`        | Create a doc from GFM markdown.                      |
+| `syo_siyuan_block_update`      | Replace block content.                               |
+| `syo_siyuan_block_insert`      | Add a new block.                                    |
+| `syo_siyuan_block_move`        | Reposition a block (keeps id + children).            |
+| `syo_siyuan_block_delete`      | Permanently delete a block + subtree.                |
+| `syo_siyuan_attrs_get` / `syo_siyuan_attrs_set` | Read / partial-update block attributes. |
+| `syo_siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | Notebook management. (open/close not exposed.) |
+| `syo_siyuan_doc_resolve`       | Unified lookup by id OR (notebook + hpath); returns array of doc metadata including `storage_path`. |
+| `syo_siyuan_doc_tree`          | List a notebook/folder subtree as a tree (id XOR notebook[+hpath], `depth` 1..N or `all`). |
+| `syo_siyuan_doc_rename` / `_move` / `_remove` | Filetree ops. Accept id XOR (notebook + hpath); the harness resolves storage `.sy` paths internally. |
+| `syo_siyuan_tag_ls` / `syo_siyuan_tag_search` | Enumerate tags / find blocks by tag. |
+| `syo_siyuan_search_text`       | LIKE-substring search across the `blocks` table.     |
+| `syo_siyuan_sql`               | Read-only raw SQL. Power tool — escape values yourself. |
+| `syo_siyuan_asset_upload`      | Upload a local file as a SiYuan asset.               |
+| `syo_siyuan_graph_neighborhood`| BFS over the link graph (depth ≤ 8, capped 500 nodes / 1000 edges). |
 
 Mutating tools wrap their response as `{"data": <payload>, "_hint": "..."}`. The hint surfaces post-call expectations (SQL index lag, follow-up tool to call, etc.) and is informational only.
 
@@ -209,8 +209,8 @@ If you only want a typed Rust client, depend on `siyuan-client`:
 
 ```toml
 [dependencies]
-siyuan-client = { git = "https://github.com/tpob/siyuan-cli" }
-siyuan-types  = { git = "https://github.com/tpob/siyuan-cli" }
+siyuan-client = { git = "https://github.com/tpob/syo" }
+siyuan-types  = { git = "https://github.com/tpob/syo" }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -238,7 +238,7 @@ The v1 surface deliberately omits the following — they are out of scope for th
 - **Two-phase plan / apply** and `--dry-run` modes. Every write hits the kernel directly.
 - **Concurrency guards** (`expected_hash`, snapshot tokens). Last-writer-wins.
 - **Notebook open/close.** Removed from the public surface; the harness does not handle user-closed notebooks. See `docs/decisions.md` §2.
-- **Attribute view (AV) editing** — read access is available via `siyuan_sql`, mutations are not.
+- **Attribute view (AV) editing** — read access is available via `syo_siyuan_sql`, mutations are not.
 - **Super-block creation and layout mutations.** Existing super-blocks are surfaced as a read-only `:::sy-superblock` fence.
 - **WebSocket / push notifications.** All calls are synchronous HTTP.
 - **History, trash, daily notes, templates** — use the SiYuan UI; the kernel already owns these flows.
@@ -258,8 +258,8 @@ crates/
   siyuan-client/   # typed reqwest wrapper over the kernel HTTP API
   siyuan-model/    # DocBundle, load_doc, sectioning, pagination, graph BFS, tags, doc-meta resolve
   siyuan-render/   # agent-md + canonical JSON renderers
-  siyuan-cli/      # `syo` binary (clap) — provides both CLI and `serve-mcp`
-  siyuan-mcp/      # library crate consumed by siyuan-cli's `serve-mcp` subcommand
+  syo/             # `syo` binary (clap) — provides both CLI and `serve-mcp`
+  syo-mcp/         # library crate consumed by syo's `serve-mcp` subcommand
   siyuan-testkit/  # Podman-driven disposable SiYuan instances
 docs/
   decisions.md          # design tradeoffs log

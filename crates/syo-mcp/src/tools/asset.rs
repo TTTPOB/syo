@@ -18,7 +18,7 @@ pub async fn upload(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
     Ok(with_hint(
         json!({ "asset_path": asset_path }),
         "Asset stored at the returned path. To embed it, insert a markdown image like \
-         `![alt](<asset_path>)` via siyuan_block_insert, or include it in siyuan_doc_create \
+         `![alt](<asset_path>)` via syo_siyuan_block_insert, or include it in syo_siyuan_doc_create \
          markdown. The path is kernel-relative and usable directly in SiYuan markdown.",
     ))
 }

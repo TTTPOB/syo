@@ -1579,50 +1579,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
-name = "siyuan-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "insta",
- "reqwest",
- "serde",
- "serde_json",
- "siyuan-client",
- "siyuan-mcp",
- "siyuan-model",
- "siyuan-render",
- "siyuan-testkit",
- "siyuan-types",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "siyuan-client"
 version = "0.1.0"
 dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "siyuan-types",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "siyuan-mcp"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "rmcp",
- "serde",
- "serde_json",
- "siyuan-client",
- "siyuan-model",
- "siyuan-render",
  "siyuan-types",
  "tokio",
  "tracing",
@@ -1773,6 +1735,44 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "syo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "insta",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "siyuan-client",
+ "siyuan-model",
+ "siyuan-render",
+ "siyuan-testkit",
+ "siyuan-types",
+ "syo-mcp",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "syo-mcp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "siyuan-client",
+ "siyuan-model",
+ "siyuan-render",
+ "siyuan-types",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

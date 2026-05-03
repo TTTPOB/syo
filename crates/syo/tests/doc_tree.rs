@@ -1,6 +1,6 @@
 //! Integration tests for `syo doc tree`.
 //!
-//! Run with: `cargo test -p siyuan-cli --test doc_tree -- --ignored --test-threads=1`
+//! Run with: `cargo test -p syo --test doc_tree -- --ignored --test-threads=1`
 //!
 //! The tests boot a fresh kernel container per scenario, seed three nested
 //! docs (`/A`, `/A/B`, `/A/B/C`), and exercise the CLI binary across the

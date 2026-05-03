@@ -1,6 +1,6 @@
 //! Integration tests for tag listing, tag search, raw SQL, and relations.
 //!
-//! Run with: `cargo test -p siyuan-cli --test tag_search -- --ignored --test-threads=1`
+//! Run with: `cargo test -p syo --test tag_search -- --ignored --test-threads=1`
 
 mod common;
 

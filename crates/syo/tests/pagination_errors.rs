@@ -1,6 +1,6 @@
 //! Integration tests for pagination and error paths.
 //!
-//! Run with: `cargo test -p siyuan-cli --test pagination_errors -- --ignored --test-threads=1`
+//! Run with: `cargo test -p syo --test pagination_errors -- --ignored --test-threads=1`
 //!
 //! Test #9 (parse_error_when_block_id_malformed) is skipped because BlockId::parse
 //! validation is already exhaustively covered by unit tests in siyuan-types/src/id.rs.

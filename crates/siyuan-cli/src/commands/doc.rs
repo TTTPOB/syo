@@ -515,6 +515,7 @@ pub async fn run(client: &SiyuanClient, cmd: DocCmd) -> Result<()> {
         }
         DocCmd::Move(a) => {
             let to_nb = NotebookId::parse(&a.to_notebook).context("--to-notebook")?;
+            validate_target_parent_exists(client, &to_nb, &a.to_path).await?;
 
             // Build one DocLookup per source. The clap `ArgGroup` already
             // enforces that exactly one of `from_ids` / `from_hpaths` is
@@ -688,6 +689,51 @@ fn build_move_source_lookups(
         });
     }
     Ok(lookups)
+}
+
+/// Validate that the target parent folder exists in the destination notebook
+/// before attempting a doc move. The kernel's `moveDocs` returns a cryptic
+/// "not found" error when the target folder is missing; this check produces a
+/// clear, actionable error message instead.
+async fn validate_target_parent_exists(
+    client: &SiyuanClient,
+    notebook: &NotebookId,
+    to_path: &str,
+) -> Result<()> {
+    // Get parent path. If to_path is "/Foo/Bar", parent is "/Foo"
+    // If parent is "/" or to_path is "/Something" (depth 1), parent is "/" which always exists
+    let parent = match to_path.rfind('/') {
+        Some(idx) if idx > 0 => &to_path[..idx],
+        _ => return Ok(()), // parent is root "/", always exists
+    };
+    if parent.is_empty() || parent == "/" {
+        return Ok(());
+    }
+
+    // Check if parent exists via SQL
+    #[derive(serde::Deserialize)]
+    #[allow(dead_code)]
+    struct R {
+        id: String,
+    }
+    let rows: Vec<R> = client
+        .sql_typed(&format!(
+            "SELECT id FROM blocks WHERE box = '{}' AND type = 'd' AND hpath LIKE '{}%' LIMIT 1",
+            notebook.as_str(),
+            parent
+        ))
+        .await?;
+
+    if rows.is_empty() {
+        bail!(
+            "target parent folder \"{}\" does not exist in notebook {}. \
+             create-doc auto-creates intermediate folders, but doc move requires \
+             the target folder to exist first.",
+            parent,
+            notebook.as_str()
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]

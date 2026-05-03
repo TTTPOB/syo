@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{ArgGroup, Args};
 
 use siyuan_client::SiyuanClient;
@@ -32,11 +32,15 @@ pub struct RenameArgs {
 }
 
 pub async fn run(client: &SiyuanClient, args: RenameArgs) -> Result<()> {
-    let lookup = build_single_doc_lookup(
-        args.id.as_deref(),
-        args.notebook.as_deref(),
-        args.hpath.as_deref(),
-    )?;
+    let notebook = match &args.notebook {
+        Some(nb) => Some(
+            syo_core::notebook::resolve_notebook_id(client, nb)
+                .await
+                .context("--notebook")?,
+        ),
+        None => None,
+    };
+    let lookup = build_single_doc_lookup(args.id.as_deref(), notebook, args.hpath.as_deref())?;
     syo_core::doc::rename(
         client,
         syo_core::doc::RenameDocInput {

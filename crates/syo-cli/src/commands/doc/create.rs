@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use clap::Args;
 
 use siyuan_client::SiyuanClient;
-use siyuan_types::NotebookId;
 
 /// Create a new document in a notebook from GFM markdown.
 ///
@@ -53,7 +52,9 @@ pub struct CreateDocArgs {
 }
 
 pub async fn run(client: &SiyuanClient, args: CreateDocArgs) -> Result<()> {
-    let notebook = NotebookId::parse(&args.notebook).context("--notebook")?;
+    let notebook = syo_core::notebook::resolve_notebook_id(client, &args.notebook)
+        .await
+        .context("--notebook")?;
     let markdown = super::super::read_markdown_input(&args.markdown_file)?;
     let id = syo_core::doc::create(
         client,

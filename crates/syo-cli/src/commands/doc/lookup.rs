@@ -10,13 +10,13 @@ use siyuan_types::{BlockId, NotebookId};
 /// get the same error shape as the command line.
 pub(super) fn build_single_doc_lookup(
     id: Option<&str>,
-    notebook: Option<&str>,
+    notebook: Option<NotebookId>,
     hpath: Option<&str>,
 ) -> Result<DocLookup> {
     match (id, notebook, hpath) {
         (Some(id), None, None) => Ok(DocLookup::ById(BlockId::parse(id.trim()).context("--id")?)),
         (None, Some(nb), Some(hp)) => Ok(DocLookup::ByHpath {
-            notebook: NotebookId::parse(nb.trim()).context("--notebook")?,
+            notebook: nb,
             hpath: hp.to_string(),
         }),
         (Some(_), _, _) => Err(anyhow!(

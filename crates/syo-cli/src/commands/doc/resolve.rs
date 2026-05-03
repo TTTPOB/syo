@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::{ArgGroup, Args};
 
 use siyuan_client::SiyuanClient;
@@ -35,11 +35,15 @@ pub struct ResolveArgs {
 }
 
 pub async fn run(client: &SiyuanClient, args: ResolveArgs) -> Result<()> {
-    let lookup = build_single_doc_lookup(
-        args.id.as_deref(),
-        args.notebook.as_deref(),
-        args.hpath.as_deref(),
-    )?;
+    let notebook = match &args.notebook {
+        Some(nb) => Some(
+            syo_core::notebook::resolve_notebook_id(client, nb)
+                .await
+                .context("--notebook")?,
+        ),
+        None => None,
+    };
+    let lookup = build_single_doc_lookup(args.id.as_deref(), notebook, args.hpath.as_deref())?;
     let docs = syo_core::doc::resolve(client, lookup).await?.docs;
     let s = match args.format {
         OutputFormat::AgentMd => {

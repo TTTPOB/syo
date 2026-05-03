@@ -1,10 +1,10 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use clap::{ArgGroup, Args};
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::doc_meta::DocLookup;
 use siyuan_model::doc_tree::{Depth, render_agent_md as render_tree_md};
-use siyuan_types::{BlockId, NotebookId};
+
+use super::lookup::build_single_doc_lookup;
 
 use crate::output::OutputFormat;
 
@@ -69,7 +69,18 @@ fn parse_depth_arg(s: &str) -> Result<DepthArg, String> {
 }
 
 pub async fn run(client: &SiyuanClient, args: TreeArgs) -> Result<()> {
-    let lookup = build_tree_lookup(args.id.as_deref(), args.notebook.as_deref(), &args.hpath)?;
+    let notebook = match &args.notebook {
+        Some(nb) => Some(
+            syo_core::notebook::resolve_notebook_id(client, nb)
+                .await
+                .context("--notebook")?,
+        ),
+        None => None,
+    };
+    // hpath defaults to "/" even when --notebook is absent, so only pass it
+    // when we actually have a notebook to avoid spurious conflicts.
+    let hpath = notebook.as_ref().map(|_| args.hpath.as_str());
+    let lookup = build_single_doc_lookup(args.id.as_deref(), notebook, hpath.as_deref())?;
     let depth = args.depth.0;
     let tree = syo_core::doc::tree(client, syo_core::doc::TreeInput { lookup, depth })
         .await?
@@ -86,23 +97,6 @@ pub async fn run(client: &SiyuanClient, args: TreeArgs) -> Result<()> {
         println!();
     }
     Ok(())
-}
-
-/// Build a `DocLookup` for `doc tree`.
-fn build_tree_lookup(id: Option<&str>, notebook: Option<&str>, hpath: &str) -> Result<DocLookup> {
-    match (id, notebook) {
-        (Some(id), None) => Ok(DocLookup::ById(BlockId::parse(id.trim()).context("--id")?)),
-        (None, Some(nb)) => Ok(DocLookup::ByHpath {
-            notebook: NotebookId::parse(nb.trim()).context("--notebook")?,
-            hpath: hpath.to_string(),
-        }),
-        (Some(_), Some(_)) => Err(anyhow!(
-            "--id conflicts with --notebook; pick exactly one input mode"
-        )),
-        (None, None) => Err(anyhow!(
-            "provide either --id, or --notebook (with optional --hpath)"
-        )),
-    }
 }
 
 #[cfg(test)]

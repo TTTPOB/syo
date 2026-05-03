@@ -314,3 +314,48 @@ async fn append_section_inserts_at_section_end() {
         "inserted block ({new_idx}) must come before next h2 ({next_heading_idx})"
     );
 }
+
+// ---------------------------------------------------------------------------
+// FIX 4: doc move gives clear error for missing target folder
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore]
+async fn doc_move_rejects_missing_target_folder() {
+    let f = boot_with_seed().await.expect("boot");
+
+    // Create a doc to move
+    let doc_id = f
+        .client
+        .create_doc_with_md(&f.notebook_id, "/MoveSource", "# Source")
+        .await
+        .expect("create source");
+
+    // Try to move it to a path where the parent folder doesn't exist.
+    // The CLI handler should give a clear error, not a cryptic "block not found".
+    let args = siyuan_cli::commands::doc::MoveArgs {
+        from_ids: vec![doc_id.to_string()],
+        notebook: None,
+        from_hpaths: vec![],
+        to_notebook: f.notebook_id.to_string(),
+        to_path: "/NonExistentFolder/Target".to_string(),
+    };
+
+    let cmd = siyuan_cli::commands::doc::DocCmd::Move(args);
+    let result = siyuan_cli::commands::doc::run(&f.client, cmd).await;
+
+    match result {
+        Err(e) => {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("parent folder"),
+                "error should mention parent folder: {msg}"
+            );
+            assert!(
+                msg.contains("NonExistentFolder"),
+                "error should name the missing folder: {msg}"
+            );
+        }
+        Ok(_) => panic!("should have returned an error for missing target folder"),
+    }
+}

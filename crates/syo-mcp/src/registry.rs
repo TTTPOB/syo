@@ -157,7 +157,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              `syo_siyuan_block_insert` adds blocks under an existing document. \
              Reach for syo_siyuan_doc_create only to mint a NEW document.\n\
              \n\
-             Inputs: `notebook` (required) is a notebook id from `syo_siyuan_notebook_ls`. \
+             Inputs: `notebook` (required) is a notebook id or display name from `syo_siyuan_notebook_ls`. \
              `hpath` (required) is a HUMAN path inside the notebook, e.g. `/Folder/Title`; \
              must start with `/`. NOT to be confused with on-disk storage paths (`.sy`-suffixed) \
              — hpaths are titles separated by `/`, storage paths look like \
@@ -177,7 +177,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              {HPATH_NOTE}"
             ),
-            r#"{"type":"object","required":["notebook","hpath","markdown"],"properties":{"notebook":{"type":"string"},"hpath":{"type":"string","description":"Human path e.g. /Folder/Title"},"markdown":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["notebook","hpath","markdown"],"properties":{"notebook":{"type":"string","description":"Notebook id or display name"},"hpath":{"type":"string","description":"Human path e.g. /Folder/Title"},"markdown":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::doc::create_doc(&c, args).await }
@@ -526,7 +526,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              changes the display name only — the on-disk folder and the notebook id remain \
              stable, so storage paths inside it are unaffected.\n\
              \n\
-             Inputs: `id` (required) is the notebook id (from `syo_siyuan_notebook_ls`); \
+             Inputs: `id` (required) is the notebook id or display name (from `syo_siyuan_notebook_ls`); \
              `name` (required) is the new display name.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
@@ -537,7 +537,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Example:\n\
                in:  { \"id\": \"20260501000000-nb00001\", \"name\": \"Triage\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["id","name"],"properties":{"id":{"type":"string"},"name":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["id","name"],"properties":{"id":{"type":"string","description":"Notebook id or display name"},"name":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::notebook::rename(&c, args).await }
@@ -555,7 +555,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              this tool destroys the whole notebook and is irreversible. Verify the \
              notebook id from `syo_siyuan_notebook_ls` before calling.\n\
              \n\
-             Inputs: `id` (required) is the notebook id.\n\
+             Inputs: `id` (required) is the notebook id or display name.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
              syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
@@ -565,7 +565,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Example:\n\
                in:  { \"id\": \"20260501000000-nb00001\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string","description":"Notebook id or display name"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::notebook::remove(&c, args).await }
@@ -612,7 +612,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              {HPATH_NOTE}"
             ),
-            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"}},"additionalProperties":true}"#,
+            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id or display name (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::resolve(&c, args).await }
@@ -657,7 +657,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              {HPATH_NOTE}"
             ),
-            r#"{"type":"object","required":["title"],"properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"},"title":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["title"],"properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id or display name (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"},"title":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::rename_doc(&c, args).await }
@@ -686,7 +686,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
                  fields must be supplied together; `notebook` here is the SOURCE \
                  notebook (distinct from `to_notebook`).\n\
              Destination is the same shape in both modes:\n\
-               * `to_notebook` (string, required): DESTINATION notebook id.\n\
+               * `to_notebook` (string, required): DESTINATION notebook id or display name.\n\
                * `to_path` (string, required): destination FOLDER as an hpath (e.g. \
                  `/Projects` or `/`). For folders the hpath and storage path coincide \
                  because folders carry no `.sy` suffix. Each source's own `.sy` filename \
@@ -710,7 +710,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              {HPATH_NOTE}"
             ),
-            r#"{"type":"object","required":["to_notebook","to_path"],"properties":{"from_ids":{"type":"array","items":{"type":"string"},"description":"Source document ids (use this OR notebook+from_hpaths)"},"notebook":{"type":"string","description":"SOURCE notebook id (use with from_hpaths)"},"from_hpaths":{"type":"array","items":{"type":"string"},"description":"Source hpaths inside `notebook` (use with notebook)"},"to_notebook":{"type":"string","description":"DESTINATION notebook id"},"to_path":{"type":"string","description":"Destination folder hpath (e.g. /Projects)"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["to_notebook","to_path"],"properties":{"from_ids":{"type":"array","items":{"type":"string"},"description":"Source document ids (use this OR notebook+from_hpaths)"},"notebook":{"type":"string","description":"SOURCE notebook id or display name (use with from_hpaths)"},"from_hpaths":{"type":"array","items":{"type":"string"},"description":"Source hpaths inside `notebook` (use with notebook)"},"to_notebook":{"type":"string","description":"DESTINATION notebook id or display name"},"to_path":{"type":"string","description":"Destination folder hpath (e.g. /Projects)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::move_doc(&c, args).await }
@@ -762,7 +762,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              {HPATH_NOTE}"
             ),
-            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook[+hpath])"},"notebook":{"type":"string","description":"Notebook id (use with optional hpath)"},"hpath":{"type":"string","description":"Human path inside `notebook`; default \"/\" yields virtual root","default":"/"},"depth":{"oneOf":[{"type":"integer","minimum":1},{"type":"string","enum":["all"]}],"description":"Levels of descendants (default 1; 0 rejected)","default":1}},"additionalProperties":true}"#,
+            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook[+hpath])"},"notebook":{"type":"string","description":"Notebook id or display name (use with optional hpath)"},"hpath":{"type":"string","description":"Human path inside `notebook`; default \"/\" yields virtual root","default":"/"},"depth":{"oneOf":[{"type":"integer","minimum":1},{"type":"string","enum":["all"]}],"description":"Levels of descendants (default 1; 0 rejected)","default":1}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::tree(&c, args).await }
@@ -806,7 +806,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              {HPATH_NOTE}"
             ),
-            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"}},"additionalProperties":true}"#,
+            r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id or display name (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::filetree::remove_doc(&c, args).await }

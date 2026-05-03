@@ -243,12 +243,7 @@ pub(crate) fn parse_depth(map: &Map<String, Value>) -> Result<Depth, McpError> {
 pub async fn tree(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let mut map = ensure_object(args)?;
     // Pre-resolve notebook name→id before passing to pure parser.
-    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
-        if super::util::is_present(Some(nb)) {
-            let resolved = super::util::resolve_notebook_id(client, nb).await?;
-            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
-        }
-    }
+    super::util::pre_resolve_notebook(&mut map, client, "notebook").await?;
     let lookup = parse_tree_lookup(&map)?;
     let depth = parse_depth(&map)?;
     let output = syo_core::doc::tree(client, syo_core::doc::TreeInput { lookup, depth })
@@ -268,12 +263,7 @@ pub async fn tree(client: &SiyuanClient, args: Value) -> Result<Value, McpError>
 pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let mut map = ensure_object(args)?;
     // Pre-resolve notebook name→id before passing to pure parser.
-    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
-        if super::util::is_present(Some(nb)) {
-            let resolved = super::util::resolve_notebook_id(client, nb).await?;
-            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
-        }
-    }
+    super::util::pre_resolve_notebook(&mut map, client, "notebook").await?;
     let lookup = parse_doc_lookup(&map)?;
     let output = syo_core::doc::resolve(client, lookup)
         .await
@@ -284,12 +274,7 @@ pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
 pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let mut map = ensure_object(args)?;
     // Pre-resolve notebook name→id before passing to pure parser.
-    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
-        if super::util::is_present(Some(nb)) {
-            let resolved = super::util::resolve_notebook_id(client, nb).await?;
-            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
-        }
-    }
+    super::util::pre_resolve_notebook(&mut map, client, "notebook").await?;
     let lookup = parse_doc_lookup(&map)?;
     let title = required_string(&map, "title")?;
 
@@ -307,21 +292,8 @@ pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
 pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let mut map = ensure_object(args)?;
     // Pre-resolve notebook name→id before passing to pure parser.
-    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
-        if super::util::is_present(Some(nb)) {
-            let resolved = super::util::resolve_notebook_id(client, nb).await?;
-            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
-        }
-    }
-    if let Some(nb) = map.get("to_notebook").and_then(|v| v.as_str()) {
-        if super::util::is_present(Some(nb)) {
-            let resolved = super::util::resolve_notebook_id(client, nb).await?;
-            map.insert(
-                "to_notebook".to_string(),
-                Value::String(resolved.to_string()),
-            );
-        }
-    }
+    super::util::pre_resolve_notebook(&mut map, client, "notebook").await?;
+    super::util::pre_resolve_notebook(&mut map, client, "to_notebook").await?;
     let source_lookups = parse_doc_lookup_batch(&map)?;
     let to_notebook = NotebookId::parse(&required_string(&map, "to_notebook")?)
         .map_err(|e| McpError::invalid_params(format!("invalid to_notebook id: {e}"), None))?;
@@ -349,12 +321,7 @@ pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpEr
 pub async fn remove_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let mut map = ensure_object(args)?;
     // Pre-resolve notebook name→id before passing to pure parser.
-    if let Some(nb) = map.get("notebook").and_then(|v| v.as_str()) {
-        if super::util::is_present(Some(nb)) {
-            let resolved = super::util::resolve_notebook_id(client, nb).await?;
-            map.insert("notebook".to_string(), Value::String(resolved.to_string()));
-        }
-    }
+    super::util::pre_resolve_notebook(&mut map, client, "notebook").await?;
     let lookup = parse_doc_lookup(&map)?;
 
     syo_core::doc::remove(client, syo_core::doc::RemoveDocInput { lookup })

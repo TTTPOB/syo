@@ -86,19 +86,52 @@ pub fn with_hint(payload: Value, hint: &str) -> Value {
 /// Resolve a user-supplied string (id or name) to a [`NotebookId`].
 ///
 /// Wraps `syo_core::notebook::resolve_notebook_id` and maps errors to MCP
-/// `invalid_params` so every handler doesn't repeat the error conversion.
+/// `invalid_params` with context-specific messages.
 pub async fn resolve_notebook_id(
     client: &SiyuanClient,
     input: &str,
 ) -> Result<NotebookId, McpError> {
     syo_core::notebook::resolve_notebook_id(client, input)
         .await
-        .map_err(|e| McpError::invalid_params(format!("invalid notebook: {:#}", e), None))
+        .map_err(|e| {
+            use siyuan_types::SiyuanError;
+            match e {
+                SiyuanError::NotebookNotFound { name: _ } => {
+                    McpError::invalid_params(
+                        format!("notebook {input:?} not found. Use syo_siyuan_notebook_ls to list available notebooks."),
+                        None,
+                    )
+                }
+                SiyuanError::AmbiguousNotebook { name: _, candidates } => {
+                    McpError::invalid_params(
+                        format!("ambiguous notebook name {input:?} — candidates: {candidates}. Use the notebook id instead."),
+                        None,
+                    )
+                }
+                _ => McpError::invalid_params(format!("invalid notebook: {e}"), None),
+            }
+        })
 }
 
 /// Treat whitespace-only inputs as absent.
 pub(crate) fn is_present(s: Option<&str>) -> bool {
     s.is_some_and(|v| !v.trim().is_empty())
+}
+
+/// Resolve a notebook name to an id in the given JSON map, mutating the map
+/// in place so downstream pure-parsers see the resolved id string.
+pub(crate) async fn pre_resolve_notebook(
+    map: &mut Map<String, Value>,
+    client: &SiyuanClient,
+    key: &str,
+) -> Result<(), McpError> {
+    if let Some(nb) = map.get(key).and_then(|v| v.as_str()) {
+        if is_present(Some(nb)) {
+            let resolved = resolve_notebook_id(client, nb).await?;
+            map.insert(key.to_string(), Value::String(resolved.to_string()));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

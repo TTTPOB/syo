@@ -21,7 +21,7 @@ pub async fn ls_tags(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
 pub async fn search_by_tag(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let tag = required_string(&map, "tag")?;
-    // Cap user-supplied limit to MAX_SEARCH_LIMIT (mirrors syo_siyuan_search_text)
+    // Cap user-supplied limit to MAX_SEARCH_LIMIT (mirrors syo_siyuan_search)
     // so a pathological caller cannot ask the kernel for an unbounded result
     // set. `limit == 0` is rejected up front as invalid_params: the model
     // layer's bail! reaches the user as a clear validation error rather than

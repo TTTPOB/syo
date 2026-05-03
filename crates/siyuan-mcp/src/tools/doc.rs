@@ -79,19 +79,6 @@ fn next_page_hint(current: usize, total: usize, _format: &str) -> Option<String>
     }
 }
 
-pub async fn get_block(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
-    let map = ensure_object(args)?;
-    let id_str = required_string(&map, "id")?;
-    let id = BlockId::parse(&id_str)
-        .map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))?;
-
-    let bk = client
-        .get_block_kramdown(&id)
-        .await
-        .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "id": bk.id, "kramdown": bk.kramdown }))
-}
-
 pub async fn create_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let notebook_str = required_string(&map, "notebook")?;
@@ -108,7 +95,7 @@ pub async fn create_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
 
     Ok(with_hint(
         json!({ "id": new_id }),
-        "Mutation completed at the kernel. SQL-indexed reads (siyuan_get_doc, siyuan_sql) may \
+        "Mutation completed at the kernel. SQL-indexed reads (siyuan_doc_get, siyuan_sql) may \
          briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
          retry once. The returned id is the new document's root block id.",
     ))

@@ -43,7 +43,7 @@ pub async fn search_by_tag(client: &SiyuanClient, args: Value) -> Result<Value, 
     Ok(with_hint(
         json!({ "hits": hits_json }),
         "Results are eventually consistent with the SQL index. Blocks tagged very recently may \
-         not appear yet. The `limit` argument is capped server-side at 1000. Use siyuan_get_doc \
+         not appear yet. The `limit` argument is capped server-side at 1000. Use siyuan_doc_get \
          or siyuan_sql to verify freshly-tagged blocks.",
     ))
 }

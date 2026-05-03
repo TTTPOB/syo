@@ -78,11 +78,11 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_get_doc",
+            "siyuan_doc_get",
             "Load a SiYuan document by its ROOT block id and return it as agent-markdown \
              or a structured JSON bundle.\n\
              \n\
-             Sibling tools: `siyuan_get_block` returns ONE block's raw kramdown — use that \
+             Sibling tools: `siyuan_block_get` returns ONE block's raw kramdown — use that \
              when you need a single block's storage syntax, not a whole document. \
              `siyuan_doc_resolve` translates hpath<->id (this tool requires an id, not an \
              hpath). `siyuan_search_text` finds candidate ids by content.\n\
@@ -110,11 +110,11 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_get_block",
+            "siyuan_block_get",
             "Fetch the raw kramdown source of a single block by id.\n\
              \n\
-             Sibling tools: `siyuan_get_doc` returns the rendered document tree — reach for \
-             that to read a whole document. `siyuan_get_attrs` returns just the attribute \
+             Sibling tools: `siyuan_doc_get` returns the rendered document tree — reach for \
+             that to read a whole document. `siyuan_attrs_get` returns just the attribute \
              map; this tool returns the kramdown body. `siyuan_search_text` finds candidate \
              ids when you do not have one yet.\n\
              \n\
@@ -127,7 +127,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string","description":"Block id"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
-                async move { tools::doc::get_block(&c, args).await }
+                async move { tools::block::block_get(&c, args).await }
             })
         );
     }
@@ -136,13 +136,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_create_doc",
+            "siyuan_doc_create",
             "Create a new document in a notebook from GFM markdown.\n\
              \n\
-             Sibling tools: `siyuan_update_block` replaces an existing block in place; \
-             `siyuan_insert_block` / `siyuan_append_block` / `siyuan_prepend_block` add \
-             blocks under an existing document. Reach for siyuan_create_doc only to mint \
-             a NEW document.\n\
+             Sibling tools: `siyuan_block_update` replaces an existing block in place; \
+             `siyuan_block_insert` adds blocks under an existing document. \
+             Reach for siyuan_doc_create only to mint a NEW document.\n\
              \n\
              Inputs: `notebook` (required) is a notebook id from `siyuan_notebook_ls`. \
              `hpath` (required) is a HUMAN path inside the notebook, e.g. `/Folder/Title`; \
@@ -173,16 +172,16 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_update_block",
+            "siyuan_block_update",
             "Replace the full content of an existing block with new GFM markdown.\n\
              \n\
-             Sibling tools: `siyuan_insert_block` adds NEW blocks at a position relative to \
-             an anchor; `siyuan_delete_block` removes a block; `siyuan_set_attrs` mutates \
-             attributes (not body). siyuan_update_block is for in-place full-body overwrite. \
-             Partial edits are NOT supported — read with `siyuan_get_block` first if part of \
+             Sibling tools: `siyuan_block_insert` adds NEW blocks at a position relative to \
+             an anchor; `siyuan_block_delete` removes a block; `siyuan_attrs_set` mutates \
+             attributes (not body). siyuan_block_update is for in-place full-body overwrite. \
+             Partial edits are NOT supported — read with `siyuan_block_get` first if part of \
              the existing content must be preserved.\n\
              \n\
-             Inputs: `id` (required) is the block id to overwrite (use `siyuan_get_doc` or \
+             Inputs: `id` (required) is the block id to overwrite (use `siyuan_doc_get` or \
              `siyuan_search_text` to find it). `markdown` (required) is GFM markdown that \
              replaces the entire block body.\n\
              \n\
@@ -197,7 +196,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             r#"{"type":"object","required":["id","markdown"],"properties":{"id":{"type":"string"},"markdown":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
-                async move { tools::block::update_block(&c, args).await }
+                async move { tools::block::block_update(&c, args).await }
             })
         );
     }
@@ -205,28 +204,37 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_insert_block",
+            "siyuan_block_insert",
             "Insert a new markdown block at a position relative to an anchor block.\n\
              \n\
-             Sibling tools: `siyuan_append_block` is a shortcut for inserting as the LAST \
-             child of a container (no anchor sibling needed); `siyuan_prepend_block` is the \
-             FIRST-child shortcut; `siyuan_move_block` moves an EXISTING block (keeps id); \
-             `siyuan_create_doc` mints a new document.\n\
+             Sibling tools: `siyuan_block_move` moves an EXISTING block (keeps id); \
+             `siyuan_block_update` overwrites a block in place; `siyuan_doc_create` mints \
+             a new document. siyuan_block_insert covers all eight insertion positions \
+             previously split across three separate tools.\n\
              \n\
              Inputs: `markdown` (required) is the GFM markdown body for the new block. \
-             EXACTLY ONE of `previous_id`, `next_id`, or `parent_id` must be supplied; \
-             supplying zero or more than one is an error. The position kinds, in terms of \
-             which field you set:\n\
-               previous_id  → new block lands as a sibling immediately AFTER previous_id\n\
-                              (anchor = any block id; siblings later in order shift down)\n\
-               next_id      → new block lands as a sibling immediately BEFORE next_id\n\
-                              (anchor = any block id; later siblings stay in order)\n\
-               parent_id    → new block lands as the FIRST child of container parent_id\n\
-                              (anchor = container id; existing children shift down)\n\
-             For LAST-child use `siyuan_append_block` (cleaner than constructing a `parent_id` \
-             call here, which inserts at the front, not the back). The kernel returns the new \
-             block's id; the response envelope surfaces it as `data.id`. Existing blocks keep \
-             their ids and children — only sibling order changes.\n\
+             `position` (required) is one of the eight position kinds, describing where \
+             the new block lands relative to `anchor`:\n\
+               after_block       new block is a sibling immediately AFTER anchor\n\
+                                 (anchor = any block id; later siblings shift down)\n\
+               before_block      new block is a sibling immediately BEFORE anchor\n\
+                                 (anchor = any block id; later siblings stay in order)\n\
+               append_child      new block is the LAST child of container anchor\n\
+                                 (anchor = container id, e.g. list item, blockquote, doc root)\n\
+               prepend_child     new block is the FIRST child of container anchor\n\
+                                 (anchor = container id; existing children shift down)\n\
+               append_section    new block is the LAST block in the heading section\n\
+                                 owned by anchor (anchor MUST be a heading block id)\n\
+               prepend_section   new block is inserted immediately AFTER the heading\n\
+                                 block anchor (anchor MUST be a heading block id)\n\
+               append_doc        new block is the LAST block of document anchor\n\
+                                 (anchor MUST be a doc root id)\n\
+               prepend_doc       new block is the FIRST block of document anchor\n\
+                                 (anchor MUST be a doc root id)\n\
+             `anchor` (required) is a block id whose role depends on `position`. \
+             Existing blocks keep their ids and children — only sibling order changes. \
+             The kernel returns the new block's id; the response envelope surfaces it \
+             as `data.id`.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
              siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
@@ -234,12 +242,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              lags.\n\
              \n\
              Example:\n\
-               in:  { \"markdown\": \"New paragraph.\\n\", \"previous_id\": \"20260501090000-blk0001\" }\n\
+               in:  { \"markdown\": \"New paragraph.\\n\", \"position\": \"after_block\", \"anchor\": \"20260501090000-blk0001\" }\n\
                out: { \"data\": { \"id\": \"20260501090500-blk0099\" }, \"_hint\": \"Block inserted at the kernel. ...\" }",
-            r#"{"type":"object","required":["markdown"],"properties":{"markdown":{"type":"string"},"previous_id":{"type":"string"},"next_id":{"type":"string"},"parent_id":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["markdown","position","anchor"],"properties":{"markdown":{"type":"string"},"position":{"type":"string","enum":["after_block","before_block","append_child","prepend_child","append_section","prepend_section","append_doc","prepend_doc"]},"anchor":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
-                async move { tools::block::insert_block(&c, args).await }
+                async move { tools::block::block_insert(&c, args).await }
             })
         );
     }
@@ -247,94 +255,21 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_append_block",
-            "Append a new markdown block as the LAST child of a container.\n\
-             \n\
-             Sibling tools: `siyuan_prepend_block` adds as the FIRST child instead; \
-             `siyuan_insert_block` inserts at a sibling position relative to an anchor (use \
-             when the new block must be placed adjacent to a specific sibling). Use \
-             siyuan_append_block when you want to add content at the end of a container \
-             without needing the id of the last existing child.\n\
-             \n\
-             Inputs: `markdown` (required) is the GFM body. `parent_id` (required) is the \
-             id of the container block — typically a document ROOT id or a list-item id. \
-             The kernel chooses the destination as `parent_id`'s last position. Existing \
-             children keep their ids and order.\n\
-             \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
-             after this call. The kernel is immediately consistent — only the SQL index \
-             lags.\n\
-             \n\
-             Example:\n\
-               in:  { \"markdown\": \"Final paragraph.\\n\", \"parent_id\": \"20260501090000-doc0001\" }\n\
-               out: { \"data\": { \"id\": \"20260501090500-blk0099\" }, \"_hint\": \"Block appended at the kernel. ...\" }",
-            r#"{"type":"object","required":["markdown","parent_id"],"properties":{"markdown":{"type":"string"},"parent_id":{"type":"string"}},"additionalProperties":true}"#,
-            make_handler(move |_, args| {
-                let c = Arc::clone(&c);
-                async move { tools::block::append_block(&c, args).await }
-            })
-        );
-    }
-
-    {
-        let c = Arc::clone(&client);
-        reg!(
-            "siyuan_prepend_block",
-            "Prepend a new markdown block as the FIRST child of a container.\n\
-             \n\
-             Sibling tools: `siyuan_append_block` adds as the LAST child instead; \
-             `siyuan_insert_block` inserts at a sibling position relative to an anchor. \
-             Use siyuan_prepend_block when you want to add content at the start of a \
-             container without needing the id of the first existing child.\n\
-             \n\
-             Inputs: `markdown` (required) is the GFM body. `parent_id` (required) is the \
-             id of the container block — typically a document ROOT id or a list-item id. \
-             Existing children shift down by one position; their ids and subtrees are \
-             unchanged.\n\
-             \n\
-             SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
-             siyuan_search_text, siyuan_tag_search) may show stale data for ~100-500 ms \
-             after this call. The kernel is immediately consistent — only the SQL index \
-             lags.\n\
-             \n\
-             Example:\n\
-               in:  { \"markdown\": \"Lead paragraph.\\n\", \"parent_id\": \"20260501090000-doc0001\" }\n\
-               out: { \"data\": { \"id\": \"20260501090500-blk0099\" }, \"_hint\": \"Block prepended at the kernel. ...\" }",
-            r#"{"type":"object","required":["markdown","parent_id"],"properties":{"markdown":{"type":"string"},"parent_id":{"type":"string"}},"additionalProperties":true}"#,
-            make_handler(move |_, args| {
-                let c = Arc::clone(&c);
-                async move { tools::block::prepend_block(&c, args).await }
-            })
-        );
-    }
-
-    {
-        let c = Arc::clone(&client);
-        reg!(
-            "siyuan_move_block",
+            "siyuan_block_move",
             "Move an existing block to a new position within the document tree.\n\
              \n\
-             Sibling tools: `siyuan_insert_block` / `siyuan_append_block` / \
-             `siyuan_prepend_block` create NEW blocks (different ids) and cover the position \
-             kinds that move-block does NOT — namely `before_block`, `append_section`, and \
-             `prepend_section`; reach for those when the equivalent move would otherwise be \
-             unsupported. `siyuan_doc_move` moves whole documents on disk (`.sy` files). \
-             siyuan_move_block keeps the block's id and all its children — only its parent \
-             and sibling order change.\n\
+             Sibling tools: `siyuan_block_insert` creates NEW blocks (different ids) and \
+             covers all eight position kinds; `siyuan_doc_move` moves whole documents on \
+             disk (`.sy` files). siyuan_block_move keeps the block's id and all its \
+             children — only its parent and sibling order change.\n\
              \n\
-             Inputs: `id` (required) is the block id to move. EXACTLY ONE of `previous_id` \
-             or `parent_id` must be supplied; supplying zero or both is an error. There is \
-             no separate `position` string field — the chosen anchor field IS the kind. \
-             Sending a stray `position` argument (e.g. ported from an older CLI mental \
-             model) is rejected with `invalid_params` and a hint pointing at \
-             `siyuan_insert_block`. The supported kinds are:\n\
-               previous_id  → moved block becomes a sibling immediately AFTER previous_id\n\
-                              (anchor = any block id; this is the kernel's only relative-move\n\
-                              direction — there is no `next_id` for move; use the previous\n\
-                              sibling's id to achieve a 'before' move)\n\
-               parent_id    → moved block becomes a child of parent_id; the kernel places it\n\
-                              at the END of parent_id's children\n\
+             Inputs: `id` (required) is the block id to move. `position` (required) is \
+             one of `after_block` (moved block becomes a sibling immediately AFTER anchor) \
+             or `append_child` (moved block becomes the LAST child of container anchor). \
+             `anchor` (required) is the anchor block id. Unlike siyuan_block_insert, only \
+             `after_block` and `append_child` are supported — use siyuan_block_insert for \
+             the other six position kinds.\n\
+             \n\
              The moved block keeps its id and entire subtree intact.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (siyuan_sql, \
@@ -343,12 +278,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              the SQL index lags.\n\
              \n\
              Example:\n\
-               in:  { \"id\": \"20260501090000-blk0001\", \"previous_id\": \"20260501090000-blk0002\" }\n\
+               in:  { \"id\": \"20260501090000-blk0001\", \"position\": \"after_block\", \"anchor\": \"20260501090000-blk0002\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string"},"previous_id":{"type":"string"},"parent_id":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["id","position","anchor"],"properties":{"id":{"type":"string"},"position":{"type":"string","enum":["after_block","append_child"]},"anchor":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
-                async move { tools::block::move_block(&c, args).await }
+                async move { tools::block::block_move(&c, args).await }
             })
         );
     }
@@ -356,13 +291,13 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_delete_block",
+            "siyuan_block_delete",
             "Permanently delete a block and all of its children.\n\
              \n\
-             Sibling tools: `siyuan_update_block` with empty body clears a block in place \
+             Sibling tools: `siyuan_block_update` with empty body clears a block in place \
              but keeps it; `siyuan_doc_remove` deletes a whole document by storage path \
              (and you can also delete a document by passing its root id here). \
-             siyuan_delete_block removes the block and its subtree irreversibly.\n\
+             siyuan_block_delete removes the block and its subtree irreversibly.\n\
              \n\
              Inputs: `id` (required) is the block id to delete. Any block type is accepted, \
              including a document ROOT id (deletes the whole document). The action is \
@@ -379,7 +314,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
-                async move { tools::block::delete_block(&c, args).await }
+                async move { tools::block::block_delete(&c, args).await }
             })
         );
     }
@@ -388,12 +323,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_get_attrs",
+            "siyuan_attrs_get",
             "Read all attributes (built-in and custom) of a block by id.\n\
              \n\
-             Sibling tools: `siyuan_set_attrs` mutates attributes (partial update); call \
-             siyuan_get_attrs first if you need to inspect existing values without \
-             overwriting them. `siyuan_get_block` returns the block's kramdown body \
+             Sibling tools: `siyuan_attrs_set` mutates attributes (partial update); call \
+             siyuan_attrs_get first if you need to inspect existing values without \
+             overwriting them. `siyuan_block_get` returns the block's kramdown body \
              (different concept).\n\
              \n\
              Inputs: `id` (required) is the block id. The response is a flat key-value \
@@ -414,10 +349,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "siyuan_set_attrs",
+            "siyuan_attrs_set",
             "Set one or more attributes on a block (partial update).\n\
              \n\
-             Sibling tools: `siyuan_get_attrs` reads the current map; `siyuan_update_block` \
+             Sibling tools: `siyuan_attrs_get` reads the current map; `siyuan_block_update` \
              mutates the body, not attributes. There is no convenience tool for icon/sort \
              at the MCP layer (the CLI has them) — use this with `icon` / `sort` keys \
              directly.\n\
@@ -453,7 +388,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Sibling tools: `siyuan_doc_resolve` looks up a single document by id or \
              hpath; this tool enumerates whole notebooks. Use it to discover notebook ids \
              before calling tools that need a `notebook` parameter \
-             (`siyuan_create_doc`, `siyuan_doc_resolve`, etc.).\n\
+             (`siyuan_doc_create`, `siyuan_doc_resolve`, etc.).\n\
              \n\
              Inputs: none required (extra properties ignored). Each notebook entry \
              includes `id`, `name`, `icon`, `sort`, and a `closed` boolean. Notebooks \
@@ -487,7 +422,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              automatically and surfaces it as `id` in the response (also under `data.id`).\n\
              \n\
              The new notebook is reachable for subsequent calls (`siyuan_doc_resolve`, \
-             `siyuan_create_doc`, etc.). NOTE: some kernel versions create the notebook \
+             `siyuan_doc_create`, etc.). NOTE: some kernel versions create the notebook \
              in a CLOSED state — the harness still resolves it through `siyuan_doc_resolve` \
              and similar kernel-direct tools, but reads via `siyuan_sql` / \
              `siyuan_search_text` may return empty until the user opens it in the SiYuan UI.\n\
@@ -573,7 +508,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "siyuan_doc_resolve",
             "Look up document metadata by EITHER block id OR (notebook + hpath).\n\
              \n\
-             Sibling tools: `siyuan_get_doc` returns the rendered document content (and \
+             Sibling tools: `siyuan_doc_get` returns the rendered document content (and \
              requires an id); this tool returns ONLY the metadata (id, hpath, notebook_id, \
              notebook_name, title, storage_path) and is the canonical hpath<->id translator. \
              `siyuan_notebook_ls` enumerates whole notebooks. As of the dual-mode locator \
@@ -616,7 +551,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "Rename a document by changing its display title.\n\
              \n\
              Sibling tools: `siyuan_doc_move` changes the parent folder of a document; \
-             this tool changes only its title (the last hpath segment). `siyuan_set_attrs` \
+             this tool changes only its title (the last hpath segment). `siyuan_attrs_set` \
              with key `icon` is the analogous icon mutator. `siyuan_doc_resolve` is no \
              longer required as a pre-step — this tool accepts the same id-or-hpath \
              locator natively.\n\
@@ -656,7 +591,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "siyuan_doc_move",
             "Move one or more documents to a different notebook/folder.\n\
              \n\
-             Sibling tools: `siyuan_move_block` moves a block within a document tree \
+             Sibling tools: `siyuan_block_move` moves a block within a document tree \
              (block-level); `siyuan_doc_rename` only retitles. siyuan_doc_move relocates \
              whole `.sy` files in the file tree. `siyuan_doc_resolve` is no longer a \
              required pre-step — this tool accepts the same id-or-hpath addressing \
@@ -707,9 +642,9 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Sibling tools: `siyuan_doc_resolve` looks up ONE document's metadata; \
              this tool enumerates a SUBTREE. `siyuan_notebook_ls` enumerates whole \
-             notebooks (no nesting). `siyuan_get_doc` returns rendered content for \
+             notebooks (no nesting). `siyuan_doc_get` returns rendered content for \
              one doc; `siyuan_doc_tree` is filetree-only — block-level children \
-             live under `siyuan_get_block` or `siyuan_sql`. Use this instead of \
+             live under `siyuan_block_get` or `siyuan_sql`. Use this instead of \
              hand-rolled `siyuan_sql` queries against the `blocks` table for \
              navigation.\n\
              \n\
@@ -753,7 +688,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "siyuan_doc_remove",
             "Permanently remove a document and all its child blocks.\n\
              \n\
-             Sibling tools: `siyuan_delete_block` with the document root id deletes the \
+             Sibling tools: `siyuan_block_delete` with the document root id deletes the \
              same content via the block API; `siyuan_doc_move` relocates instead of \
              deleting; `siyuan_notebook_remove` destroys an entire notebook. \
              siyuan_doc_remove is the per-document destroyer. `siyuan_doc_resolve` is no \
@@ -943,9 +878,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Sibling tools: there is no separate `reference` tool at the MCP layer (the CLI \
              has `siyuan asset reference` which is a pure formatter). Use the returned \
-             asset path inside markdown that you pass to `siyuan_insert_block`, \
-             `siyuan_append_block`, `siyuan_prepend_block`, `siyuan_update_block`, or \
-             `siyuan_create_doc`.\n\
+             asset path inside markdown that you pass to `siyuan_block_insert`, \
+             `siyuan_block_update`, or `siyuan_doc_create`.\n\
              \n\
              Inputs: `file_path` (required) is an ABSOLUTE path on the machine running \
              the MCP server (NOT on the SiYuan kernel host if they differ). The process \

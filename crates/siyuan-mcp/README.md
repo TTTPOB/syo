@@ -6,7 +6,7 @@ This crate is **not** a binary. To run the server, install the workspace and inv
 
 ## Response envelope
 
-Read-only tools (`siyuan_status`, `siyuan_get_doc`, `siyuan_get_block`, `siyuan_get_attrs`, `siyuan_doc_resolve`) return their payload directly as a bare JSON object.
+Read-only tools (`siyuan_status`, `siyuan_doc_get`, `siyuan_block_get`, `siyuan_attrs_get`, `siyuan_doc_resolve`) return their payload directly as a bare JSON object.
 
 Mutating and post-call-sensitive tools wrap the payload to surface follow-up expectations:
 
@@ -26,17 +26,15 @@ Agents should check for the presence of `_hint` rather than assuming a fixed sha
 | Tool | Summary |
 |------|---------|
 | `siyuan_status` | Health-check: returns kernel version. |
-| `siyuan_get_doc` | Load a document as agent-markdown or JSON bundle, with pagination. |
-| `siyuan_get_block` | Fetch raw kramdown source of a single block. |
-| `siyuan_create_doc` | Create a new document from GFM markdown at an hpath. |
-| `siyuan_update_block` | Replace a block's content with new markdown. |
-| `siyuan_insert_block` | Insert a block relative to an anchor (before/after/as child). |
-| `siyuan_append_block` | Append a block as the last child of a container. |
-| `siyuan_prepend_block` | Prepend a block as the first child of a container. |
-| `siyuan_move_block` | Move a block to a new position in the tree. |
-| `siyuan_delete_block` | Permanently delete a block and all its children. |
-| `siyuan_get_attrs` | Read all attributes of a block. |
-| `siyuan_set_attrs` | Partially update attributes on a block (`custom-` prefix required for custom keys). |
+| `siyuan_doc_get` | Load a document as agent-markdown or JSON bundle, with pagination. |
+| `siyuan_block_get` | Fetch raw kramdown source of a single block. |
+| `siyuan_doc_create` | Create a new document from GFM markdown at an hpath. |
+| `siyuan_block_update` | Replace a block's content with new markdown. |
+| `siyuan_block_insert` | Insert a block at one of eight positions relative to an anchor. |
+| `siyuan_block_move` | Move a block to a new position in the tree. |
+| `siyuan_block_delete` | Permanently delete a block and all its children. |
+| `siyuan_attrs_get` | Read all attributes of a block. |
+| `siyuan_attrs_set` | Partially update attributes on a block (`custom-` prefix required for custom keys). |
 | `siyuan_notebook_ls` | List all notebooks (open and closed). |
 | `siyuan_notebook_create` | Create a new notebook. |
 | `siyuan_notebook_rename` | Rename a notebook. |

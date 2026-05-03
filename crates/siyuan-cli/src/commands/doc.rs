@@ -80,7 +80,7 @@ pub enum DocCmd {
     Rename(RenameArgs),
     /// Move one or more documents to a different notebook/folder.
     ///
-    /// Sibling commands: `siyuan move-block` moves a block within the
+    /// Sibling commands: `siyuan block move` moves a block within the
     /// document tree (block-level); `siyuan doc rename` only retitles a
     /// document. doc move relocates whole `.sy` files in the file tree.
     ///

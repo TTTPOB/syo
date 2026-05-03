@@ -6,8 +6,8 @@ use siyuan_types::NotebookId;
 
 /// Create a new document in a notebook from GFM markdown.
 ///
-/// Sibling commands: `siyuan update-block` replaces an existing block;
-/// `siyuan insert-blocks` appends/inserts blocks under an existing document.
+/// Sibling commands: `siyuan block update` replaces an existing block;
+/// `siyuan block insert` appends/inserts blocks under an existing document.
 /// Only use create-doc to mint a NEW document.
 ///
 /// Inputs:

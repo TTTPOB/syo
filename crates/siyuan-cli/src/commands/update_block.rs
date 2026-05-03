@@ -6,10 +6,10 @@ use siyuan_types::BlockId;
 
 /// Replace the full markdown content of an existing block.
 ///
-/// Sibling commands: `siyuan insert-blocks` adds NEW blocks at a position
-/// relative to an anchor; `siyuan delete-block` removes a block; this
+/// Sibling commands: `siyuan block insert` adds NEW blocks at a position
+/// relative to an anchor; `siyuan block delete` removes a block; this
 /// command is for in-place full overwrite of the markdown body. Partial
-/// edits are NOT supported — read with `siyuan get-block` first if you need
+/// edits are NOT supported — read with `siyuan block get` first if you need
 /// to preserve part of the existing content.
 ///
 /// Inputs:

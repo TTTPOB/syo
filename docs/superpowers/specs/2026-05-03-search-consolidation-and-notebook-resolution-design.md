@@ -196,11 +196,11 @@ Define a single constant (e.g. in `syo-mcp/src/registry.rs` and in
 ```rust
 const HPATH_NOTE: &str = "\
 Note: the first `/`-delimited segment of an hpath is NOT a notebook name \
-— it is the top-level folder INSIDE the target notebook. The notebook is \
+— it is the top-level document title INSIDE the target notebook. (SiYuan has no folder concept — every path segment is a document). The notebook is \
 always supplied separately via the `notebook` parameter. \
 Example: notebook `expnote`, hpath `/year2026/month12` means \
-`expnote:/year2026/month12`. Even when the notebook is named `hello` and \
-the hpath is `/hello/world`, the first segment is still a folder: \
+`expnote:/year2026/month12` (the notebook is `expnote`, the top-level document is `year2026`). Even when the notebook is named `hello` and \
+the hpath is `/hello/world`, the first segment is still a document title: \
 `hello[notebook]:/hello/world`.";
 ```
 

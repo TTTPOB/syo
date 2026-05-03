@@ -214,17 +214,14 @@ mod tests {
                 "anchor": "20260501090000-blk0002",
             });
             let result = block_move(&client, args).await;
-            match result {
-                Err(e) => {
-                    // Expect a network-level error, NOT a position-rejection error.
-                    assert!(
-                        !e.message
-                            .contains("not supported for syo_siyuan_block_move"),
-                        "position {kind} should be accepted; got rejection: {}",
-                        e.message
-                    );
-                }
-                Ok(_) => {}
+            if let Err(e) = result {
+                // Expect a network-level error, NOT a position-rejection error.
+                assert!(
+                    !e.message
+                        .contains("not supported for syo_siyuan_block_move"),
+                    "position {kind} should be accepted; got rejection: {}",
+                    e.message
+                );
             }
         }
     }

@@ -42,6 +42,12 @@ pub enum SiyuanError {
 
     #[error("verification after write failed: {0}")]
     VerifyFailed(String),
+
+    #[error("notebook {name:?} not found")]
+    NotebookNotFound { name: String },
+
+    #[error("ambiguous notebook name {name:?} — matches: {candidates}")]
+    AmbiguousNotebook { name: String, candidates: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +62,8 @@ pub enum ErrorKind {
     GraphLimit,
     Parse,
     VerifyFailed,
+    NotebookNotFound,
+    AmbiguousNotebook,
 }
 
 impl SiyuanError {
@@ -71,6 +79,8 @@ impl SiyuanError {
             Self::GraphLimit { .. } => ErrorKind::GraphLimit,
             Self::Parse(_) => ErrorKind::Parse,
             Self::VerifyFailed(_) => ErrorKind::VerifyFailed,
+            Self::NotebookNotFound { .. } => ErrorKind::NotebookNotFound,
+            Self::AmbiguousNotebook { .. } => ErrorKind::AmbiguousNotebook,
         }
     }
 }

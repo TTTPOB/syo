@@ -34,7 +34,7 @@ pub struct TreeArgs {
     #[arg(long, conflicts_with_all = ["notebook", "hpath"])]
     pub id: Option<String>,
 
-    /// Notebook id. With `--hpath /` (the default in this mode) returns
+    /// Notebook id or display name. With `--hpath /` (the default in this mode) returns
     /// the notebook's top-level docs under a virtual root; with a non-`/`
     /// hpath anchors the tree at that doc.
     #[arg(long)]

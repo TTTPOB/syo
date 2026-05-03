@@ -26,7 +26,7 @@ pub struct RemoveArgs {
     #[arg(long, conflicts_with_all = ["notebook", "hpath"])]
     pub id: Option<String>,
 
-    /// Notebook id (use together with --hpath to address by human path).
+    /// Notebook id or display name (use together with --hpath to address by human path).
     #[arg(long, requires = "hpath")]
     pub notebook: Option<String>,
 

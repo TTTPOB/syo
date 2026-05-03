@@ -43,7 +43,7 @@ use siyuan_client::SiyuanClient;
 #[derive(Args, Debug)]
 #[command(verbatim_doc_comment)]
 pub struct CreateDocArgs {
-    /// Notebook id (from `syo notebook ls`).
+    /// Notebook id or display name (from `syo notebook ls`).
     #[arg(long)]
     pub notebook: String,
 

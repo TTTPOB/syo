@@ -45,7 +45,7 @@ Agents should check for the presence of `_hint` rather than assuming a fixed sha
 | `syo_siyuan_doc_remove` | Permanently remove a document (requires storage `.sy` path). |
 | `syo_siyuan_tag_ls` | List all tags in the workspace. |
 | `syo_siyuan_tag_search` | Find blocks carrying a specific tag (without `#` prefix). |
-| `syo_siyuan_search_text` | LIKE substring search across block markdown content. |
+| `syo_siyuan_search` | Search for blocks by type and/or content filter. |
 | `syo_siyuan_sql` | Execute a raw read-only SQL SELECT against the SiYuan database. |
 | `syo_siyuan_asset_upload` | Upload a local file as a SiYuan asset; returns the asset path. |
 | `syo_siyuan_graph_neighborhood` | Compute the link-graph neighborhood around a block. |

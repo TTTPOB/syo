@@ -36,7 +36,7 @@ pub struct MoveArgs {
     )]
     pub from_ids: Vec<String>,
 
-    /// SOURCE notebook id (used only with --from-hpaths). Distinct from
+    /// SOURCE notebook id or display name (used only with --from-hpaths). Distinct from
     /// --to-notebook (the destination).
     #[arg(long, requires = "from_hpaths")]
     pub notebook: Option<String>,

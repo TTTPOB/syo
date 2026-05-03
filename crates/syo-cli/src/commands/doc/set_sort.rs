@@ -16,9 +16,14 @@ pub struct SortArgs {
 
 pub async fn run(client: &SiyuanClient, args: SortArgs) -> Result<()> {
     let id = BlockId::parse(&args.id).context("--id")?;
-    let mut attrs = std::collections::BTreeMap::new();
-    attrs.insert("sort".to_string(), args.sort.to_string());
-    client.set_block_attrs(&id, &attrs).await?;
+    syo_core::attr::set_sort(
+        client,
+        syo_core::attr::SetSortInput {
+            id,
+            sort: args.sort,
+        },
+    )
+    .await?;
     println!("ok");
     Ok(())
 }

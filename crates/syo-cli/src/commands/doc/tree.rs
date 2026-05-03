@@ -3,7 +3,7 @@ use clap::{ArgGroup, Args};
 
 use siyuan_client::SiyuanClient;
 use siyuan_model::doc_meta::DocLookup;
-use siyuan_model::doc_tree::{Depth, build_tree, render_agent_md as render_tree_md};
+use siyuan_model::doc_tree::{Depth, render_agent_md as render_tree_md};
 use siyuan_types::{BlockId, NotebookId};
 
 use crate::output::OutputFormat;
@@ -71,7 +71,9 @@ fn parse_depth_arg(s: &str) -> Result<DepthArg, String> {
 pub async fn run(client: &SiyuanClient, args: TreeArgs) -> Result<()> {
     let lookup = build_tree_lookup(args.id.as_deref(), args.notebook.as_deref(), &args.hpath)?;
     let depth = args.depth.0;
-    let tree = build_tree(client, lookup, depth).await?;
+    let tree = syo_core::doc::tree(client, syo_core::doc::TreeInput { lookup, depth })
+        .await?
+        .tree;
     let s = match args.format {
         OutputFormat::AgentMd => render_tree_md(&tree, depth),
         OutputFormat::Json => serde_json::to_string(&tree)?,

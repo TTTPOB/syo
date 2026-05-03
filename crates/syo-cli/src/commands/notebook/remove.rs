@@ -13,7 +13,7 @@ pub struct Args {
 
 pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
     let id = NotebookId::parse(&args.id).context("--id")?;
-    client.remove_notebook(&id).await?;
+    syo_core::notebook::remove(client, syo_core::notebook::RemoveInput { id }).await?;
     println!("ok");
     Ok(())
 }

@@ -16,7 +16,14 @@ pub struct Args {
 
 pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
     let id = NotebookId::parse(&args.id).context("--id")?;
-    client.rename_notebook(&id, &args.name).await?;
+    syo_core::notebook::rename(
+        client,
+        syo_core::notebook::RenameInput {
+            id,
+            name: args.name,
+        },
+    )
+    .await?;
     println!("ok");
     Ok(())
 }

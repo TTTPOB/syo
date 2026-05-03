@@ -2,8 +2,7 @@ use anyhow::Result;
 use clap::Args as ClapArgs;
 use serde::Serialize;
 
-use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient};
-use siyuan_model::tag::{TagBlockHit, search_by_tag};
+use siyuan_client::SiyuanClient;
 
 use crate::output::OutputFormat;
 
@@ -31,12 +30,15 @@ struct TagSearchView {
 }
 
 pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
-    // Mirror `search blocks`/`search text`: usize-typed CLI flag capped at
-    // MAX_SEARCH_LIMIT so a pathological caller cannot ask the kernel for an
-    // unbounded result set. `limit == 0` is intentionally NOT promoted to 1.
-    let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
-    let limit = args.limit.min(limit_cap);
-    let hits = search_by_tag(client, &args.tag, limit).await?;
+    let hits = syo_core::tag::search_by_tag(
+        client,
+        syo_core::tag::SearchByTagInput {
+            tag: args.tag,
+            limit: args.limit,
+        },
+    )
+    .await?
+    .hits;
     println!("{}", format_search_results(&hits, args.format)?);
     Ok(())
 }
@@ -46,7 +48,10 @@ pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
 /// Agent-md prints a human-readable message when the result set is empty
 /// so the user can tell the command executed successfully (JSON already
 /// emits `[]`, which is unambiguous).
-fn format_search_results(hits: &[TagBlockHit], format: OutputFormat) -> Result<String> {
+fn format_search_results(
+    hits: &[syo_core::tag::TagBlockHit],
+    format: OutputFormat,
+) -> Result<String> {
     match format {
         OutputFormat::AgentMd => {
             if hits.is_empty() {
@@ -79,6 +84,7 @@ fn format_search_results(hits: &[TagBlockHit], format: OutputFormat) -> Result<S
 mod tests {
     use super::*;
     use serde::Deserialize;
+    use syo_core::tag::TagBlockHit;
 
     #[derive(Debug, Deserialize, PartialEq)]
     struct TagSearchViewOwned {

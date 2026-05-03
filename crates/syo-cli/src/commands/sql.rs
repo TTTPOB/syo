@@ -1,8 +1,7 @@
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::Args;
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::sql_guard;
 
 /// Run a single read-only SQL statement against the SiYuan SQLite store.
 ///
@@ -72,15 +71,7 @@ pub struct SqlArgs {
 }
 
 pub async fn run(client: &SiyuanClient, args: SqlArgs) -> Result<()> {
-    // AST-level read-only guard. The kernel does NOT enforce read-only at
-    // the SQL level (see security advisories GHSA-jqwg-75qf-vmf9 and
-    // GHSA-j7wh-x834-p3r7), so we cannot trust the kernel to catch writes
-    // for us — this check is the actual gate. Forward the original `stmt`
-    // verbatim to the kernel so quoting / case / whitespace are preserved.
-    if let Err(e) = sql_guard::validate_read_only(&args.stmt) {
-        bail!("--stmt: {e}");
-    }
-    let rows = client.sql(&args.stmt).await?;
+    let rows = syo_core::sql::raw(client, syo_core::sql::SqlInput { stmt: args.stmt }).await?;
     println!("{}", serde_json::to_string_pretty(&rows)?);
     Ok(())
 }
@@ -90,7 +81,7 @@ mod tests {
     use super::*;
 
     fn dummy_client() -> SiyuanClient {
-        // The dummy URL is never reached: empty-stmt validation runs before
+        // The dummy URL is never reached: validation runs inside syo_core before
         // any HTTP call, so this client is just a placeholder argument.
         SiyuanClient::new("http://127.0.0.1:1", "tok").expect("dummy client builds")
     }
@@ -103,8 +94,8 @@ mod tests {
             .await
             .expect_err("whitespace stmt must be rejected");
         assert!(
-            err.to_string().contains("--stmt"),
-            "error message should reference `--stmt`; got: {err}"
+            err.to_string().contains("empty"),
+            "error should mention 'empty'; got: {err}"
         );
     }
 
@@ -116,18 +107,13 @@ mod tests {
             .await
             .expect_err("empty stmt must be rejected");
         assert!(
-            err.to_string().contains("--stmt"),
-            "error message should reference `--stmt`; got: {err}"
+            err.to_string().contains("empty"),
+            "error should mention 'empty'; got: {err}"
         );
     }
 
     #[tokio::test]
     async fn run_rejects_non_select_stmt() {
-        // A `DROP TABLE` would burn a kernel round trip if forwarded — the
-        // AST guard rejects it locally. The dummy client points at an
-        // unreachable port, so if the guard regresses this test would
-        // surface a network error instead of the read-only message; the
-        // assertion pins the exact rejection reason.
         let client = dummy_client();
         let args = SqlArgs {
             stmt: "DROP TABLE blocks".into(),
@@ -143,10 +129,6 @@ mod tests {
 
     #[tokio::test]
     async fn run_rejects_with_tail_delete() {
-        // CTE-tail writes pass the old lexical check (leading `with`) but
-        // execute as DELETEs. The AST guard recognises the underlying
-        // SetExpr::Delete and rejects them. This test pins that promotion
-        // — the lexical guard would have let this through.
         let client = dummy_client();
         let args = SqlArgs {
             stmt: "WITH x AS (SELECT id FROM blocks) DELETE FROM blocks \

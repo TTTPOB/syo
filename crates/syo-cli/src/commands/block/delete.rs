@@ -61,7 +61,7 @@ pub async fn run(client: &SiyuanClient, args: DeleteBlockArgs) -> Result<()> {
         );
     }
 
-    client.delete_block(&id).await?;
+    syo_core::block::delete(client, syo_core::block::DeleteBlockInput { id }).await?;
     println!("ok");
     Ok(())
 }

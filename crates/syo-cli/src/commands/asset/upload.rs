@@ -13,7 +13,13 @@ pub struct UploadArgs {
 }
 
 pub async fn run(client: &SiyuanClient, args: UploadArgs) -> Result<()> {
-    let path = client.upload_asset(&args.file).await?;
-    println!("{path}");
+    let result = syo_core::asset::upload(
+        client,
+        syo_core::asset::UploadInput {
+            file_path: args.file.to_string_lossy().to_string(),
+        },
+    )
+    .await?;
+    println!("{}", result.asset_path);
     Ok(())
 }

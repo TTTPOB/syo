@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::{ArgGroup, Args};
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::doc_meta::{DocLookup, resolve_one_storage};
+use siyuan_model::doc_meta::DocLookup;
 use siyuan_types::{BlockId, NotebookId};
 
 /// Arguments for `syo doc move`.
@@ -60,13 +60,15 @@ pub async fn run(client: &SiyuanClient, args: MoveArgs) -> Result<()> {
     let source_lookups =
         build_move_source_lookups(&args.from_ids, args.notebook.as_deref(), &args.from_hpaths)?;
 
-    let mut from_paths = Vec::with_capacity(source_lookups.len());
-    for lookup in source_lookups {
-        let (_nb, storage_path) = resolve_one_storage(client, lookup).await?;
-        from_paths.push(storage_path);
-    }
-
-    client.move_docs(&from_paths, &to_nb, &args.to_path).await?;
+    syo_core::doc::move_docs(
+        client,
+        syo_core::doc::MoveDocsInput {
+            from: source_lookups,
+            to_notebook: to_nb,
+            to_path: args.to_path,
+        },
+    )
+    .await?;
     println!("ok");
     Ok(())
 }

@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::Args as ClapArgs;
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::tag::list_tags;
 
 use crate::output::OutputFormat;
 
@@ -15,7 +14,7 @@ pub struct Args {
 }
 
 pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
-    let tags = list_tags(client).await?;
+    let tags = syo_core::tag::list_tags(client).await?.tags;
     match args.format {
         OutputFormat::AgentMd => {
             for t in tags {

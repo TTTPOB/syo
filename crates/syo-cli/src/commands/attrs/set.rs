@@ -10,9 +10,8 @@ use siyuan_types::BlockId;
 ///
 /// Sibling commands: `syo doc set-icon` and `syo doc set-sort` are
 /// thin wrappers that set the `icon` / `sort` attribute respectively;
-/// reach for them when that is all you need. There is no `get-attrs` CLI —
-/// to read existing attributes use `syo block get --format json` (its
-/// JSON output includes `attrs`).
+/// reach for them when that is all you need. Use `syo attrs get` to
+/// read existing attributes.
 ///
 /// Inputs:
 ///   --id (required): block id whose attributes to mutate.
@@ -58,7 +57,7 @@ pub async fn run(client: &SiyuanClient, args: SetAttrsArgs) -> Result<()> {
         }
         map.insert(k.into(), v.into());
     }
-    client.set_block_attrs(&id, &map).await?;
+    syo_core::attr::set(client, syo_core::attr::SetAttrsInput { id, attrs: map }).await?;
     println!("ok");
     Ok(())
 }

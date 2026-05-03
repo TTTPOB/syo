@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::{ArgGroup, Args};
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::doc_meta::resolve_one_storage;
 
 use super::lookup::build_single_doc_lookup;
 
@@ -38,8 +37,14 @@ pub async fn run(client: &SiyuanClient, args: RenameArgs) -> Result<()> {
         args.notebook.as_deref(),
         args.hpath.as_deref(),
     )?;
-    let (nb, storage_path) = resolve_one_storage(client, lookup).await?;
-    client.rename_doc(&nb, &storage_path, &args.title).await?;
+    syo_core::doc::rename(
+        client,
+        syo_core::doc::RenameDocInput {
+            lookup,
+            title: args.title,
+        },
+    )
+    .await?;
     println!("ok");
     Ok(())
 }

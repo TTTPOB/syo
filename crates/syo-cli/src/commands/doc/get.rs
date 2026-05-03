@@ -2,12 +2,6 @@ use anyhow::{Context, Result};
 use clap::Args;
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::{
-    load::load_doc,
-    pagination::{DEFAULT_PAGE_SIZE, PageRequest},
-};
-use siyuan_render::agent_md::render_doc;
-use siyuan_render::json_bundle::render_bundle;
 use siyuan_types::BlockId;
 
 use crate::output::OutputFormat;
@@ -47,7 +41,7 @@ pub struct GetDocArgs {
     pub page: usize,
 
     /// Blocks per page. Default 50, capped at 1000 by the model layer.
-    #[arg(long, default_value_t = DEFAULT_PAGE_SIZE)]
+    #[arg(long, default_value_t = siyuan_model::pagination::DEFAULT_PAGE_SIZE)]
     pub page_size: usize,
 
     /// Output format: `agent-md` (default), `json`, or `json-pretty`.
@@ -57,20 +51,22 @@ pub struct GetDocArgs {
 
 pub async fn run(client: &SiyuanClient, args: GetDocArgs) -> Result<()> {
     let id = BlockId::parse(args.id).context("--id is not a valid block id")?;
-    let bundle = load_doc(
+    let doc_format = match args.format {
+        OutputFormat::AgentMd => syo_core::doc::DocFormat::AgentMd,
+        OutputFormat::Json => syo_core::doc::DocFormat::Json,
+        OutputFormat::JsonPretty => syo_core::doc::DocFormat::JsonPretty,
+    };
+    let s = syo_core::doc::get(
         client,
-        &id,
-        PageRequest {
+        syo_core::doc::GetDocInput {
+            id,
             page: args.page,
             page_size: args.page_size,
+            format: doc_format,
         },
     )
-    .await?;
-    let s = match args.format {
-        OutputFormat::AgentMd => render_doc(&bundle),
-        OutputFormat::Json => render_bundle(&bundle, false)?,
-        OutputFormat::JsonPretty => render_bundle(&bundle, true)?,
-    };
+    .await?
+    .content;
     println!("{s}");
     Ok(())
 }

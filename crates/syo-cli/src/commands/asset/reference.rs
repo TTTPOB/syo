@@ -13,12 +13,10 @@ pub struct ReferenceArgs {
 }
 
 pub fn run(args: ReferenceArgs) -> Result<()> {
-    let alt = if args.alt.is_empty() {
-        args.path.rsplit('/').next().unwrap_or("").to_string()
-    } else {
-        args.alt
-    };
-    // Image-style markdown reference.
-    println!("![{alt}]({})", args.path);
+    let output = syo_core::asset::reference(syo_core::asset::ReferenceInput {
+        path: args.path,
+        alt: args.alt,
+    });
+    println!("{}", output.markdown);
     Ok(())
 }

@@ -16,9 +16,14 @@ pub struct IconArgs {
 
 pub async fn run(client: &SiyuanClient, args: IconArgs) -> Result<()> {
     let id = BlockId::parse(&args.id).context("--id")?;
-    let mut attrs = std::collections::BTreeMap::new();
-    attrs.insert("icon".to_string(), args.icon);
-    client.set_block_attrs(&id, &attrs).await?;
+    syo_core::attr::set_icon(
+        client,
+        syo_core::attr::SetIconInput {
+            id,
+            icon: args.icon,
+        },
+    )
+    .await?;
     println!("ok");
     Ok(())
 }

@@ -47,7 +47,7 @@ struct BlockView {
 
 pub async fn run(client: &SiyuanClient, args: GetBlockArgs) -> Result<()> {
     let id = BlockId::parse(args.id).context("--id is not a valid block id")?;
-    let kr = client.get_block_kramdown(&id).await?;
+    let kr = syo_core::block::get(client, &id).await?;
     let attrs = match client.get_block_attrs(&id).await {
         Ok(a) => a,
         Err(e) => {

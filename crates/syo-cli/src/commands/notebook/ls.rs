@@ -27,7 +27,7 @@ struct NotebookView<'a> {
 }
 
 pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
-    let nbs = client.ls_notebooks().await?;
+    let nbs = syo_core::notebook::ls(client).await?.notebooks;
     match args.format {
         OutputFormat::AgentMd => {
             // Preserve the legacy TSV byte shape, including the two-space

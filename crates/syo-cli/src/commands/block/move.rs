@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use clap::Args;
 
 use siyuan_client::SiyuanClient;
@@ -69,81 +69,17 @@ pub struct MoveBlockArgs {
 pub async fn run(client: &SiyuanClient, args: MoveBlockArgs) -> Result<()> {
     let id = BlockId::parse(&args.id).context("--id")?;
     let anchor = BlockId::parse(&args.anchor).context("--anchor")?;
-    match args.position {
-        PositionKind::AfterBlock => {
-            client.move_block(&id, Some(&anchor), None).await?;
-        }
-        PositionKind::BeforeBlock => {
-            let prev_id = find_previous_sibling(client, &anchor).await?;
-            client.move_block(&id, Some(&prev_id), None).await?;
-        }
-        PositionKind::AppendChild | PositionKind::AppendDoc => {
-            client.move_block(&id, None, Some(&anchor)).await?;
-        }
-        PositionKind::PrependChild | PositionKind::PrependDoc => {
-            // moveBlock with parent_id and no previous_id places the moved
-            // block at the END of the parent. SiYuan's kernel does not have
-            // a separate "prepend" call — practically the position is the
-            // same; callers wanting strict first-child semantics should
-            // follow up with an after_block of the original first child.
-            client.move_block(&id, None, Some(&anchor)).await?;
-        }
-        PositionKind::AppendSection => {
-            let section_end = super::insert::resolve_section_end(client, &anchor).await?;
-            client.move_block(&id, Some(&section_end), None).await?;
-        }
-        PositionKind::PrependSection => {
-            // Right after the heading itself.
-            client.move_block(&id, Some(&anchor), None).await?;
-        }
-    }
-    println!("ok");
-    Ok(())
-}
-
-/// Find the block that comes immediately before `anchor` in its parent's
-/// children list. Used by `before_block` positioning.
-async fn find_previous_sibling(client: &SiyuanClient, anchor: &BlockId) -> Result<BlockId> {
-    use siyuan_model::load::load_doc;
-    use siyuan_model::pagination::PageRequest;
-
-    // Query root_id for the anchor block via SQL.
-    #[derive(serde::Deserialize)]
-    struct R {
-        root_id: String,
-    }
-    let rows: Vec<R> = client
-        .sql_typed(&format!(
-            "SELECT root_id FROM blocks WHERE id = '{}'",
-            anchor.as_str()
-        ))
-        .await?;
-    let root = rows
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("anchor block not found"))?;
-    let root_id = BlockId::parse(&root.root_id).context("parsing root id")?;
-
-    let bundle = load_doc(
+    syo_core::block::move_block(
         client,
-        &root_id,
-        PageRequest {
-            page: 1,
-            page_size: 100_000,
+        syo_core::block::MoveBlockInput {
+            id,
+            position: args.position,
+            anchor,
         },
     )
     .await?;
-    let blocks = bundle.blocks;
-    let idx = blocks
-        .iter()
-        .position(|b| &b.id == anchor)
-        .ok_or_else(|| anyhow::anyhow!("anchor block not found in document"))?;
-    if idx == 0 {
-        bail!(
-            "cannot move before first child of document; use prepend_child or prepend_doc instead"
-        );
-    }
-    let prev = &blocks[idx - 1];
-    Ok(prev.id.clone())
+    println!("ok");
+    Ok(())
 }
 
 #[cfg(test)]

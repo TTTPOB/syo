@@ -1,8 +1,7 @@
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::Args as ClapArgs;
 
-use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_string};
-use siyuan_model::sql_guard;
+use siyuan_client::SiyuanClient;
 
 use crate::output::OutputFormat;
 
@@ -26,28 +25,22 @@ pub struct Args {
 }
 
 pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
-    let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
-    // Reject blank/whitespace-only queries: an empty LIKE pattern matches
-    // every block and the result is always silently trimmed by `--limit`,
-    // hiding the misuse from the user.
-    if args.query.trim().is_empty() {
-        bail!("--query must not be empty");
-    }
-    // Escape single quotes for SQL string-literal safety. The SiYuan kernel's
-    // SQL engine does not support ESCAPE '\' in LIKE patterns, so % and _ in
-    // user input behave as LIKE wildcards.
-    let needle = escape_sql_string(&args.query);
-    let limit = args.limit.min(limit_cap);
-    let stmt = format!(
-        "SELECT id, type, markdown FROM blocks \
-         WHERE markdown LIKE '%{needle}%' LIMIT {limit}"
-    );
-    // Defense-in-depth: validate that the assembled SQL is read-only before
-    // sending to the kernel. User input is already escaped, but the AST guard
-    // catches any escaping bug or future regression.
-    if let Err(e) = sql_guard::validate_read_only(&stmt) {
-        bail!("{e}");
-    }
-    let rows: Vec<Hit> = client.sql_typed(&stmt).await?;
-    emit_hits(rows, args.format)
+    let result = syo_core::search::fulltext(
+        client,
+        syo_core::search::FulltextInput {
+            query: args.query,
+            limit: args.limit,
+        },
+    )
+    .await?;
+    let hits: Vec<Hit> = result
+        .hits
+        .into_iter()
+        .map(|h| Hit {
+            id: h.id,
+            block_type: h.block_type,
+            markdown: h.markdown,
+        })
+        .collect();
+    emit_hits(hits, args.format)
 }

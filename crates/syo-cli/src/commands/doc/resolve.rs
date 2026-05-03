@@ -2,7 +2,6 @@ use anyhow::{Result, bail};
 use clap::{ArgGroup, Args};
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::doc_meta::resolve as resolve_doc_meta;
 
 use crate::output::OutputFormat;
 
@@ -41,7 +40,7 @@ pub async fn run(client: &SiyuanClient, args: ResolveArgs) -> Result<()> {
         args.notebook.as_deref(),
         args.hpath.as_deref(),
     )?;
-    let docs = resolve_doc_meta(client, lookup).await?;
+    let docs = syo_core::doc::resolve(client, lookup).await?.docs;
     let s = match args.format {
         OutputFormat::AgentMd => {
             bail!("doc resolve does not support --format agent-md; use json or json-pretty");

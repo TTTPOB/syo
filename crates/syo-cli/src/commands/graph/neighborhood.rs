@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::graph::{Direction, neighborhood};
 use siyuan_types::BlockId;
 
 #[derive(ClapArgs, Debug)]
@@ -21,11 +20,19 @@ pub struct Args {
 pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
     let id = BlockId::parse(&args.id).context("--id")?;
     let dir = match args.direction.as_str() {
-        "in" | "incoming" => Direction::Incoming,
-        "out" | "outgoing" => Direction::Outgoing,
-        _ => Direction::Both,
+        "in" | "incoming" => syo_core::graph::Direction::Incoming,
+        "out" | "outgoing" => syo_core::graph::Direction::Outgoing,
+        _ => syo_core::graph::Direction::Both,
     };
-    let g = neighborhood(client, &id, args.depth, dir).await?;
+    let g = syo_core::graph::neighborhood(
+        client,
+        syo_core::graph::NeighborhoodInput {
+            center: id,
+            depth: args.depth,
+            direction: dir,
+        },
+    )
+    .await?;
     println!("{}", serde_json::to_string_pretty(&g)?);
     Ok(())
 }

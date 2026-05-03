@@ -11,7 +11,10 @@ pub struct Args {
 }
 
 pub async fn run(client: &SiyuanClient, args: Args) -> Result<()> {
-    let nb = client.create_notebook(&args.name).await?;
+    let nb =
+        syo_core::notebook::create(client, syo_core::notebook::CreateInput { name: args.name })
+            .await?
+            .notebook;
     println!("{}", nb.id);
     Ok(())
 }

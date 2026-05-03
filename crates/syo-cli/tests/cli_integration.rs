@@ -6,7 +6,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{boot_with_seed, wait_for};
+use common::{boot_with_seed, cleanup_fixture, wait_for};
 use siyuan_model::{load::load_doc, pagination::PageRequest};
 use siyuan_render::agent_md::render_doc;
 use siyuan_types::BlockId;

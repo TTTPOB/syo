@@ -6,7 +6,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{boot_with_seed, wait_for};
+use common::{boot_with_seed, cleanup_fixture, wait_for};
 use serde::Deserialize;
 use siyuan_model::{
     relations::relations_for,
@@ -58,6 +58,7 @@ async fn list_tags_includes_seeded_tags() {
         alpha_pos < beta_pos,
         "list_tags must return tags in ascending order; got {tags:?}"
     );
+    cleanup_fixture(f).await.expect("cleanup");
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +93,7 @@ async fn search_by_tag_returns_tagged_blocks() {
         "preview should contain the raw tag markup; got: {:?}",
         hits[0].markdown_preview
     );
+    cleanup_fixture(f).await.expect("cleanup");
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +113,7 @@ async fn search_by_tag_handles_unknown_tag() {
         hits.is_empty(),
         "no blocks should match an unknown tag; got {hits:?}"
     );
+    cleanup_fixture(f).await.expect("cleanup");
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +155,7 @@ async fn search_by_tag_respects_limit() {
         "limit=2 must cap result count; got {} hits",
         limited.len()
     );
+    cleanup_fixture(f).await.expect("cleanup");
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +216,7 @@ async fn sql_typed_round_trip() {
         siyuan_types::BlockId::parse(&row.id)
             .unwrap_or_else(|_| panic!("id {:?} must be a valid BlockId", row.id));
     }
+    cleanup_fixture(f).await.expect("cleanup");
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +238,7 @@ async fn sql_raw_handles_empty_result() {
         rows.is_empty(),
         "no rows expected for impossible predicate; got {rows:?}"
     );
+    cleanup_fixture(f).await.expect("cleanup");
 }
 
 // ---------------------------------------------------------------------------
@@ -289,6 +295,7 @@ async fn relations_for_populates_tags() {
         "beta block summary must contain tag 'beta'; got: {:?}",
         beta_summary.tags
     );
+    cleanup_fixture(f).await.expect("cleanup");
 }
 
 // ---------------------------------------------------------------------------
@@ -365,4 +372,5 @@ async fn relations_for_counts_incoming_and_outgoing_refs() {
         "block B should have exactly one incoming ref; got: {:?}",
         b_summary.incoming_refs_count
     );
+    cleanup_fixture(f).await.expect("cleanup");
 }

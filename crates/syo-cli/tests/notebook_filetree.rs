@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use common::{Fixture, boot_with_seed, wait_for};
+use common::{Fixture, boot_with_seed, cleanup_fixture, wait_for};
 
 /// Path to the compiled `syo` binary (cargo sets `CARGO_BIN_EXE_syo` for tests).
 fn binary_path() -> std::path::PathBuf {
@@ -96,7 +96,7 @@ async fn get_ids_by_hpath_resolves_seeded_doc() {
 
     let ids = f
         .client
-        .get_ids_by_hpath(&f.notebook_id, "/IntegrationTestDoc")
+        .get_ids_by_hpath(&f.notebook_id, &f.doc_hpath)
         .await
         .expect("get_ids_by_hpath");
 
@@ -118,9 +118,10 @@ async fn get_hpath_by_id_round_trips() {
         .expect("get_hpath_by_id");
 
     // The kernel may return a leading notebook-name segment; assert on the tail.
+    let expected = f.doc_hpath.trim_start_matches('/');
     assert!(
-        hpath.contains("IntegrationTestDoc"),
-        "hpath should contain 'IntegrationTestDoc'; got: {hpath:?}"
+        hpath.contains(expected),
+        "hpath should contain '{expected}'; got: {hpath:?}"
     );
 }
 
@@ -150,14 +151,9 @@ async fn wait_for_hpath_containing(
 
 /// Drive the compiled `syo` binary so the test exercises the same clap
 /// parse path the user/agent sees. Returns stdout on success.
-fn run_cli(container: &siyuan_testkit::SiyuanContainer, args: &[&str]) -> std::process::Output {
+fn run_cli(args: &[&str]) -> std::process::Output {
     Command::new(binary_path())
-        .args([
-            "--base-url",
-            container.base_url(),
-            "--token",
-            container.token(),
-        ])
+        .args(["--base-url", common::base_url(), "--token", common::token()])
         .args(args)
         .output()
         .expect("spawn syo binary")
@@ -169,10 +165,7 @@ async fn rename_doc_by_id_changes_title() {
     let f: Fixture = boot_with_seed().await.expect("boot");
 
     let id_str = f.doc_id.to_string();
-    let out = run_cli(
-        &f.container,
-        &["doc", "rename", "--id", &id_str, "--title", "Renamed By Id"],
-    );
+    let out = run_cli(&["doc", "rename", "--id", &id_str, "--title", "Renamed By Id"]);
     assert!(
         out.status.success(),
         "doc rename --id failed: stderr={}",
@@ -194,19 +187,16 @@ async fn rename_doc_by_hpath_changes_title() {
     let f: Fixture = boot_with_seed().await.expect("boot");
 
     let nb_str = f.notebook_id.to_string();
-    let out = run_cli(
-        &f.container,
-        &[
-            "doc",
-            "rename",
-            "--notebook",
-            &nb_str,
-            "--hpath",
-            "/IntegrationTestDoc",
-            "--title",
-            "Renamed By Hpath",
-        ],
-    );
+    let out = run_cli(&[
+        "doc",
+        "rename",
+        "--notebook",
+        &nb_str,
+        "--hpath",
+        &f.doc_hpath,
+        "--title",
+        "Renamed By Hpath",
+    ]);
     assert!(
         out.status.success(),
         "doc rename --notebook --hpath failed: stderr={}",
@@ -266,19 +256,16 @@ async fn move_docs_by_from_ids_relocates_doc() {
 
     let id_str = f.doc_id.to_string();
     let dest_str = dest.id.to_string();
-    let out = run_cli(
-        &f.container,
-        &[
-            "doc",
-            "move",
-            "--from-ids",
-            &id_str,
-            "--to-notebook",
-            &dest_str,
-            "--to-path",
-            "/",
-        ],
-    );
+    let out = run_cli(&[
+        "doc",
+        "move",
+        "--from-ids",
+        &id_str,
+        "--to-notebook",
+        &dest_str,
+        "--to-path",
+        "/",
+    ]);
     assert!(
         out.status.success(),
         "doc move --from-ids failed: stderr={}",
@@ -290,10 +277,7 @@ async fn move_docs_by_from_ids_relocates_doc() {
     let dest_id = dest.id.clone();
     let ids = wait_for(
         || async {
-            let ids = f
-                .client
-                .get_ids_by_hpath(&dest_id, "/IntegrationTestDoc")
-                .await?;
+            let ids = f.client.get_ids_by_hpath(&dest_id, &f.doc_hpath).await?;
             if ids.contains(&doc_id) {
                 Ok(Some(ids))
             } else {
@@ -321,21 +305,18 @@ async fn move_docs_by_from_hpaths_relocates_doc() {
 
     let nb_str = f.notebook_id.to_string();
     let dest_str = dest.id.to_string();
-    let out = run_cli(
-        &f.container,
-        &[
-            "doc",
-            "move",
-            "--notebook",
-            &nb_str,
-            "--from-hpaths",
-            "/IntegrationTestDoc",
-            "--to-notebook",
-            &dest_str,
-            "--to-path",
-            "/",
-        ],
-    );
+    let out = run_cli(&[
+        "doc",
+        "move",
+        "--notebook",
+        &nb_str,
+        "--from-hpaths",
+        &f.doc_hpath,
+        "--to-notebook",
+        &dest_str,
+        "--to-path",
+        "/",
+    ]);
     assert!(
         out.status.success(),
         "doc move --from-hpaths failed: stderr={}",
@@ -346,10 +327,7 @@ async fn move_docs_by_from_hpaths_relocates_doc() {
     let dest_id = dest.id.clone();
     let ids = wait_for(
         || async {
-            let ids = f
-                .client
-                .get_ids_by_hpath(&dest_id, "/IntegrationTestDoc")
-                .await?;
+            let ids = f.client.get_ids_by_hpath(&dest_id, &f.doc_hpath).await?;
             if ids.contains(&doc_id) {
                 Ok(Some(ids))
             } else {
@@ -396,7 +374,7 @@ async fn remove_doc_by_id_makes_lookup_empty() {
     let f: Fixture = boot_with_seed().await.expect("boot");
 
     let id_str = f.doc_id.to_string();
-    let out = run_cli(&f.container, &["doc", "remove", "--id", &id_str]);
+    let out = run_cli(&["doc", "remove", "--id", &id_str]);
     assert!(
         out.status.success(),
         "doc remove --id failed: stderr={}",
@@ -406,10 +384,7 @@ async fn remove_doc_by_id_makes_lookup_empty() {
     let nb_id = f.notebook_id.clone();
     let ids = wait_for(
         || async {
-            let ids = f
-                .client
-                .get_ids_by_hpath(&nb_id, "/IntegrationTestDoc")
-                .await?;
+            let ids = f.client.get_ids_by_hpath(&nb_id, &f.doc_hpath).await?;
             if ids.is_empty() {
                 Ok(Some(ids))
             } else {
@@ -429,17 +404,14 @@ async fn remove_doc_by_hpath_makes_lookup_empty() {
     let f: Fixture = boot_with_seed().await.expect("boot");
 
     let nb_str = f.notebook_id.to_string();
-    let out = run_cli(
-        &f.container,
-        &[
-            "doc",
-            "remove",
-            "--notebook",
-            &nb_str,
-            "--hpath",
-            "/IntegrationTestDoc",
-        ],
-    );
+    let out = run_cli(&[
+        "doc",
+        "remove",
+        "--notebook",
+        &nb_str,
+        "--hpath",
+        &f.doc_hpath,
+    ]);
     assert!(
         out.status.success(),
         "doc remove --notebook --hpath failed: stderr={}",
@@ -449,10 +421,7 @@ async fn remove_doc_by_hpath_makes_lookup_empty() {
     let nb_id = f.notebook_id.clone();
     let ids = wait_for(
         || async {
-            let ids = f
-                .client
-                .get_ids_by_hpath(&nb_id, "/IntegrationTestDoc")
-                .await?;
+            let ids = f.client.get_ids_by_hpath(&nb_id, &f.doc_hpath).await?;
             if ids.is_empty() {
                 Ok(Some(ids))
             } else {
@@ -505,9 +474,9 @@ async fn notebook_ls_format_json_emits_parseable_array() {
     let output = Command::new(binary_path())
         .args([
             "--base-url",
-            f.container.base_url(),
+            common::base_url(),
             "--token",
-            f.container.token(),
+            common::token(),
             "notebook",
             "ls",
             "--format",

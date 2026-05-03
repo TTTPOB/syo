@@ -8,7 +8,7 @@ mod common;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use common::{boot_with_seed, wait_for};
+use common::{boot_with_seed, cleanup_fixture, wait_for};
 use siyuan_model::{load::load_doc, pagination::PageRequest, section::populate_section_children};
 use siyuan_types::BlockType;
 

@@ -9,7 +9,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{boot_with_seed, wait_for, wait_for_doc_indexed};
+use common::{boot_with_seed, cleanup_fixture, wait_for, wait_for_doc_indexed};
 use siyuan_client::SiyuanClient;
 use siyuan_model::{load::load_doc, pagination::PageRequest};
 use siyuan_types::{BlockId, ErrorKind, SiyuanError};
@@ -237,11 +237,11 @@ async fn pagination_oob_page_clamps_to_last() {
 #[tokio::test]
 #[ignore]
 async fn auth_error_when_token_wrong() {
-    let f = boot_with_seed().await.expect("boot");
+    common::ensure_booted().await;
 
     // Construct a second client pointing at the same container but with the wrong token.
     let bad_client =
-        SiyuanClient::new(f.container.base_url(), "definitely-wrong-token").expect("client build");
+        SiyuanClient::new(common::base_url(), "definitely-wrong-token").expect("client build");
 
     let err = bad_client
         .ls_notebooks()

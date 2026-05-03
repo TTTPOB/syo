@@ -21,21 +21,15 @@ use serde::Deserialize;
 
 use common::wait_for;
 use siyuan_client::SiyuanClient;
-use siyuan_testkit::SiyuanContainer;
 use siyuan_types::{BlockId, NotebookId};
 
 fn binary_path() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_BIN_EXE_syo"))
 }
 
-fn run_cli(container: &SiyuanContainer, args: &[&str]) -> std::process::Output {
+fn run_cli(args: &[&str]) -> std::process::Output {
     Command::new(binary_path())
-        .args([
-            "--base-url",
-            container.base_url(),
-            "--token",
-            container.token(),
-        ])
+        .args(["--base-url", common::base_url(), "--token", common::token()])
         .args(args)
         .output()
         .expect("spawn syo binary")
@@ -71,11 +65,17 @@ struct TreeNode {
 /// Boot a kernel and create three nested docs (`/A`, `/A/B`, `/A/B/C`)
 /// in a fresh notebook.
 async fn boot_with_nested_docs() -> Result<NestedFixture> {
-    siyuan_testkit::init_tracing();
-    let container = SiyuanContainer::start().await?;
-    let client = SiyuanClient::new(container.base_url(), container.token())?;
-
-    let nb = client.create_notebook("doctree-test").await?;
+    common::ensure_booted().await;
+    let client = SiyuanClient::new(common::base_url(), common::token())?;
+    let suffix = &format!(
+        "{:016x}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+    let nb_name = format!("doctree-{suffix}");
+    let nb = client.create_notebook(&nb_name).await?;
     let _ = client.open_notebook(&nb.id).await;
 
     // Each createDocWithMd takes the FULL hpath; the kernel auto-creates
@@ -90,7 +90,6 @@ async fn boot_with_nested_docs() -> Result<NestedFixture> {
     wait_for_doc_count(&client, &nb.id, 3).await?;
 
     Ok(NestedFixture {
-        container,
         client,
         notebook_id: nb.id,
         a,
@@ -101,12 +100,28 @@ async fn boot_with_nested_docs() -> Result<NestedFixture> {
 
 #[allow(dead_code)]
 struct NestedFixture {
-    container: SiyuanContainer,
     client: SiyuanClient,
     notebook_id: NotebookId,
     a: BlockId,
     b: BlockId,
     c: BlockId,
+}
+
+async fn cleanup_nested(f: NestedFixture) -> Result<()> {
+    f.client.remove_notebook(&f.notebook_id).await?;
+    let nb_id = f.notebook_id.clone();
+    wait_for(
+        || async {
+            let notebooks = f.client.ls_notebooks().await?;
+            if notebooks.iter().any(|nb| nb.id == nb_id) {
+                Ok(None)
+            } else {
+                Ok(Some(()))
+            }
+        },
+        Duration::from_secs(5),
+    )
+    .await
 }
 
 /// Wait until the notebook contains at least `min_docs` rows of type='d'.
@@ -195,12 +210,9 @@ async fn tree_id_mode_depth_one_loads_immediate_children() {
     let f = boot_with_nested_docs().await.expect("boot");
 
     let a_str = f.a.to_string();
-    let out = run_cli(
-        &f.container,
-        &[
-            "doc", "tree", "--id", &a_str, "--depth", "1", "--format", "json",
-        ],
-    );
+    let out = run_cli(&[
+        "doc", "tree", "--id", &a_str, "--depth", "1", "--format", "json",
+    ]);
     assert!(
         out.status.success(),
         "doc tree --id --depth 1 failed: stderr={}",
@@ -235,12 +247,9 @@ async fn tree_id_mode_depth_one_loads_immediate_children() {
 async fn tree_id_mode_depth_two_loads_two_levels() {
     let f = boot_with_nested_docs().await.expect("boot");
     let a_str = f.a.to_string();
-    let out = run_cli(
-        &f.container,
-        &[
-            "doc", "tree", "--id", &a_str, "--depth", "2", "--format", "json",
-        ],
-    );
+    let out = run_cli(&[
+        "doc", "tree", "--id", &a_str, "--depth", "2", "--format", "json",
+    ]);
     assert!(out.status.success());
     let tree: TreeNode = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
     assert_eq!(tree.children.len(), 1);
@@ -256,12 +265,9 @@ async fn tree_id_mode_depth_two_loads_two_levels() {
 async fn tree_id_mode_depth_all_loads_full_subtree() {
     let f = boot_with_nested_docs().await.expect("boot");
     let a_str = f.a.to_string();
-    let out = run_cli(
-        &f.container,
-        &[
-            "doc", "tree", "--id", &a_str, "--depth", "all", "--format", "json",
-        ],
-    );
+    let out = run_cli(&[
+        "doc", "tree", "--id", &a_str, "--depth", "all", "--format", "json",
+    ]);
     assert!(out.status.success());
     let tree: TreeNode = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
     assert_eq!(tree.children.len(), 1);
@@ -274,19 +280,16 @@ async fn tree_id_mode_depth_all_loads_full_subtree() {
 async fn tree_notebook_root_yields_virtual_root() {
     let f = boot_with_nested_docs().await.expect("boot");
     let nb_str = f.notebook_id.to_string();
-    let out = run_cli(
-        &f.container,
-        &[
-            "doc",
-            "tree",
-            "--notebook",
-            &nb_str,
-            "--hpath",
-            "/",
-            "--format",
-            "json",
-        ],
-    );
+    let out = run_cli(&[
+        "doc",
+        "tree",
+        "--notebook",
+        &nb_str,
+        "--hpath",
+        "/",
+        "--format",
+        "json",
+    ]);
     assert!(
         out.status.success(),
         "doc tree --notebook --hpath / failed: stderr={}",
@@ -315,27 +318,21 @@ async fn tree_notebook_hpath_matches_id_mode() {
 
     // Same depth across both invocations. Compare the trees field by
     // field — they should be identical except for the input route.
-    let by_id = run_cli(
-        &f.container,
-        &[
-            "doc", "tree", "--id", &a_str, "--depth", "1", "--format", "json",
-        ],
-    );
-    let by_hpath = run_cli(
-        &f.container,
-        &[
-            "doc",
-            "tree",
-            "--notebook",
-            &nb_str,
-            "--hpath",
-            "/A",
-            "--depth",
-            "1",
-            "--format",
-            "json",
-        ],
-    );
+    let by_id = run_cli(&[
+        "doc", "tree", "--id", &a_str, "--depth", "1", "--format", "json",
+    ]);
+    let by_hpath = run_cli(&[
+        "doc",
+        "tree",
+        "--notebook",
+        &nb_str,
+        "--hpath",
+        "/A",
+        "--depth",
+        "1",
+        "--format",
+        "json",
+    ]);
     assert!(by_id.status.success());
     assert!(by_hpath.status.success());
 
@@ -366,7 +363,7 @@ async fn tree_non_doc_id_is_not_found() {
         .expect("seeded doc must have at least one non-doc child block")
         .to_string();
 
-    let out = run_cli(&f.container, &["doc", "tree", "--id", &non_doc_id]);
+    let out = run_cli(&["doc", "tree", "--id", &non_doc_id]);
     assert!(
         !out.status.success(),
         "doc tree --id <non-doc> must fail with NotFound; stdout={}",
@@ -386,10 +383,7 @@ async fn tree_non_doc_id_is_not_found() {
 async fn tree_agent_md_format_well_formed() {
     let f = boot_with_nested_docs().await.expect("boot");
     let a_str = f.a.to_string();
-    let out = run_cli(
-        &f.container,
-        &["doc", "tree", "--id", &a_str, "--depth", "all"],
-    );
+    let out = run_cli(&["doc", "tree", "--id", &a_str, "--depth", "all"]);
     assert!(out.status.success());
     let s = String::from_utf8_lossy(&out.stdout);
     assert!(

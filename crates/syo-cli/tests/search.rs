@@ -6,7 +6,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{boot_with_seed, wait_for};
+use common::{boot_with_seed, cleanup_fixture, wait_for};
 use serde::Deserialize;
 
 // ---------------------------------------------------------------------------

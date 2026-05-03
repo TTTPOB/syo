@@ -7,7 +7,7 @@ mod common;
 use std::io::Write as _;
 use std::time::Duration;
 
-use common::{boot_with_seed, wait_for};
+use common::{boot_with_seed, cleanup_fixture, wait_for};
 use serde::Deserialize;
 use siyuan_model::graph::{Direction, neighborhood};
 use siyuan_model::{load::load_doc, pagination::PageRequest};

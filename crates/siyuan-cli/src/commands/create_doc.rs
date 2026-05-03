@@ -20,6 +20,8 @@ use siyuan_types::NotebookId;
 ///     `/20260501090000-abc1234.sy`.
 ///   --markdown-file (required): path to a markdown file, or `-` to read
 ///     from stdin.
+///   --force (optional): skip the hpath-conflict check. By default,
+///     create-doc rejects duplicate hpaths with a clear error.
 ///
 /// Prints the new document's root block id to stdout.
 ///

@@ -718,8 +718,9 @@ async fn validate_target_parent_exists(
     }
     let rows: Vec<R> = client
         .sql_typed(&format!(
-            "SELECT id FROM blocks WHERE box = '{}' AND type = 'd' AND hpath LIKE '{}%' LIMIT 1",
+            "SELECT id FROM blocks WHERE box = '{}' AND type = 'd' AND (hpath = '{}' OR hpath LIKE '{}/%') LIMIT 1",
             notebook.as_str(),
+            parent,
             parent
         ))
         .await?;

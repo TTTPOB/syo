@@ -8,4 +8,4 @@ pub mod position;
 pub use block::{BlockNode, BlockRole, BlockSubtype, BlockType};
 pub use error::{ErrorKind, SiyuanError};
 pub use id::{BlockId, NotebookId};
-pub use position::Position;
+pub use position::{Position, PositionKind};

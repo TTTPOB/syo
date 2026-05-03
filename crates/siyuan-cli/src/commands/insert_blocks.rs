@@ -9,7 +9,7 @@ use siyuan_types::{BlockId, BlockType, Position};
 /// Insert a new markdown block (or blocks) at a position relative to an anchor.
 ///
 /// Sibling commands: `siyuan block move` moves an EXISTING block (keeps id);
-/// `siyuan block update` overwrites a block in place; `siyuan create-doc`
+/// `siyuan block update` overwrites a block in place; `siyuan doc create`
 /// mints a whole new document. Use `siyuan block insert` only to add NEW
 /// blocks inside an existing document.
 ///

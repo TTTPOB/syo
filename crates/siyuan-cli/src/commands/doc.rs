@@ -14,7 +14,7 @@ use crate::output::OutputFormat;
 pub enum DocCmd {
     /// Look up document metadata by id OR by (notebook + hpath).
     ///
-    /// Sibling commands: `siyuan get-doc` returns the rendered document
+    /// Sibling commands: `siyuan doc get` returns the rendered document
     /// content (requires id); this command returns ONLY the metadata
     /// (id, hpath, notebook_id, notebook_name, title, storage_path) and
     /// is the canonical hpath<->id translator. `siyuan notebook ls`
@@ -119,7 +119,7 @@ pub enum DocCmd {
     Move(MoveArgs),
     /// Set the document's `icon` attribute (or clear it with empty value).
     ///
-    /// Sibling commands: `siyuan set-attrs --attr icon=...` does the
+    /// Sibling commands: `siyuan attrs set --attr icon=...` does the
     /// same thing for any block; this is just a convenience wrapper for
     /// document roots. Use `siyuan doc set-sort` to change ordering.
     ///
@@ -142,7 +142,7 @@ pub enum DocCmd {
     SetIcon(IconArgs),
     /// Set the document's `sort` attribute (manual ordering hint).
     ///
-    /// Sibling commands: `siyuan set-attrs --attr sort=N` is the generic
+    /// Sibling commands: `siyuan attrs set --attr sort=N` is the generic
     /// equivalent. SiYuan uses `sort` as the sibling-ordering key when the
     /// notebook is configured for manual sort.
     ///
@@ -194,7 +194,7 @@ pub enum DocCmd {
     /// Sibling commands: `siyuan doc resolve` looks up a single
     /// document's metadata; this command enumerates a SUBTREE.
     /// `siyuan notebook ls` enumerates whole notebooks (no nesting).
-    /// `siyuan get-doc` returns rendered content for one doc; `doc tree`
+    /// `siyuan doc get` returns rendered content for one doc; `doc tree`
     /// is filetree-only — block-level children live under `get-block`.
     ///
     /// Address modes (mutually exclusive — provide EXACTLY ONE):

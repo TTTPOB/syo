@@ -2,12 +2,10 @@ use rmcp::ErrorData as McpError;
 use serde_json::{Value, json};
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::pagination::PageRequest;
 use siyuan_types::BlockId;
 
 use super::util::{
-    MAX_PAGE_SIZE, anyhow_to_mcp, ensure_object, optional_u64, required_string, siyuan_to_mcp,
-    with_hint,
+    MAX_PAGE_SIZE, anyhow_to_mcp, ensure_object, optional_u64, required_string, with_hint,
 };
 
 pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -16,47 +14,39 @@ pub async fn get_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
     let id = BlockId::parse(&id_str)
         .map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))?;
 
-    // Do NOT cap `page` here: paginate() clamps an over-large `page` to
-    // total_pages (see R1 BUG-1 fix), and capping here would prevent
-    // legitimate access to high page numbers in long documents. We only
-    // cap `page_size` so a pathological caller cannot defeat pagination.
     let page = optional_u64(&map, "page").unwrap_or(1) as usize;
     let page_size = optional_u64(&map, "page_size")
         .unwrap_or(50)
         .min(MAX_PAGE_SIZE) as usize;
-    let format = map
+    let format_str = map
         .get("format")
         .and_then(|v| v.as_str())
         .unwrap_or("agent-md");
 
-    // load_doc returns anyhow::Error but may wrap a typed SiyuanError (e.g.
-    // NotFound when the doc id is unknown). Downcast first so siyuan_to_mcp's
-    // existing typed-error mapping reaches the wire — otherwise NotFound gets
-    // flattened to a generic internal_error by anyhow_to_mcp.
-    let bundle = siyuan_model::load::load_doc(client, &id, PageRequest { page, page_size })
-        .await
-        .map_err(|e| match e.downcast::<siyuan_types::SiyuanError>() {
-            Ok(typed) => siyuan_to_mcp(typed),
-            Err(other) => anyhow_to_mcp(other),
-        })?;
-
-    let total_pages = bundle.page.total_pages;
-    let current_page = bundle.page.page;
-
-    let content = match format {
-        "json" => siyuan_render::json_bundle::render_bundle(&bundle, false)
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?,
-        "json-pretty" => siyuan_render::json_bundle::render_bundle(&bundle, true)
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?,
-        _ => siyuan_render::agent_md::render_doc(&bundle),
+    let format = match format_str {
+        "json" => syo_core::doc::DocFormat::Json,
+        "json-pretty" => syo_core::doc::DocFormat::JsonPretty,
+        _ => syo_core::doc::DocFormat::AgentMd,
     };
 
-    let payload = json!({ "format": format, "content": content });
+    let output = syo_core::doc::get(
+        client,
+        syo_core::doc::GetDocInput {
+            id,
+            page,
+            page_size,
+            format,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
 
-    // Only emit a "next page" hint when there is actually a next page to fetch;
-    // on the last page paginate() clamps `page` to `total_pages`, so suggesting
-    // page=current+1 would loop forever.
-    match next_page_hint(current_page, total_pages, format) {
+    let total_pages = output.total_pages;
+    let current_page = output.page;
+
+    let payload = json!({ "format": format_str, "content": output.content });
+
+    match next_page_hint(current_page, total_pages, format_str) {
         Some(hint) => Ok(with_hint(payload, &hint)),
         None => Ok(payload),
     }
@@ -88,13 +78,20 @@ pub async fn create_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
     let notebook = siyuan_types::NotebookId::parse(&notebook_str)
         .map_err(|e| McpError::invalid_params(format!("invalid notebook id: {e}"), None))?;
 
-    let new_id = client
-        .create_doc_with_md(&notebook, &hpath, &markdown)
-        .await
-        .map_err(siyuan_to_mcp)?;
+    let output = syo_core::doc::create(
+        client,
+        syo_core::doc::CreateDocInput {
+            notebook,
+            hpath,
+            markdown,
+            force: true,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
 
     Ok(with_hint(
-        json!({ "id": new_id }),
+        json!({ "id": output.id }),
         "Mutation completed at the kernel. SQL-indexed reads (syo_siyuan_doc_get, syo_siyuan_sql) may \
          briefly show stale state for ~100–500 ms; if a follow-up read returns unexpected data, \
          retry once. The returned id is the new document's root block id.",

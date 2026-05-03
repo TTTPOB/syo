@@ -1,25 +1,19 @@
 use rmcp::ErrorData as McpError;
 use serde_json::{Value, json};
 
-use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_string};
-use siyuan_model::sql_guard;
+use siyuan_client::SiyuanClient;
 
-use super::util::{ensure_object, optional_u64, required_string, siyuan_to_mcp, with_hint};
+use super::util::{
+    anyhow_to_mcp, ensure_object, optional_string, optional_u64, required_string, with_hint,
+};
 
 pub async fn raw_sql(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let stmt = required_string(&map, "stmt")?;
 
-    // AST-level read-only guard. The kernel does NOT enforce read-only at
-    // the SQL level (see security advisories GHSA-jqwg-75qf-vmf9 and
-    // GHSA-j7wh-x834-p3r7), so this check is the actual gate, not just a
-    // UX nicety. Reject anything that is not a single Query / Explain-of-
-    // Query node before any kernel round trip.
-    if let Err(e) = sql_guard::validate_read_only(&stmt) {
-        return Err(McpError::invalid_params(format!("`stmt`: {e}"), None));
-    }
-
-    let rows = client.sql(&stmt).await.map_err(siyuan_to_mcp)?;
+    let rows = syo_core::sql::raw(client, syo_core::sql::SqlInput { stmt })
+        .await
+        .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
         json!({ "rows": rows }),
         "Power tool: results are raw rows from the SiYuan SQLite database. Some columns may be \
@@ -38,34 +32,43 @@ pub async fn search_text(client: &SiyuanClient, args: Value) -> Result<Value, Mc
     if query.trim().is_empty() {
         return Err(McpError::invalid_params("`query` must not be empty", None));
     }
-    // Cap user-supplied limit to MAX_SEARCH_LIMIT so a pathological caller
-    // can't ask the kernel for an unbounded result set.
-    let limit = optional_u64(&map, "limit")
-        .unwrap_or(50)
-        .min(MAX_SEARCH_LIMIT);
+    // Cap user-supplied limit via syo-core which caps at MAX_SEARCH_LIMIT internally.
+    let limit = optional_u64(&map, "limit").unwrap_or(50) as usize;
 
-    // Escape single quotes for SQL string-literal safety. The SiYuan
-    // kernel's SQL engine does not support ESCAPE '\' in LIKE patterns,
-    // so % and _ in user input behave as LIKE wildcards.
-    let escaped = escape_sql_string(&query);
-    let stmt = format!(
-        "SELECT id, root_id, markdown FROM blocks \
-         WHERE markdown LIKE '%{escaped}%' LIMIT {limit}"
-    );
-
-    // AST-level read-only guard for defense-in-depth. User input is already
-    // escaped, but the AST guard catches any escaping bug or future regression.
-    if let Err(e) = sql_guard::validate_read_only(&stmt) {
-        return Err(McpError::invalid_params(format!("`query`: {e}"), None));
-    }
-
-    let rows = client.sql(&stmt).await.map_err(siyuan_to_mcp)?;
+    let output =
+        syo_core::search::fulltext(client, syo_core::search::FulltextInput { query, limit })
+            .await
+            .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
-        json!({ "hits": rows }),
+        json!({ "hits": output.hits }),
         "Results are SQL LIKE substring matches (case-insensitive on most SQLite builds). \
          The query searches block markdown content. Results may lag recent mutations by \
          ~100–500 ms. If too many results are returned, narrow the query or lower the limit. \
          The `limit` argument is capped server-side at 1000.",
+    ))
+}
+
+pub async fn search_blocks(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
+    let map = ensure_object(args)?;
+    let block_type = optional_string(&map, "type").unwrap_or_default();
+    let contains = optional_string(&map, "contains").unwrap_or_default();
+    let limit = optional_u64(&map, "limit").unwrap_or(50) as usize;
+
+    let output = syo_core::search::blocks(
+        client,
+        syo_core::search::BlocksInput {
+            block_type,
+            contains,
+            limit,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
+    Ok(with_hint(
+        json!({ "hits": output.hits }),
+        "Results are SQL-filtered by block type (=) and/or content (LIKE). When both \
+         `type` and `contains` are empty, all blocks are returned up to `limit`. \
+         Results may lag recent mutations by ~100–500 ms.",
     ))
 }
 

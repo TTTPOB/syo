@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use siyuan_client::{MAX_SEARCH_LIMIT, SiyuanClient, escape_sql_string};
 use siyuan_model::sql_guard;
@@ -12,7 +12,7 @@ use siyuan_model::sql_guard;
 ///
 /// Deserialized from SQL rows; the `type` column is remapped to `block_type`
 /// so the struct field is idiomatic Rust.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct SearchHit {
     pub id: String,
     #[serde(rename = "type")]

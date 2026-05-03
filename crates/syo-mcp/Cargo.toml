@@ -16,6 +16,7 @@ siyuan-types = { workspace = true }
 siyuan-client = { workspace = true }
 siyuan-model = { workspace = true }
 siyuan-render = { workspace = true }
+syo-core = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

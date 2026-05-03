@@ -29,9 +29,16 @@ pub async fn neighborhood(client: &SiyuanClient, args: Value) -> Result<Value, M
         _ => Direction::Both,
     };
 
-    let graph = siyuan_model::graph::neighborhood(client, &center, depth, direction)
-        .await
-        .map_err(anyhow_to_mcp)?;
+    let graph = syo_core::graph::neighborhood(
+        client,
+        syo_core::graph::NeighborhoodInput {
+            center,
+            depth,
+            direction,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
 
     let truncated = graph.truncated;
     let graph_val =
@@ -45,6 +52,54 @@ pub async fn neighborhood(client: &SiyuanClient, args: Value) -> Result<Value, M
          directly for unbounded results."
     } else {
         "Graph is complete within the requested depth and direction. `truncated` is false."
+    };
+
+    Ok(with_hint(json!(graph_val), hint))
+}
+
+pub async fn backlinks(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
+    let map = ensure_object(args)?;
+    let center_str = required_string(&map, "center")?;
+    let center = BlockId::parse(&center_str)
+        .map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))?;
+
+    let graph = syo_core::graph::backlinks(client, &center)
+        .await
+        .map_err(anyhow_to_mcp)?;
+
+    let truncated = graph.truncated;
+    let graph_val =
+        serde_json::to_value(graph).map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+    let hint = if truncated {
+        "Graph traversal hit the per-call node/edge limit — `truncated` is true. \
+         The result is a partial view of backlinks."
+    } else {
+        "Graph is complete; all direct backlinks are included. `truncated` is false."
+    };
+
+    Ok(with_hint(json!(graph_val), hint))
+}
+
+pub async fn outgoing(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
+    let map = ensure_object(args)?;
+    let center_str = required_string(&map, "center")?;
+    let center = BlockId::parse(&center_str)
+        .map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))?;
+
+    let graph = syo_core::graph::outgoing(client, &center)
+        .await
+        .map_err(anyhow_to_mcp)?;
+
+    let truncated = graph.truncated;
+    let graph_val =
+        serde_json::to_value(graph).map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+    let hint = if truncated {
+        "Graph traversal hit the per-call node/edge limit — `truncated` is true. \
+         The result is a partial view of outgoing links."
+    } else {
+        "Graph is complete; all direct outgoing links are included. `truncated` is false."
     };
 
     Ok(with_hint(json!(graph_val), hint))

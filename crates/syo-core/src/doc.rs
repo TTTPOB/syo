@@ -26,6 +26,8 @@ pub struct GetDocInput {
 
 pub struct GetDocOutput {
     pub content: String,
+    pub page: usize,
+    pub total_pages: usize,
 }
 
 pub async fn get(client: &SiyuanClient, input: GetDocInput) -> Result<GetDocOutput> {
@@ -38,12 +40,18 @@ pub async fn get(client: &SiyuanClient, input: GetDocInput) -> Result<GetDocOutp
         },
     )
     .await?;
+    let page = bundle.page.page;
+    let total_pages = bundle.page.total_pages;
     let content = match input.format {
         DocFormat::AgentMd => render_doc(&bundle),
         DocFormat::Json => render_bundle(&bundle, false)?,
         DocFormat::JsonPretty => render_bundle(&bundle, true)?,
     };
-    Ok(GetDocOutput { content })
+    Ok(GetDocOutput {
+        content,
+        page,
+        total_pages,
+    })
 }
 
 // --- create ---

@@ -264,11 +264,17 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              children — only its parent and sibling order change.\n\
              \n\
              Inputs: `id` (required) is the block id to move. `position` (required) is \
-             one of `after_block` (moved block becomes a sibling immediately AFTER anchor) \
-             or `append_child` (moved block becomes the LAST child of container anchor). \
-             `anchor` (required) is the anchor block id. Unlike syo_siyuan_block_insert, only \
-             `after_block` and `append_child` are supported — use syo_siyuan_block_insert for \
-             the other six position kinds.\n\
+             one of the eight position kinds describing where the block lands relative to \
+             `anchor`:\n\
+               after_block       moved block becomes sibling immediately AFTER anchor\n\
+               before_block      moved block becomes sibling immediately BEFORE anchor\n\
+               append_child      moved block becomes the LAST child of container anchor\n\
+               prepend_child     moved block becomes the FIRST child of container anchor\n\
+               append_section    moved block becomes the LAST block in the heading section\n\
+               prepend_section   moved block is inserted immediately AFTER the heading\n\
+               append_doc        moved block becomes the LAST block of document anchor\n\
+               prepend_doc       moved block becomes the FIRST block of document anchor\n\
+             `anchor` (required) is the anchor block id whose role depends on `position`.\n\
              \n\
              The moved block keeps its id and entire subtree intact.\n\
              \n\
@@ -280,7 +286,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Example:\n\
                in:  { \"id\": \"20260501090000-blk0001\", \"position\": \"after_block\", \"anchor\": \"20260501090000-blk0002\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["id","position","anchor"],"properties":{"id":{"type":"string"},"position":{"type":"string","enum":["after_block","append_child"]},"anchor":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["id","position","anchor"],"properties":{"id":{"type":"string"},"position":{"type":"string","enum":["after_block","before_block","append_child","prepend_child","append_section","prepend_section","append_doc","prepend_doc"]},"anchor":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::block::block_move(&c, args).await }
@@ -374,6 +380,55 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::attr::set_attrs(&c, args).await }
+            })
+        );
+    }
+
+    // ---- doc set_icon / set_sort ----
+    {
+        let c = Arc::clone(&client);
+        reg!(
+            "syo_siyuan_doc_set_icon",
+            "Set the icon attribute on a document or block.\n\
+             \n\
+             Sibling tools: `syo_siyuan_attrs_set` can also set icon (key `icon`) along with \
+             other attributes; this is a focused convenience tool. `syo_siyuan_doc_set_sort` \
+             is the analogous sort mutator.\n\
+             \n\
+             Inputs: `id` (required) is the block id. `icon` (required) is the icon string \
+             (e.g. `:rocket:`); pass an empty string to clear.\n\
+             \n\
+             Example:\n\
+               in:  { \"id\": \"20260501090000-doc0001\", \"icon\": \":rocket:\" }\n\
+               out: { \"ok\": true }",
+            r#"{"type":"object","required":["id","icon"],"properties":{"id":{"type":"string"},"icon":{"type":"string"}},"additionalProperties":true}"#,
+            make_handler(move |_, args| {
+                let c = Arc::clone(&c);
+                async move { tools::attr::set_icon(&c, args).await }
+            })
+        );
+    }
+
+    {
+        let c = Arc::clone(&client);
+        reg!(
+            "syo_siyuan_doc_set_sort",
+            "Set the sort attribute on a document or block.\n\
+             \n\
+             Sibling tools: `syo_siyuan_attrs_set` can also set sort (key `sort`) along with \
+             other attributes; this is a focused convenience tool. `syo_siyuan_doc_set_icon` \
+             is the analogous icon mutator.\n\
+             \n\
+             Inputs: `id` (required) is the block id. `sort` (required) is an integer sort \
+             order value.\n\
+             \n\
+             Example:\n\
+               in:  { \"id\": \"20260501090000-doc0001\", \"sort\": 5 }\n\
+               out: { \"ok\": true }",
+            r#"{"type":"object","required":["id","sort"],"properties":{"id":{"type":"string"},"sort":{"type":"integer"}},"additionalProperties":true}"#,
+            make_handler(move |_, args| {
+                let c = Arc::clone(&c);
+                async move { tools::attr::set_sort(&c, args).await }
             })
         );
     }
@@ -869,6 +924,33 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         );
     }
 
+    // ---- search_blocks ----
+    {
+        let c = Arc::clone(&client);
+        reg!(
+            "syo_siyuan_search_blocks",
+            "Search for blocks by type and/or content filter.\n\
+             \n\
+             Sibling tools: `syo_siyuan_search_text` does fulltext LIKE against the `markdown` \
+             column; `syo_siyuan_tag_search` finds blocks by exact tag match; `syo_siyuan_sql` \
+             is the raw escape hatch for arbitrary queries. syo_siyuan_search_blocks filters by \
+             block type (=) and/or content (LIKE); empty filters select all blocks up to `limit`.\n\
+             \n\
+             Inputs: `type` (optional) is the block type code (e.g. `p`, `h`, `d`). \
+             `contains` (optional) is a substring to match against the `content` column \
+             (visible text). `limit` (optional, default 50) caps the result count.\n\
+             \n\
+             Example:\n\
+               in:  { \"type\": \"h\", \"contains\": \"Plan\", \"limit\": 10 }\n\
+               out: { \"data\": { \"hits\": [ { \"id\": \"20260501090000-blk0001\", \"type\": \"h\", \"markdown\": \"## Plan\" } ] } }",
+            r#"{"type":"object","properties":{"type":{"type":"string","description":"Block type code (e.g. p, h, d)"},"contains":{"type":"string","description":"Substring match against content column"},"limit":{"type":"integer","default":50}},"additionalProperties":true}"#,
+            make_handler(move |_, args| {
+                let c = Arc::clone(&c);
+                async move { tools::sql::search_blocks(&c, args).await }
+            })
+        );
+    }
+
     // ---- asset ----
     {
         let c = Arc::clone(&client);
@@ -876,10 +958,11 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "syo_siyuan_asset_upload",
             "Upload a local file as a SiYuan asset.\n\
              \n\
-             Sibling tools: there is no separate `reference` tool at the MCP layer (the CLI \
-             has `syo asset reference` which is a pure formatter). Use the returned \
-             asset path inside markdown that you pass to `syo_siyuan_block_insert`, \
-             `syo_siyuan_block_update`, or `syo_siyuan_doc_create`.\n\
+             Sibling tools: `syo_siyuan_asset_reference` is a pure formatter that builds \
+             a markdown image reference from a path and alt text (no kernel round trip). \
+             Use the returned asset path inside markdown that you pass to \
+             `syo_siyuan_block_insert`, `syo_siyuan_block_update`, or \
+             `syo_siyuan_doc_create`.\n\
              \n\
              Inputs: `file_path` (required) is an ABSOLUTE path on the machine running \
              the MCP server (NOT on the SiYuan kernel host if they differ). The process \
@@ -899,6 +982,32 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         );
     }
 
+    {
+        let c = Arc::clone(&client);
+        reg!(
+            "syo_siyuan_asset_reference",
+            "Build a markdown image reference from an asset path and alt text.\n\
+             \n\
+             Sibling tools: `syo_siyuan_asset_upload` uploads a local file and returns a \
+             kernel-relative asset path. syo_siyuan_asset_reference is a PURE formatter — \
+             it does not contact the SiYuan kernel. Use its output markdown with \
+             `syo_siyuan_block_insert` or `syo_siyuan_block_update` to embed the asset.\n\
+             \n\
+             Inputs: `path` (required) is the asset path (e.g. `assets/img.png`). \
+             `alt` (optional, default \"\") is the alt text; when empty, the filename \
+             portion of `path` is used as alt.\n\
+             \n\
+             Example:\n\
+               in:  { \"path\": \"assets/img.png\", \"alt\": \"My Image\" }\n\
+               out: { \"data\": { \"markdown\": \"![My Image](assets/img.png)\" } }",
+            r#"{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"alt":{"type":"string","default":""}},"additionalProperties":true}"#,
+            make_handler(move |_, args| {
+                let _c = Arc::clone(&c);
+                async move { tools::asset::reference(args) }
+            })
+        );
+    }
+
     // ---- graph ----
     {
         let c = Arc::clone(&client);
@@ -907,10 +1016,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "Compute the link-graph neighborhood around a center block up to a given depth.\n\
              \n\
              Sibling tools: `syo_siyuan_sql` against the `refs` table gives unbounded results \
-             when this tool's caps are insufficient. There are no separate backlinks / \
-             outgoing tools at the MCP layer — set `direction` to `incoming` or `outgoing` \
-             here to get those. The CLI exposes `syo graph backlinks` / `outgoing` as \
-             depth-1 single-direction shortcuts.\n\
+             when this tool's caps are insufficient. `syo_siyuan_graph_backlinks` and \
+             `syo_siyuan_graph_outgoing` are depth-1 single-direction shortcuts (one hop, \
+             incoming or outgoing only). The CLI exposes `syo graph backlinks` / `outgoing` \
+             as the same shortcuts.\n\
              \n\
              Inputs: `center` (required) is the center block id. `depth` (optional, default \
              1) is the hop count, CAPPED at 8 by the model layer. `direction` (optional, \
@@ -930,6 +1039,62 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::graph::neighborhood(&c, args).await }
+            })
+        );
+    }
+
+    {
+        let c = Arc::clone(&client);
+        reg!(
+            "syo_siyuan_graph_backlinks",
+            "Fetch the incoming backlink graph for a block (depth-1, incoming only).\n\
+             \n\
+             Sibling tools: `syo_siyuan_graph_neighborhood` is the general tool with \
+             configurable depth and direction; `syo_siyuan_graph_outgoing` fetches the \
+             outgoing link graph. syo_siyuan_graph_backlinks is a focused convenience \
+             shortcut returning all blocks that reference the center block.\n\
+             \n\
+             Inputs: `center` (required) is the center block id. Always uses depth=1 \
+             and direction=incoming.\n\
+             \n\
+             Traversal stops at 500 nodes or 1000 edges per call. When either cap is hit, \
+             `data.truncated` is `true` and the result is partial.\n\
+             \n\
+             Example:\n\
+               in:  { \"center\": \"20260501090000-blk0001\" }\n\
+               out: { \"data\": { \"nodes\": [...], \"edges\": [...], \"truncated\": false } }",
+            r#"{"type":"object","required":["center"],"properties":{"center":{"type":"string"}},"additionalProperties":true}"#,
+            make_handler(move |_, args| {
+                let c = Arc::clone(&c);
+                async move { tools::graph::backlinks(&c, args).await }
+            })
+        );
+    }
+
+    {
+        let c = Arc::clone(&client);
+        reg!(
+            "syo_siyuan_graph_outgoing",
+            "Fetch the outgoing link graph for a block (depth-1, outgoing only).\n\
+             \n\
+             Sibling tools: `syo_siyuan_graph_neighborhood` is the general tool with \
+             configurable depth and direction; `syo_siyuan_graph_backlinks` fetches the \
+             incoming backlink graph. syo_siyuan_graph_outgoing is a focused convenience \
+             shortcut returning all blocks that the center block references.\n\
+             \n\
+             Inputs: `center` (required) is the center block id. Always uses depth=1 \
+             and direction=outgoing.\n\
+             \n\
+             Traversal stops at 500 nodes or 1000 edges per call. When either cap is hit, \
+             `data.truncated` is `true` and the result is partial.\n\
+             \n\
+             Example:\n\
+               in:  { \"center\": \"20260501090000-blk0001\" }\n\
+               out: { \"data\": { \"nodes\": [...], \"edges\": [...], \"truncated\": false } }",
+            r#"{"type":"object","required":["center"],"properties":{"center":{"type":"string"}},"additionalProperties":true}"#,
+            make_handler(move |_, args| {
+                let c = Arc::clone(&c);
+                async move { tools::graph::outgoing(&c, args).await }
             })
         );
     }

@@ -2,12 +2,12 @@ use rmcp::ErrorData as McpError;
 use serde_json::{Map, Value, json};
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::doc_meta::{DocLookup, resolve as resolve_doc_meta, resolve_one_storage};
-use siyuan_model::doc_tree::{Depth, build_tree};
+use siyuan_model::doc_meta::DocLookup;
+use siyuan_model::doc_tree::Depth;
 use siyuan_types::{BlockId, NotebookId};
 
 use super::util::{
-    ensure_object, optional_string, required_string, siyuan_to_mcp, string_array, with_hint,
+    anyhow_to_mcp, ensure_object, optional_string, required_string, string_array, with_hint,
 };
 
 fn parse_notebook_id(s: &str) -> Result<NotebookId, McpError> {
@@ -252,11 +252,11 @@ pub async fn tree(client: &SiyuanClient, args: Value) -> Result<Value, McpError>
     let map = ensure_object(args)?;
     let lookup = parse_tree_lookup(&map)?;
     let depth = parse_depth(&map)?;
-    let tree = build_tree(client, lookup, depth)
+    let output = syo_core::doc::tree(client, syo_core::doc::TreeInput { lookup, depth })
         .await
-        .map_err(siyuan_to_mcp)?;
+        .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
-        json!({ "tree": tree }),
+        json!({ "tree": output.tree }),
         "Filetree listing: each node carries id, title, hpath, has_children, \
          doc_count_recursive (full subtree count), created, updated, sort, icon, \
          notebook_id, notebook_name, storage_path, and children (sliced to `depth`). \
@@ -269,10 +269,10 @@ pub async fn tree(client: &SiyuanClient, args: Value) -> Result<Value, McpError>
 pub async fn resolve(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let lookup = parse_doc_lookup(&map)?;
-    let docs = resolve_doc_meta(client, lookup)
+    let output = syo_core::doc::resolve(client, lookup)
         .await
-        .map_err(siyuan_to_mcp)?;
-    Ok(json!({ "docs": docs }))
+        .map_err(anyhow_to_mcp)?;
+    Ok(json!({ "docs": output.docs }))
 }
 
 pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
@@ -280,13 +280,9 @@ pub async fn rename_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
     let lookup = parse_doc_lookup(&map)?;
     let title = required_string(&map, "title")?;
 
-    let (notebook, storage_path) = resolve_one_storage(client, lookup)
+    syo_core::doc::rename(client, syo_core::doc::RenameDocInput { lookup, title })
         .await
-        .map_err(siyuan_to_mcp)?;
-    client
-        .rename_doc(&notebook, &storage_path, &title)
-        .await
-        .map_err(siyuan_to_mcp)?;
+        .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
         "Filesystem-level mutation: document title updated. syo_siyuan_doc_resolve reflects \
@@ -301,22 +297,16 @@ pub async fn move_doc(client: &SiyuanClient, args: Value) -> Result<Value, McpEr
     let to_notebook = parse_notebook_id(&required_string(&map, "to_notebook")?)?;
     let to_path = required_string(&map, "to_path")?;
 
-    // Resolve each source to its storage path. Sequential because the
-    // typical batch is small (<10) and resolve() internally hits a cheap
-    // `lsNotebooks` + a single SQL `IN` query — parallelism would not pay
-    // for the added complexity.
-    let mut from_paths = Vec::with_capacity(source_lookups.len());
-    for lookup in source_lookups {
-        let (_nb, storage_path) = resolve_one_storage(client, lookup)
-            .await
-            .map_err(siyuan_to_mcp)?;
-        from_paths.push(storage_path);
-    }
-
-    client
-        .move_docs(&from_paths, &to_notebook, &to_path)
-        .await
-        .map_err(siyuan_to_mcp)?;
+    syo_core::doc::move_docs(
+        client,
+        syo_core::doc::MoveDocsInput {
+            from: source_lookups,
+            to_notebook,
+            to_path,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
         "Filesystem-level mutation: documents moved to the target notebook/path. \
@@ -330,13 +320,9 @@ pub async fn remove_doc(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
     let map = ensure_object(args)?;
     let lookup = parse_doc_lookup(&map)?;
 
-    let (notebook, storage_path) = resolve_one_storage(client, lookup)
+    syo_core::doc::remove(client, syo_core::doc::RemoveDocInput { lookup })
         .await
-        .map_err(siyuan_to_mcp)?;
-    client
-        .remove_doc(&notebook, &storage_path)
-        .await
-        .map_err(siyuan_to_mcp)?;
+        .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
         "Filesystem-level mutation: document permanently removed including all child \

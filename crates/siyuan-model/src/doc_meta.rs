@@ -241,7 +241,7 @@ mod tests {
     // `pick_one_storage`. The pure dispatch is the interesting failure-mode
     // surface (0/1/>1 hits → which error variant?), so we test the dispatch
     // directly. Exercising `resolve_one_storage` through a live kernel is
-    // covered by the integration tests in `crates/syo/tests/`.
+    // covered by the integration tests in `crates/syo-cli/tests/`.
 
     fn nb() -> NotebookId {
         NotebookId::parse("20260501000000-nb00001").unwrap()

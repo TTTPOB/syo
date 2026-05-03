@@ -1,4 +1,4 @@
-//! Integration tests for search text and search blocks.
+//! Integration tests for search.
 //!
 //! Run with: `cargo test -p syo --test search -- --ignored --test-threads=1`
 
@@ -10,7 +10,7 @@ use common::{boot_with_seed, cleanup_fixture, wait_for};
 use serde::Deserialize;
 
 // ---------------------------------------------------------------------------
-// Test 1: search text (LIKE on markdown) finds blocks containing the query
+// Test 1: search (LIKE on markdown) finds matching blocks
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
@@ -24,7 +24,7 @@ struct Hit {
 
 #[tokio::test]
 #[ignore]
-async fn search_text_finds_matching_blocks() {
+async fn search_finds_matching_blocks() {
     let f = boot_with_seed().await.expect("boot");
 
     // Append a block with distinctive content so we can search for it.
@@ -63,12 +63,12 @@ async fn search_text_finds_matching_blocks() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 2: search blocks by type returns only blocks of that type
+// Test 2: search by type returns only blocks of that type
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[ignore]
-async fn search_blocks_by_type_filters_correctly() {
+async fn search_by_type_filters_correctly() {
     let f = boot_with_seed().await.expect("boot");
 
     // Append a heading with distinctive content.
@@ -139,12 +139,12 @@ async fn search_no_matches_returns_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 4: search blocks by contains (LIKE on content column)
+// Test 4: search by contains (LIKE on content column)
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[ignore]
-async fn search_blocks_by_content_substring() {
+async fn search_by_content_substring() {
     let f = boot_with_seed().await.expect("boot");
 
     // Append a paragraph with a distinctive word in its text content.

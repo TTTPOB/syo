@@ -34,7 +34,7 @@ Entry format:
 
 **Rationale.** Walking the SiYuan frontend code (`app/src/menus/navigation.ts`, `app/src/layout/dock/Files.ts`) showed that even SiYuan's own UI buries close behind a notebook right-click → Close menu item, and open lives in a collapsible "Closed notebooks" drawer that is empty for users who never closed anything. An agent harness exposing these as first-class operations gives them more weight than the upstream UI does. The kernel-level effect of close (`Unindex` in `kernel/model/mount.go`) is genuine memory release, not a UI flag — auto-opening would silently override a user's deliberate decision to drop a notebook from the working set. Better to fail loudly.
 
-**Tradeoff.** Agents calling `siyuan_create_doc` against a closed notebook see a typed `invalid_params` error rather than a transparent recovery. They cannot programmatically close a notebook to free index memory; if a workflow needs that, it goes through the SiYuan UI.
+**Tradeoff.** Agents calling `siyuan_doc_create` against a closed notebook see a typed `invalid_params` error rather than a transparent recovery. They cannot programmatically close a notebook to free index memory; if a workflow needs that, it goes through the SiYuan UI.
 
 **Reversal trigger.** A real workflow surfaces where agents legitimately need to manage notebook open/close state — e.g. long-running automation that must reduce kernel memory pressure, or batch operations across notebooks where agent-side close/reopen avoids index thrash.
 
@@ -48,7 +48,7 @@ Entry format:
 
 **Rationale.** Unlike open/close — which manage state of *existing* notebooks — creation is a one-shot scaffolding operation. An agent bootstrapping a project structure ("create a new notebook called X, add docs Y and Z") would otherwise need to break the loop and ask the user to open the SiYuan UI. That's a worse experience than letting the agent run.
 
-**Tradeoff.** In some kernel versions the new notebook lands with `closed: true` and is invisible to subsequent `siyuan_get_doc` / `siyuan_sql` reads until the user opens it in the UI. We cannot auto-open (decision #2). The MCP tool description was softened to acknowledge this honestly.
+**Tradeoff.** In some kernel versions the new notebook lands with `closed: true` and is invisible to subsequent `siyuan_doc_get` / `siyuan_sql` reads until the user opens it in the UI. We cannot auto-open (decision #2). The MCP tool description was softened to acknowledge this honestly.
 
 **Reversal trigger.** `notebook_create` produces "ghost" notebooks (created-then-closed) often enough that the create-and-can't-use-it footgun outweighs the bootstrap convenience.
 
@@ -94,7 +94,7 @@ Entry format:
 4. Minimal in/out example (concrete JSON, or tab-separated literals for tab-printing CLI commands).
 5. Async-index lag note for any tool that mutates content or relies on SQL indexing.
 
-Position-aware operations (`insert_block` family, `move_block`, CLI `insert-blocks` / `move-block`) get an exhaustive position-kind table that names what `--anchor` must be, what happens to existing siblings, and which kinds the operation does *not* support.
+Position-aware operations (`block_insert` family, `block_move`, CLI `block insert` / `block move`) get an exhaustive position-kind table that names what `--anchor` must be, what happens to existing siblings, and which kinds the operation does *not* support.
 
 **Rationale.** The audience is an LLM with no codebase context. Humans pick up "the response is wrapped in a `data` envelope" from peripheral cues (sibling tools, examples elsewhere); agents do not. Footguns like path-vs-hpath are easier to dodge when called out *literally* in the description rather than implied by a parameter name. Verbose help is the cheap fix; behavioural changes (e.g. accepting both forms) would be more invasive and reduce explicitness.
 
@@ -128,7 +128,7 @@ Position-aware operations (`insert_block` family, `move_block`, CLI `insert-bloc
 
 **Tradeoff.** Operations against closed notebooks fail with kernel errors that the agent must understand. Ergonomics regression for any workflow that wants the auto-open semantic.
 
-**Reversal trigger.** Frequent "I called `siyuan_create_doc` and it failed because the notebook was closed" reports — at which point the right fix is probably a typed error class (`SiyuanError::NotebookClosed`) plus an explicit `--ensure-opened` flag, not a silent helper.
+**Reversal trigger.** Frequent "I called `siyuan_doc_create` and it failed because the notebook was closed" reports — at which point the right fix is probably a typed error class (`SiyuanError::NotebookClosed`) plus an explicit `--ensure-opened` flag, not a silent helper.
 
 ---
 
@@ -148,7 +148,7 @@ Position-aware operations (`insert_block` family, `move_block`, CLI `insert-bloc
 
 ## 10. Ergonomic stage: dual-mode doc locator + format flag + doc tree
 
-**Context.** Dogfooding surfaced three rough edges. (a) `doc rename` / `doc remove` / `doc move` leaked storage paths — every call required a prior `doc resolve` and pasting back unreadable `/<nb>/<doc>.sy` strings. (b) Output-format conventions drifted across read commands: TSV from `notebook ls` / `tag ls` / `tag search` / `search text` / `search blocks`, `json-pretty` from `doc resolve`, JSON-only from `sql`, no opt-in. (c) No `doc tree` primitive existed — agents fell back to raw `siyuan sql` for filetree navigation. Plus four smaller fixes: missing `tag search --limit`, `move-block` position kinds that bailed at runtime, `get-doc` returning a misleading "empty doc" message for a missing id, and `sql`'s unverified read-only claim.
+**Context.** Dogfooding surfaced three rough edges. (a) `doc rename` / `doc remove` / `doc move` leaked storage paths — every call required a prior `doc resolve` and pasting back unreadable `/<nb>/<doc>.sy` strings. (b) Output-format conventions drifted across read commands: TSV from `notebook ls` / `tag ls` / `tag search` / `search text` / `search blocks`, `json-pretty` from `doc resolve`, JSON-only from `sql`, no opt-in. (c) No `doc tree` primitive existed — agents fell back to raw `siyuan sql` for filetree navigation. Plus four smaller fixes: missing `tag search --limit`, `block move` position kinds that bailed at runtime, `doc get` returning a misleading "empty doc" message for a missing id, and `sql`'s unverified read-only claim.
 
 **Decision.** Land all seven items (A–G in the spec) as atomic semantic commits. Reuse the `DocLookup` enum and `parse_doc_lookup` helper from `doc resolve` on rename/remove/move, plus a new `resolve_one_storage(client, lookup) -> Result<(NotebookId, String), SiyuanError>` that maps 0 hits to `NotFound` and >1 to `AmbiguousPath`. Add `siyuan-model::doc_tree`, which pulls the subtree via one bounded `SELECT`, builds the tree from `path` parent-prefix relationships, slices to depth, and computes `doc_count_recursive` from the FULL preload so a depth=1 view still reports correct descendant counts. Propagate `--format <agent-md|json|json-pretty>` to the five list commands and `doc resolve`, preserving each command's current default byte shape exactly (`agent-md` is rejected for `doc resolve` since its output is structured metadata).
 

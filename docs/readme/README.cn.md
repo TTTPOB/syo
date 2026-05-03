@@ -82,27 +82,28 @@ siyuan doc move --notebook 20260501000000-nb00001 --from-hpaths /Plan /Notes \
   --to-notebook 20260501000000-nb00002 --to-path /Archive
 
 # 读文档：默认输出 agent-readable markdown，也可输出 JSON
-siyuan get-doc --id 20260501090000-doc0001
-siyuan get-doc --id 20260501090000-doc0001 --format json-pretty
-siyuan get-doc --id 20260501090000-doc0001 --page 2 --page-size 50
+siyuan doc get --id 20260501090000-doc0001
+siyuan doc get --id 20260501090000-doc0001 --format json-pretty
+siyuan doc get --id 20260501090000-doc0001 --page 2 --page-size 50
 
 # 单个块的原始 kramdown
-siyuan get-block --id 20260501090000-blk0001
+siyuan block get --id 20260501090000-blk0001
 
 # 从 markdown 文件创建文档（用 `-` 表示读 stdin）
-siyuan create-doc \
+siyuan doc create \
   --notebook 20260501000000-nb00001 \
   --hpath "/Projects/New Page" \
   --markdown-file ./page.md
 
 # 块写入
-siyuan update-block   --id <block-id> --markdown-file ./new.md
-siyuan insert-blocks  --position after_block --anchor <block-id> --markdown-file ./snippet.md
-siyuan move-block     --id <block-id> --position append_child --anchor <container-id>
-siyuan delete-block   --id <block-id>
+siyuan block update   --id <block-id> --markdown-file ./new.md
+siyuan block insert  --position after_block --anchor <block-id> --markdown-file ./snippet.md
+siyuan block move     --id <block-id> --position append_child --anchor <container-id>
+siyuan block delete   --id <block-id>
+# 注意：block delete 拒绝文档根块（type='d'），请使用 `siyuan doc remove` 删除文档。
 
 # 块属性（自定义键必须 `custom-...`；空值表示删除某个键）
-siyuan set-attrs --id <block-id> --attr custom-status=done --attr custom-owner=alice
+siyuan attrs set --id <block-id> --attr custom-status=done --attr custom-owner=alice
 
 # Tag / 搜索
 siyuan tag ls
@@ -125,10 +126,11 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 ### 输出格式
 
-`get-doc` / `get-block` 接受 `--format`：
+`doc get` / `block get` 接受 `--format`：
 
 - `agent-md`（默认）—— markdown，外加 `<!-- sy:doc … -->` / `<!-- sy:block … -->` HTML 注释标记，承载 id、type、分页元数据。设计目标是让 LLM 读完之后能直接生成精确指向某个块的写入指令。
 - `json` / `json-pretty` —— 标准结构化 bundle（`DocBundle`），含完整块元数据。
+  当文档跨多页时，`agent-md` 输出在最后一个渲染块之后包含 `<!-- sy:page X/Y blocks remaining: Z -->` 页脚。
 
 `notebook ls`、`tag ls`、`tag search`、`search text`、`search blocks` 也接受 `--format`。默认仍为 `agent-md`（即原有 TSV / 每行一项的形式，向后兼容）；`json` / `json-pretty` 输出同字段的结构化数组（分别为 `{status,id,name}`、tag 字符串、`{block_id,markdown_preview}`、`{id,type,markdown_preview}`）。
 
@@ -136,20 +138,20 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 ### Position 类型
 
-`insert-blocks` 与 `move-block` 共用以下 `--position`：
+`block insert` 与 `block move` 共用以下 `--position`：
 
 | kind             | 含义                                | anchor               |
 | ---------------- | ----------------------------------- | -------------------- |
 | `after_block`    | 插入到 anchor 之后（同级）          | 块 id                |
-| `before_block`   | 插入到 anchor 之前（同级）          | 块 id（仅 insert）   |
+| `before_block`   | 插入到 anchor 之前（同级）          | 块 id                |
 | `append_child`   | 作为容器的最后一个子块              | 容器块 id            |
 | `prepend_child`  | 作为容器的第一个子块                | 容器块 id            |
-| `append_section` | 作为标题对应章节的最后一块          | 标题块 id（仅 insert）|
-| `prepend_section`| 紧跟在标题块之后                    | 标题块 id（仅 insert）|
+| `append_section` | 作为标题对应章节的最后一块          | 标题块 id            |
+| `prepend_section`| 紧跟在标题块之后                    | 标题块 id            |
 | `append_doc`     | 作为整篇文档的最后一块              | 文档根 id            |
 | `prepend_doc`    | 作为整篇文档的第一块                | 文档根 id            |
 
-`move-block` 在 v1 不支持 `before_block` 与 `*_section`，请改写成「上一兄弟块的 `after_block`」。
+`block move` 支持全部 8 种 position。注意：`prepend_child` 与 `prepend_doc` 因 kernel API 限制会将块放在容器末尾；如需严格的首位放置，请后续使用 `after_block` 调整。
 
 ## MCP server 使用
 
@@ -179,14 +181,14 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 | Tool                       | 用途                                                                |
 | -------------------------- | ------------------------------------------------------------------- |
 | `siyuan_status`            | 内核可达性 + 版本检查。                                             |
-| `siyuan_get_doc`           | 读文档，默认 agent-md，支持 JSON 与分页。                           |
-| `siyuan_get_block`         | 读单块原始 kramdown。                                               |
-| `siyuan_create_doc`        | 用 GFM markdown 创建文档。                                          |
-| `siyuan_update_block`      | 整体替换块内容。                                                    |
-| `siyuan_insert_block` / `siyuan_append_block` / `siyuan_prepend_block` | 新增块。                |
-| `siyuan_move_block`        | 移动块（保留原 id 与子块）。                                        |
-| `siyuan_delete_block`      | 永久删除块及其子树。                                                |
-| `siyuan_get_attrs` / `siyuan_set_attrs` | 读 / 增量更新块属性。                                  |
+| `siyuan_doc_get`           | 读文档，默认 agent-md，支持 JSON 与分页。                           |
+| `siyuan_block_get`         | 读单块原始 kramdown。                                               |
+| `siyuan_doc_create`        | 用 GFM markdown 创建文档。                                          |
+| `siyuan_block_update`      | 整体替换块内容。                                                    |
+| `siyuan_block_insert`      | 新增块。                                                            |
+| `siyuan_block_move`        | 移动块（保留原 id 与子块）。                                        |
+| `siyuan_block_delete`      | 永久删除块及其子树。                                                |
+| `siyuan_attrs_get` / `siyuan_attrs_set` | 读 / 增量更新块属性。                                  |
 | `siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | 笔记本管理（不暴露 open/close）。      |
 | `siyuan_doc_resolve`       | 统一查询：可按 id 或 (notebook + hpath) 反查；返回数组，含 `storage_path`。 |
 | `siyuan_doc_tree`          | 以树形列出 notebook / 文件夹子树（id 与 notebook[+hpath] 二选一，`depth` 取 1..N 或 `all`）。 |

@@ -82,27 +82,28 @@ siyuan doc move --notebook 20260501000000-nb00001 --from-hpaths /Plan /Notes \
   --to-notebook 20260501000000-nb00002 --to-path /Archive
 
 # Read a doc as agent-readable markdown (default), or as JSON
-siyuan get-doc --id 20260501090000-doc0001
-siyuan get-doc --id 20260501090000-doc0001 --format json-pretty
-siyuan get-doc --id 20260501090000-doc0001 --page 2 --page-size 50
+siyuan doc get --id 20260501090000-doc0001
+siyuan doc get --id 20260501090000-doc0001 --format json-pretty
+siyuan doc get --id 20260501090000-doc0001 --page 2 --page-size 50
 
 # Read a single block's raw kramdown
-siyuan get-block --id 20260501090000-blk0001
+siyuan block get --id 20260501090000-blk0001
 
 # Create a doc from a markdown file (or stdin via `-`)
-siyuan create-doc \
+siyuan doc create \
   --notebook 20260501000000-nb00001 \
   --hpath "/Projects/New Page" \
   --markdown-file ./page.md
 
 # Block writes
-siyuan update-block   --id <block-id> --markdown-file ./new.md
-siyuan insert-blocks  --position after_block --anchor <block-id> --markdown-file ./snippet.md
-siyuan move-block     --id <block-id> --position append_child --anchor <container-id>
-siyuan delete-block   --id <block-id>
+siyuan block update   --id <block-id> --markdown-file ./new.md
+siyuan block insert  --position after_block --anchor <block-id> --markdown-file ./snippet.md
+siyuan block move     --id <block-id> --position append_child --anchor <container-id>
+siyuan block delete   --id <block-id>
+# Note: document root blocks (type='d') are rejected by block delete; use `siyuan doc remove` to delete a document.
 
 # Attributes (custom keys must be `custom-...`; empty value clears a key)
-siyuan set-attrs --id <block-id> --attr custom-status=done --attr custom-owner=alice
+siyuan attrs set --id <block-id> --attr custom-status=done --attr custom-owner=alice
 
 # Tags & search
 siyuan tag ls
@@ -125,10 +126,11 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 ### Output formats
 
-`get-doc` and `get-block` accept `--format`:
+`doc get` and `block get` accept `--format`:
 
 - `agent-md` *(default)* — markdown with `<!-- sy:doc … -->` / `<!-- sy:block … -->` HTML-comment markers carrying ids, types and pagination metadata. Designed for LLMs to round-trip reads back into block-targeted writes.
 - `json` / `json-pretty` — the canonical structured bundle (`DocBundle`) including full block metadata.
+  When a doc spans multiple pages, `agent-md` output includes a `<!-- sy:page X/Y blocks remaining: Z -->` footer after the last rendered block.
 
 `notebook ls`, `tag ls`, `tag search`, `search text`, and `search blocks` also accept `--format`. Their default `agent-md` is the legacy TSV (or one-per-line for `tag ls`) for backward compatibility; `json` / `json-pretty` emit a structured array of the same fields (`{status,id,name}`, tag strings, `{block_id,markdown_preview}`, or `{id,type,markdown_preview}` respectively).
 
@@ -136,20 +138,20 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 ### Position kinds
 
-`insert-blocks` and `move-block` share these `--position` values:
+`block insert` and `block move` share these `--position` values:
 
 | kind             | meaning                                  | anchor                |
 | ---------------- | ---------------------------------------- | --------------------- |
 | `after_block`    | as a sibling immediately after anchor    | block id              |
-| `before_block`   | as a sibling immediately before anchor   | block id (insert only)|
+| `before_block`   | as a sibling immediately before anchor   | block id              |
 | `append_child`   | as the last child of the container       | container block id    |
 | `prepend_child`  | as the first child of the container      | container block id    |
-| `append_section` | as the last block of a heading's section | heading block id (insert only) |
-| `prepend_section`| right after the heading itself           | heading block id (insert only) |
+| `append_section` | as the last block of a heading's section | heading block id              |
+| `prepend_section`| right after the heading itself           | heading block id              |
 | `append_doc`     | as the last block of a document          | document root id      |
 | `prepend_doc`    | as the first block of a document         | document root id      |
 
-`move-block` does not support `before_block` or `*_section` in v1; rewrite those as `after_block` of the previous sibling.
+`block move` supports all 8 position kinds. Note: `prepend_child` and `prepend_doc` place the block at the end of the container due to kernel API limitations; if strict prepend placement is required, follow up with an `after_block` adjustment.
 
 ## MCP server usage
 
@@ -179,14 +181,14 @@ Tools exposed (one-line summary; full agent-friendly descriptions live in `crate
 | Tool                       | Purpose                                              |
 | -------------------------- | ---------------------------------------------------- |
 | `siyuan_status`            | Kernel reachability + version.                       |
-| `siyuan_get_doc`           | Load a doc as agent-md (default) or JSON, paginated. |
-| `siyuan_get_block`         | Raw kramdown of one block.                           |
-| `siyuan_create_doc`        | Create a doc from GFM markdown.                      |
-| `siyuan_update_block`      | Replace block content.                               |
-| `siyuan_insert_block` / `siyuan_append_block` / `siyuan_prepend_block` | Add a new block. |
-| `siyuan_move_block`        | Reposition a block (keeps id + children).            |
-| `siyuan_delete_block`      | Permanently delete a block + subtree.                |
-| `siyuan_get_attrs` / `siyuan_set_attrs` | Read / partial-update block attributes. |
+| `siyuan_doc_get`           | Load a doc as agent-md (default) or JSON, paginated. |
+| `siyuan_block_get`         | Raw kramdown of one block.                           |
+| `siyuan_doc_create`        | Create a doc from GFM markdown.                      |
+| `siyuan_block_update`      | Replace block content.                               |
+| `siyuan_block_insert`      | Add a new block.                                    |
+| `siyuan_block_move`        | Reposition a block (keeps id + children).            |
+| `siyuan_block_delete`      | Permanently delete a block + subtree.                |
+| `siyuan_attrs_get` / `siyuan_attrs_set` | Read / partial-update block attributes. |
 | `siyuan_notebook_ls` / `_create` / `_rename` / `_remove` | Notebook management. (open/close not exposed.) |
 | `siyuan_doc_resolve`       | Unified lookup by id OR (notebook + hpath); returns array of doc metadata including `storage_path`. |
 | `siyuan_doc_tree`          | List a notebook/folder subtree as a tree (id XOR notebook[+hpath], `depth` 1..N or `all`). |

@@ -1,3 +1,5 @@
+//! Shared operations layer for syo CLI and MCP surfaces.
+
 pub mod asset;
 pub mod attr;
 pub mod block;

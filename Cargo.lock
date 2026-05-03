@@ -1760,6 +1760,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "syo-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "siyuan-client",
+ "siyuan-model",
+ "siyuan-render",
+ "siyuan-types",
+]
+
+[[package]]
 name = "syo-mcp"
 version = "0.1.0"
 dependencies = [

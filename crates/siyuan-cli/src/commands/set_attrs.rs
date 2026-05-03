@@ -11,7 +11,7 @@ use siyuan_types::BlockId;
 /// Sibling commands: `siyuan doc set-icon` and `siyuan doc set-sort` are
 /// thin wrappers that set the `icon` / `sort` attribute respectively;
 /// reach for them when that is all you need. There is no `get-attrs` CLI —
-/// to read existing attributes use `siyuan get-block --format json` (its
+/// to read existing attributes use `siyuan block get --format json` (its
 /// JSON output includes `attrs`).
 ///
 /// Inputs:

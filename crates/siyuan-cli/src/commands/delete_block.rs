@@ -6,7 +6,7 @@ use siyuan_types::BlockId;
 
 /// Permanently delete a block and all of its children.
 ///
-/// Sibling commands: `siyuan update-block` with empty content clears a block
+/// Sibling commands: `siyuan block update` with empty content clears a block
 /// in place but keeps it; `siyuan doc remove` deletes an entire document
 /// (use it instead when the target is a document root and you also want to
 /// drop the `.sy` file). This command removes the block and its subtree

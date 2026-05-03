@@ -14,7 +14,7 @@ use crate::output::OutputFormat;
 
 /// Fetch a document by id and render as agent-markdown or JSON.
 ///
-/// Sibling commands: `siyuan get-block` returns one block's raw kramdown;
+/// Sibling commands: `siyuan block get` returns one block's raw kramdown;
 /// `siyuan doc resolve` converts an hpath to an id (this command requires an
 /// id, not an hpath). For full-text scans across many docs use
 /// `siyuan search text` instead of paging through every document.

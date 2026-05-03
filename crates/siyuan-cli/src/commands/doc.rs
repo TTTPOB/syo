@@ -162,7 +162,7 @@ pub enum DocCmd {
     SetSort(SortArgs),
     /// Permanently remove a document and all its child blocks.
     ///
-    /// Sibling commands: `siyuan delete-block --id <doc-root-id>` is a
+    /// Sibling commands: `siyuan block delete --id <doc-root-id>` is a
     /// block-level delete that also drops the document; `siyuan doc move`
     /// relocates instead of deleting; `siyuan notebook remove` destroys
     /// the entire notebook. doc remove is the per-document destroyer.

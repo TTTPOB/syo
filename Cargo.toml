@@ -41,3 +41,4 @@ siyuan-render = { path = "crates/siyuan-render" }
 siyuan-testkit = { path = "crates/siyuan-testkit" }
 syo-core = { path = "crates/syo-core" }
 syo-mcp = { path = "crates/syo-mcp" }
+syo-cli = { path = "crates/syo-cli" }

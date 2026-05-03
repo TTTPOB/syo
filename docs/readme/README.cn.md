@@ -27,7 +27,7 @@ cargo build --release
 ./target/release/syo --help
 ```
 
-本地开发期间，`cargo run -p syo -- <args>` 同样可用。
+本地开发期间，`cargo run -p syo-cli -- <args>` 同样可用。
 
 ## 配置
 
@@ -256,7 +256,7 @@ crates/
   siyuan-client/   # 基于 reqwest 的 typed 内核 HTTP 包装
   siyuan-model/    # DocBundle、load_doc、章节、分页、图 BFS、tag、doc-meta 解析
   siyuan-render/   # agent-md + 标准 JSON 渲染器
-  syo/             # `syo` 二进制（clap），既提供 CLI 也提供 `serve-mcp`
+  syo-cli/         # `syo` 二进制（clap），既提供 CLI 也提供 `serve-mcp`
   syo-mcp/         # 库 crate；被 syo 的 `serve-mcp` 子命令消费
   siyuan-testkit/  # 用 Podman 起一次性 SiYuan 实例
 docs/

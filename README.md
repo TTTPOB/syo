@@ -27,7 +27,7 @@ cargo build --release
 ./target/release/syo --help
 ```
 
-For local hacking `cargo run -p syo -- <args>` works too.
+For local hacking `cargo run -p syo-cli -- <args>` works too.
 
 ## Configure
 
@@ -258,7 +258,7 @@ crates/
   siyuan-client/   # typed reqwest wrapper over the kernel HTTP API
   siyuan-model/    # DocBundle, load_doc, sectioning, pagination, graph BFS, tags, doc-meta resolve
   siyuan-render/   # agent-md + canonical JSON renderers
-  syo/             # `syo` binary (clap) — provides both CLI and `serve-mcp`
+  syo-cli/         # `syo` binary (clap) — provides both CLI and `serve-mcp`
   syo-mcp/         # library crate consumed by syo's `serve-mcp` subcommand
   siyuan-testkit/  # Podman-driven disposable SiYuan instances
 docs/

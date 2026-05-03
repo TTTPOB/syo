@@ -4,10 +4,12 @@ use siyuan_types::BlockId;
 use std::collections::BTreeMap;
 
 // --- get ---
+#[derive(Debug)]
 pub struct GetAttrsInput {
     pub id: BlockId,
 }
 
+#[derive(Debug)]
 pub struct GetAttrsOutput {
     pub id: BlockId,
     pub attrs: BTreeMap<String, String>,
@@ -22,6 +24,7 @@ pub async fn get(client: &SiyuanClient, input: GetAttrsInput) -> Result<GetAttrs
 }
 
 // --- set ---
+#[derive(Debug)]
 pub struct SetAttrsInput {
     pub id: BlockId,
     pub attrs: BTreeMap<String, String>,
@@ -33,6 +36,7 @@ pub async fn set(client: &SiyuanClient, input: SetAttrsInput) -> Result<()> {
 }
 
 // --- set_icon convenience ---
+#[derive(Debug)]
 pub struct SetIconInput {
     pub id: BlockId,
     pub icon: String,
@@ -46,6 +50,7 @@ pub async fn set_icon(client: &SiyuanClient, input: SetIconInput) -> Result<()> 
 }
 
 // --- set_sort convenience ---
+#[derive(Debug)]
 pub struct SetSortInput {
     pub id: BlockId,
     pub sort: i64,

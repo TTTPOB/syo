@@ -20,6 +20,19 @@ pub(crate) type Handler = Arc<
         + Sync,
 >;
 
+/// Hpath clarification note — embedded in every tool description that
+/// involves a `notebook` + `hpath` pair.
+const HPATH_NOTE: &str = "\
+Note: the first `/`-delimited segment of an hpath is NOT a notebook name \
+— it is a top-level document title INSIDE the target notebook. (SiYuan \
+has no folder concept — every path segment is a document.) The notebook \
+is always supplied separately via the `notebook` parameter. \
+Example: notebook `expnote`, hpath `/year2026/month12` means \
+`expnote:/year2026/month12` (the notebook is `expnote`, the top-level \
+document is `year2026`). Even when the notebook is named `hello` and \
+the hpath is `/hello/world`, the first segment is still a document \
+title: `hello[notebook]:/hello/world`.";
+
 // Parse a JSON schema string into a JsonObject (Arc'd for Tool).
 fn schema(s: &str) -> Arc<JsonObject> {
     Arc::new(
@@ -44,7 +57,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     let mut handlers: HashMap<&'static str, Handler> = HashMap::new();
 
     macro_rules! reg {
-        ($name:literal, $desc:literal, $schema_str:expr, $handler:expr) => {{
+        ($name:literal, $desc:expr, $schema_str:expr, $handler:expr) => {{
             handlers.insert($name, $handler);
             tool_list.push(Tool::new($name, $desc, schema($schema_str)));
         }};
@@ -137,7 +150,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         let c = Arc::clone(&client);
         reg!(
             "syo_siyuan_doc_create",
-            "Create a new document in a notebook from GFM markdown.\n\
+            format!(
+                "Create a new document in a notebook from GFM markdown.\n\
              \n\
              Sibling tools: `syo_siyuan_block_update` replaces an existing block in place; \
              `syo_siyuan_block_insert` adds blocks under an existing document. \
@@ -158,8 +172,11 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              lags.\n\
              \n\
              Example:\n\
-               in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\", \"markdown\": \"# Plan\\n\" }\n\
-               out: { \"data\": { \"id\": \"20260501090000-doc0001\" }, \"_hint\": \"Mutation completed at the kernel. ...\" }",
+               in:  {{ \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\", \"markdown\": \"# Plan\\n\" }}\n\
+               out: {{ \"data\": {{ \"id\": \"20260501090000-doc0001\" }}, \"_hint\": \"Mutation completed at the kernel. ...\" }}\n\
+             \n\
+             {HPATH_NOTE}"
+            ),
             r#"{"type":"object","required":["notebook","hpath","markdown"],"properties":{"notebook":{"type":"string"},"hpath":{"type":"string","description":"Human path e.g. /Folder/Title"},"markdown":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -561,7 +578,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         let c = Arc::clone(&client);
         reg!(
             "syo_siyuan_doc_resolve",
-            "Look up document metadata by EITHER block id OR (notebook + hpath).\n\
+            format!(
+                "Look up document metadata by EITHER block id OR (notebook + hpath).\n\
              \n\
              Sibling tools: `syo_siyuan_doc_get` returns the rendered document content (and \
              requires an id); this tool returns ONLY the metadata (id, hpath, notebook_id, \
@@ -586,11 +604,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              rename/move/remove tools no longer accept it as input).\n\
              \n\
              Example:\n\
-               in:  { \"id\": \"20260501090000-doc0001\" }\n\
-               out: { \"docs\": [ { \"id\": \"20260501090000-doc0001\", \"hpath\": \"/Plan\", \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"title\": \"Plan\", \"storage_path\": \"/20260501090000-doc0001.sy\" } ] }\n\
+               in:  {{ \"id\": \"20260501090000-doc0001\" }}\n\
+               out: {{ \"docs\": [ {{ \"id\": \"20260501090000-doc0001\", \"hpath\": \"/Plan\", \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"title\": \"Plan\", \"storage_path\": \"/20260501090000-doc0001.sy\" }} ] }}\n\
              \n\
-               in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\" }\n\
-               out: { \"docs\": [ { \"id\": \"20260501090000-doc0001\", \"hpath\": \"/Plan\", \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"title\": \"Plan\", \"storage_path\": \"/20260501090000-doc0001.sy\" } ] }",
+               in:  {{ \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\" }}\n\
+               out: {{ \"docs\": [ {{ \"id\": \"20260501090000-doc0001\", \"hpath\": \"/Plan\", \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"title\": \"Plan\", \"storage_path\": \"/20260501090000-doc0001.sy\" }} ] }}\n\
+             \n\
+             {HPATH_NOTE}"
+            ),
             r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -603,7 +624,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         let c = Arc::clone(&client);
         reg!(
             "syo_siyuan_doc_rename",
-            "Rename a document by changing its display title.\n\
+            format!(
+                "Rename a document by changing its display title.\n\
              \n\
              Sibling tools: `syo_siyuan_doc_move` changes the parent folder of a document; \
              this tool changes only its title (the last hpath segment). `syo_siyuan_attrs_set` \
@@ -627,11 +649,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              lags.\n\
              \n\
              Example:\n\
-               in:  { \"id\": \"20260501090000-doc0001\", \"title\": \"Q3 Plan\" }\n\
-               out: { \"ok\": true }\n\
+               in:  {{ \"id\": \"20260501090000-doc0001\", \"title\": \"Q3 Plan\" }}\n\
+               out: {{ \"ok\": true }}\n\
              \n\
-               in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\", \"title\": \"Q3 Plan\" }\n\
-               out: { \"ok\": true }",
+               in:  {{ \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\", \"title\": \"Q3 Plan\" }}\n\
+               out: {{ \"ok\": true }}\n\
+             \n\
+             {HPATH_NOTE}"
+            ),
             r#"{"type":"object","required":["title"],"properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"},"title":{"type":"string"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -644,7 +669,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         let c = Arc::clone(&client);
         reg!(
             "syo_siyuan_doc_move",
-            "Move one or more documents to a different notebook/folder.\n\
+            format!(
+                "Move one or more documents to a different notebook/folder.\n\
              \n\
              Sibling tools: `syo_siyuan_block_move` moves a block within a document tree \
              (block-level); `syo_siyuan_doc_rename` only retitles. syo_siyuan_doc_move relocates \
@@ -676,11 +702,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              lags.\n\
              \n\
              Example:\n\
-               in:  { \"from_ids\": [\"20260501090000-doc0001\"], \"to_notebook\": \"20260501000000-nb00002\", \"to_path\": \"/\" }\n\
-               out: { \"ok\": true }\n\
+               in:  {{ \"from_ids\": [\"20260501090000-doc0001\"], \"to_notebook\": \"20260501000000-nb00002\", \"to_path\": \"/\" }}\n\
+               out: {{ \"ok\": true }}\n\
              \n\
-               in:  { \"notebook\": \"20260501000000-nb00001\", \"from_hpaths\": [\"/Plan\", \"/Notes\"], \"to_notebook\": \"20260501000000-nb00002\", \"to_path\": \"/Archive\" }\n\
-               out: { \"ok\": true }",
+               in:  {{ \"notebook\": \"20260501000000-nb00001\", \"from_hpaths\": [\"/Plan\", \"/Notes\"], \"to_notebook\": \"20260501000000-nb00002\", \"to_path\": \"/Archive\" }}\n\
+               out: {{ \"ok\": true }}\n\
+             \n\
+             {HPATH_NOTE}"
+            ),
             r#"{"type":"object","required":["to_notebook","to_path"],"properties":{"from_ids":{"type":"array","items":{"type":"string"},"description":"Source document ids (use this OR notebook+from_hpaths)"},"notebook":{"type":"string","description":"SOURCE notebook id (use with from_hpaths)"},"from_hpaths":{"type":"array","items":{"type":"string"},"description":"Source hpaths inside `notebook` (use with notebook)"},"to_notebook":{"type":"string","description":"DESTINATION notebook id"},"to_path":{"type":"string","description":"Destination folder hpath (e.g. /Projects)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -693,7 +722,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         let c = Arc::clone(&client);
         reg!(
             "syo_siyuan_doc_tree",
-            "List documents under a notebook/folder root as a tree.\n\
+            format!(
+                "List documents under a notebook/folder root as a tree.\n\
              \n\
              Sibling tools: `syo_siyuan_doc_resolve` looks up ONE document's metadata; \
              this tool enumerates a SUBTREE. `syo_siyuan_notebook_ls` enumerates whole \
@@ -724,11 +754,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              with a `_hint` envelope.\n\
              \n\
              Example:\n\
-               in:  { \"id\": \"20260501090000-doc0001\", \"depth\": 2 }\n\
-               out: { \"data\": { \"tree\": { \"id\": \"20260501090000-doc0001\", \"title\": \"Plan\", \"hpath\": \"/Plan\", \"has_children\": true, \"doc_count_recursive\": 2, \"created\": \"20260501090000\", \"updated\": \"20260501090000\", \"sort\": 0, \"icon\": \"\", \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"storage_path\": \"/20260501090000-doc0001.sy\", \"children\": [...] } }, \"_hint\": \"Filetree listing: ...\" }\n\
+               in:  {{ \"id\": \"20260501090000-doc0001\", \"depth\": 2 }}\n\
+               out: {{ \"data\": {{ \"tree\": {{ \"id\": \"20260501090000-doc0001\", \"title\": \"Plan\", \"hpath\": \"/Plan\", \"has_children\": true, \"doc_count_recursive\": 2, \"created\": \"20260501090000\", \"updated\": \"20260501090000\", \"sort\": 0, \"icon\": \"\", \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"storage_path\": \"/20260501090000-doc0001.sy\", \"children\": [...] }} }}, \"_hint\": \"Filetree listing: ...\" }}\n\
              \n\
-               in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/\", \"depth\": \"all\" }\n\
-               out: { \"data\": { \"tree\": { \"id\": \"\", \"title\": \"\", \"hpath\": \"/\", \"has_children\": true, \"doc_count_recursive\": 3, \"sort\": 0, \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"storage_path\": \"\", \"children\": [...] } }, \"_hint\": \"...\" }",
+               in:  {{ \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/\", \"depth\": \"all\" }}\n\
+               out: {{ \"data\": {{ \"tree\": {{ \"id\": \"\", \"title\": \"\", \"hpath\": \"/\", \"has_children\": true, \"doc_count_recursive\": 3, \"sort\": 0, \"notebook_id\": \"20260501000000-nb00001\", \"notebook_name\": \"Inbox\", \"storage_path\": \"\", \"children\": [...] }} }}, \"_hint\": \"...\" }}\n\
+             \n\
+             {HPATH_NOTE}"
+            ),
             r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook[+hpath])"},"notebook":{"type":"string","description":"Notebook id (use with optional hpath)"},"hpath":{"type":"string","description":"Human path inside `notebook`; default \"/\" yields virtual root","default":"/"},"depth":{"oneOf":[{"type":"integer","minimum":1},{"type":"string","enum":["all"]}],"description":"Levels of descendants (default 1; 0 rejected)","default":1}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
@@ -741,7 +774,8 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         let c = Arc::clone(&client);
         reg!(
             "syo_siyuan_doc_remove",
-            "Permanently remove a document and all its child blocks.\n\
+            format!(
+                "Permanently remove a document and all its child blocks.\n\
              \n\
              Sibling tools: `syo_siyuan_block_delete` with the document root id deletes the \
              same content via the block API; `syo_siyuan_doc_move` relocates instead of \
@@ -764,11 +798,14 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              lags.\n\
              \n\
              Example:\n\
-               in:  { \"id\": \"20260501090000-doc0001\" }\n\
-               out: { \"ok\": true }\n\
+               in:  {{ \"id\": \"20260501090000-doc0001\" }}\n\
+               out: {{ \"ok\": true }}\n\
              \n\
-               in:  { \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\" }\n\
-               out: { \"ok\": true }",
+               in:  {{ \"notebook\": \"20260501000000-nb00001\", \"hpath\": \"/Plan\" }}\n\
+               out: {{ \"ok\": true }}\n\
+             \n\
+             {HPATH_NOTE}"
+            ),
             r#"{"type":"object","properties":{"id":{"type":"string","description":"Document block id (use this OR notebook+hpath)"},"notebook":{"type":"string","description":"Notebook id (use with hpath)"},"hpath":{"type":"string","description":"Human path (use with notebook)"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);

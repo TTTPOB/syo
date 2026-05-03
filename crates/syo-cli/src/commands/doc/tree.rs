@@ -80,7 +80,7 @@ pub async fn run(client: &SiyuanClient, args: TreeArgs) -> Result<()> {
     // hpath defaults to "/" even when --notebook is absent, so only pass it
     // when we actually have a notebook to avoid spurious conflicts.
     let hpath = notebook.as_ref().map(|_| args.hpath.as_str());
-    let lookup = build_single_doc_lookup(args.id.as_deref(), notebook, hpath.as_deref())?;
+    let lookup = build_single_doc_lookup(args.id.as_deref(), notebook, hpath)?;
     let depth = args.depth.0;
     let tree = syo_core::doc::tree(client, syo_core::doc::TreeInput { lookup, depth })
         .await?

@@ -85,7 +85,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Sibling tools: `syo_siyuan_block_get` returns ONE block's raw kramdown — use that \
              when you need a single block's storage syntax, not a whole document. \
              `syo_siyuan_doc_resolve` translates hpath<->id (this tool requires an id, not an \
-             hpath). `syo_siyuan_search_text` finds candidate ids by content.\n\
+             hpath). `syo_siyuan_search` finds candidate ids by content.\n\
              \n\
              Inputs: `id` (required) is a document ROOT block id (14-digit timestamp + \
              7-char suffix); not an hpath. `page` (optional, default 1) is 1-indexed in \
@@ -115,7 +115,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Sibling tools: `syo_siyuan_doc_get` returns the rendered document tree — reach for \
              that to read a whole document. `syo_siyuan_attrs_get` returns just the attribute \
-             map; this tool returns the kramdown body. `syo_siyuan_search_text` finds candidate \
+             map; this tool returns the kramdown body. `syo_siyuan_search` finds candidate \
              ids when you do not have one yet.\n\
              \n\
              Inputs: `id` (required) is any block id (paragraph, heading, list item, \
@@ -153,7 +153,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              `_hint` string.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -182,11 +182,11 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              the existing content must be preserved.\n\
              \n\
              Inputs: `id` (required) is the block id to overwrite (use `syo_siyuan_doc_get` or \
-             `syo_siyuan_search_text` to find it). `markdown` (required) is GFM markdown that \
+             `syo_siyuan_search` to find it). `markdown` (required) is GFM markdown that \
              replaces the entire block body.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -237,7 +237,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              as `data.id`.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -279,7 +279,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              The moved block keeps its id and entire subtree intact.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale position data for \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale position data for \
              ~100-500 ms after this call. The kernel is immediately consistent — only \
              the SQL index lags.\n\
              \n\
@@ -310,7 +310,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              irreversible at the kernel level.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may briefly still return the block for \
+             syo_siyuan_search, syo_siyuan_tag_search) may briefly still return the block for \
              ~100-500 ms after this call. The kernel is immediately consistent — only the \
              SQL index lags.\n\
              \n\
@@ -369,7 +369,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              to set internal keys like `id` or `type` are silently ignored by the kernel.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -480,10 +480,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              `syo_siyuan_doc_create`, etc.). NOTE: some kernel versions create the notebook \
              in a CLOSED state — the harness still resolves it through `syo_siyuan_doc_resolve` \
              and similar kernel-direct tools, but reads via `syo_siyuan_sql` / \
-             `syo_siyuan_search_text` may return empty until the user opens it in the SiYuan UI.\n\
+             `syo_siyuan_search` may return empty until the user opens it in the SiYuan UI.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -513,7 +513,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              `name` (required) is the new display name.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags. `syo_siyuan_notebook_ls` itself reflects the new name immediately.\n\
              \n\
@@ -541,7 +541,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Inputs: `id` (required) is the notebook id.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -622,7 +622,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              and the tool resolves the storage path internally before calling the kernel.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -671,7 +671,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              After the move, `syo_siyuan_doc_resolve` reflects the new location immediately. \
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -759,7 +759,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              After removal, `syo_siyuan_doc_resolve` no longer finds this document. \
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
-             syo_siyuan_search_text, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
+             syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
              after this call. The kernel is immediately consistent — only the SQL index \
              lags.\n\
              \n\
@@ -785,7 +785,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "List all distinct tags used anywhere in the workspace.\n\
              \n\
              Sibling tools: `syo_siyuan_tag_search` finds blocks tagged with one specific tag; \
-             this tool enumerates the available tags. `syo_siyuan_search_text` is for free-text \
+             this tool enumerates the available tags. `syo_siyuan_search` is for free-text \
              content search, not tags.\n\
              \n\
              Inputs: none required. The output is a flat array of tag strings WITHOUT the \
@@ -811,7 +811,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             "syo_siyuan_tag_search",
             "Find all blocks that carry a specific tag.\n\
              \n\
-             Sibling tools: `syo_siyuan_tag_ls` enumerates available tags; `syo_siyuan_search_text` \
+             Sibling tools: `syo_siyuan_tag_ls` enumerates available tags; `syo_siyuan_search` \
              does free-text matching instead of tag-exact match.\n\
              \n\
              Inputs: `tag` (required) is the tag content WITHOUT the surrounding `#` \
@@ -838,41 +838,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
     {
         let c = Arc::clone(&client);
         reg!(
-            "syo_siyuan_search_text",
-            "Full-text search across all blocks using a SQL LIKE substring match.\n\
-             \n\
-             Sibling tools: `syo_siyuan_tag_search` is exact tag match; `syo_siyuan_sql` is the raw \
-             escape hatch for arbitrary queries (joins, aggregates). syo_siyuan_search_text \
-             matches against the `markdown` column (includes inline syntax markers) — for \
-             a `content` (visible-text) match, build the LIKE manually via `syo_siyuan_sql`.\n\
-             \n\
-             Inputs: `query` (required, non-empty) is the substring. Single quotes are \
-             escaped internally; LIKE meta-chars (`%`, `_`, `\\`) are NOT escaped — they \
-             behave as wildcards. Matching is case-insensitive on most SQLite builds. \
-             `limit` (optional, default 50) caps the result count.\n\
-             \n\
-             Results may lag recent mutations by ~100-500 ms (the kernel is immediately \
-             consistent; only the SQL index lags). The response envelope includes \
-             `data.hits` as an array of block records with `id`, `root_id`, `markdown`.\n\
-             \n\
-             Example:\n\
-               in:  { \"query\": \"kickoff\", \"limit\": 10 }\n\
-               out: { \"data\": { \"hits\": [ { \"id\": \"20260501090000-blk0001\", \"root_id\": \"20260501090000-doc0001\", \"markdown\": \"Plan kickoff for Q3\" } ] } }",
-            r#"{"type":"object","required":["query"],"properties":{"query":{"type":"string"},"limit":{"type":"integer","default":50}},"additionalProperties":true}"#,
-            make_handler(move |_, args| {
-                let c = Arc::clone(&c);
-                async move { tools::sql::search_text(&c, args).await }
-            })
-        );
-    }
-
-    {
-        let c = Arc::clone(&client);
-        reg!(
             "syo_siyuan_sql",
             "Execute a single read-only SQL statement against the SiYuan SQLite database.\n\
              \n\
-             Sibling tools: prefer `syo_siyuan_search_text`, `syo_siyuan_tag_search`, or \
+             Sibling tools: prefer `syo_siyuan_search`, `syo_siyuan_tag_search`, or \
              `syo_siyuan_graph_neighborhood` when they cover the use case. Reach for syo_siyuan_sql \
              ONLY for queries those do not (joins, aggregations, or access to internal \
              tables like `refs`, `attributes`, `spans`). The CLI exposes the same operation \
@@ -924,17 +893,18 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
         );
     }
 
-    // ---- search_blocks ----
+    // ---- search ----
     {
         let c = Arc::clone(&client);
         reg!(
-            "syo_siyuan_search_blocks",
+            "syo_siyuan_search",
             "Search for blocks by type and/or content filter.\n\
              \n\
-             Sibling tools: `syo_siyuan_search_text` does fulltext LIKE against the `markdown` \
-             column; `syo_siyuan_tag_search` finds blocks by exact tag match; `syo_siyuan_sql` \
-             is the raw escape hatch for arbitrary queries. syo_siyuan_search_blocks filters by \
-             block type (=) and/or content (LIKE); empty filters select all blocks up to `limit`.\n\
+             Sibling tools: `syo_siyuan_tag_search` finds blocks by exact tag match; \
+             `syo_siyuan_sql` is the raw escape hatch for arbitrary queries (joins, \
+             aggregates, fulltext LIKE against markdown). syo_siyuan_search filters by \
+             block type (=) and/or content (LIKE); empty filters select all blocks up \
+             to `limit`.\n\
              \n\
              Inputs: `type` (optional) is the block type code (e.g. `p`, `h`, `d`). \
              `contains` (optional) is a substring to match against the `content` column \
@@ -946,7 +916,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
             r#"{"type":"object","properties":{"type":{"type":"string","description":"Block type code (e.g. p, h, d)"},"contains":{"type":"string","description":"Substring match against content column"},"limit":{"type":"integer","default":50}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
-                async move { tools::sql::search_blocks(&c, args).await }
+                async move { tools::sql::search(&c, args).await }
             })
         );
     }

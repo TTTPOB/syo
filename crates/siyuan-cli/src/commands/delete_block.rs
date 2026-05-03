@@ -1,5 +1,6 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Args;
+use serde::Deserialize;
 
 use siyuan_client::SiyuanClient;
 use siyuan_types::BlockId;
@@ -13,8 +14,9 @@ use siyuan_types::BlockId;
 /// irreversibly.
 ///
 /// Inputs:
-///   --id (required): block id to delete. Any block type is accepted,
-///     including a document root (in which case the document is removed).
+///   --id (required): block id to delete. Document root blocks (type='d')
+///     are REJECTED — use `siyuan doc remove --id <id>` instead. All other
+///     block types are accepted.
 ///
 /// Prints `ok` on success.
 ///
@@ -36,6 +38,29 @@ pub struct DeleteBlockArgs {
 
 pub async fn run(client: &SiyuanClient, args: DeleteBlockArgs) -> Result<()> {
     let id = BlockId::parse(&args.id).context("--id")?;
+
+    // Check if block is a document root — those must be deleted via doc remove.
+    #[derive(Deserialize)]
+    struct Row {
+        #[serde(rename = "type")]
+        ty: String,
+    }
+    let rows: Vec<Row> = client
+        .sql_typed(&format!(
+            "SELECT type FROM blocks WHERE id = '{}'",
+            id.as_str()
+        ))
+        .await
+        .context("checking block type")?;
+    if rows.first().map(|r| r.ty.as_str()) == Some("d") {
+        bail!(
+            "{} is a document root block. delete-block cannot delete entire documents.\n\
+             Use `siyuan doc remove --id {}` instead.",
+            id.as_str(),
+            id.as_str()
+        );
+    }
+
     client.delete_block(&id).await?;
     println!("ok");
     Ok(())

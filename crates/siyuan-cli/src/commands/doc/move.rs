@@ -5,7 +5,7 @@ use siyuan_client::SiyuanClient;
 use siyuan_model::doc_meta::{DocLookup, resolve_one_storage};
 use siyuan_types::{BlockId, NotebookId};
 
-/// Arguments for `siyuan doc move`.
+/// Arguments for `syo doc move`.
 ///
 /// Source addressing has two mutually exclusive modes:
 /// - `--from-ids` (one-or-more): each source is addressed by its block id.

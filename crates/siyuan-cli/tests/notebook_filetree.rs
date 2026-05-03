@@ -11,9 +11,9 @@ use serde::Deserialize;
 
 use common::{Fixture, boot_with_seed, wait_for};
 
-/// Path to the compiled `siyuan` binary (cargo sets `CARGO_BIN_EXE_siyuan` for tests).
+/// Path to the compiled `syo` binary (cargo sets `CARGO_BIN_EXE_syo` for tests).
 fn binary_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_siyuan"))
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_syo"))
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ async fn wait_for_hpath_containing(
     .await
 }
 
-/// Drive the compiled `siyuan` binary so the test exercises the same clap
+/// Drive the compiled `syo` binary so the test exercises the same clap
 /// parse path the user/agent sees. Returns stdout on success.
 fn run_cli(container: &siyuan_testkit::SiyuanContainer, args: &[&str]) -> std::process::Output {
     Command::new(binary_path())
@@ -160,7 +160,7 @@ fn run_cli(container: &siyuan_testkit::SiyuanContainer, args: &[&str]) -> std::p
         ])
         .args(args)
         .output()
-        .expect("spawn siyuan binary")
+        .expect("spawn syo binary")
 }
 
 #[tokio::test]
@@ -239,7 +239,7 @@ fn rename_doc_legacy_path_flag_is_rejected_by_clap() {
             "X",
         ])
         .output()
-        .expect("spawn siyuan");
+        .expect("spawn syo");
     assert!(
         !out.status.success(),
         "doc rename --path must error at clap parse time, but the CLI succeeded"
@@ -378,7 +378,7 @@ fn move_docs_legacy_from_paths_flag_is_rejected_by_clap() {
             "/",
         ])
         .output()
-        .expect("spawn siyuan");
+        .expect("spawn syo");
     assert!(
         !out.status.success(),
         "doc move --from-paths must error at clap parse time, but the CLI succeeded"
@@ -479,7 +479,7 @@ fn remove_doc_legacy_path_flag_is_rejected_by_clap() {
             "/20260501090000-doc0001.sy",
         ])
         .output()
-        .expect("spawn siyuan");
+        .expect("spawn syo");
     assert!(
         !out.status.success(),
         "doc remove --path must error at clap parse time, but the CLI succeeded"
@@ -514,11 +514,11 @@ async fn notebook_ls_format_json_emits_parseable_array() {
             "json",
         ])
         .output()
-        .expect("spawn siyuan notebook ls --format json");
+        .expect("spawn syo notebook ls --format json");
 
     assert!(
         output.status.success(),
-        "siyuan notebook ls --format json exited non-zero: stderr={}",
+        "syo notebook ls --format json exited non-zero: stderr={}",
         String::from_utf8_lossy(&output.stderr)
     );
 

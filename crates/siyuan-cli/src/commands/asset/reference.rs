@@ -3,7 +3,7 @@ use clap::Args;
 
 #[derive(Args, Debug)]
 pub struct ReferenceArgs {
-    /// Kernel-relative asset path (the value returned by `siyuan asset upload`).
+    /// Kernel-relative asset path (the value returned by `syo asset upload`).
     #[arg(long)]
     pub path: String,
 

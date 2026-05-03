@@ -1,6 +1,6 @@
-# siyuan-cli
+# Siyuan Operations CLI
 
-为 [SiYuan（思源笔记）](https://github.com/siyuan-note/siyuan) 内核 HTTP API 打造的 Agent 友好工具集。**单一二进制**（`siyuan`），基于一份 typed Rust client，同时承担 CLI（人类/脚本使用）与 MCP（Model Context Protocol）服务（供 LLM agent 调用）两种角色 —— MCP 通过 `siyuan serve-mcp` 子命令启动。
+为 [SiYuan（思源笔记）](https://github.com/siyuan-note/siyuan) 内核 HTTP API 打造的 Agent 友好工具集。**单一二进制**（`syo`），基于一份 typed Rust client，同时承担 CLI（人类/脚本使用）与 MCP（Model Context Protocol）服务（供 LLM agent 调用）两种角色 —— MCP 通过 `syo serve-mcp` 子命令启动。
 
 底层 crate（`siyuan-types`、`siyuan-client`、`siyuan-model`、`siyuan-render`）也可独立作为库使用。
 
@@ -23,8 +23,8 @@ v1，单工作区、单用户场景，对应 2026-05 时点的 SiYuan 内核 HTT
 
 ```sh
 cargo build --release
-# 二进制输出到 target/release/siyuan
-./target/release/siyuan --help
+# 二进制输出到 target/release/syo
+./target/release/syo --help
 ```
 
 本地开发期间，`cargo run -p siyuan-cli -- <args>` 同样可用。
@@ -46,82 +46,82 @@ CLI 也支持全局参数 `--base-url` / `--token`，优先级高于环境变量
 
 ```sh
 export SIYUAN_TOKEN=...你的 token...
-siyuan status
+syo status
 # 输出内核版本，例如 3.1.x
 ```
 
-CLI 是「扁平命令 + 少量子命令组」结构，完整列表请看 `siyuan --help`、`siyuan <cmd> --help`。常用片段：
+CLI 是「扁平命令 + 少量子命令组」结构，完整列表请看 `syo --help`、`syo <cmd> --help`。常用片段：
 
 ```sh
 # 笔记本
-siyuan notebook ls
-siyuan notebook create --name "Inbox"
+syo notebook ls
+syo notebook create --name "Inbox"
 # （open/close 不暴露；如需手动卸载/挂载请走思源 UI）
 
 # 解析文档 —— 支持 --id 或 (--notebook + --hpath) 二选一
-siyuan doc resolve --id 20260501090000-doc0001
-siyuan doc resolve --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
+syo doc resolve --id 20260501090000-doc0001
+syo doc resolve --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
 # 输出 JSON 数组，每条含 { id, hpath, notebook_id, notebook_name, title, storage_path }
 
 # 列出某个 notebook / 文件夹下的子树
 # （--depth 默认 1，可填整数或 `all`；--format 默认 agent-md。）
-siyuan doc tree --notebook 20260501000000-nb00001                                # 顶层文档
-siyuan doc tree --notebook 20260501000000-nb00001 --hpath /Projects --depth all
-siyuan doc tree --id 20260501090000-doc0001 --depth 2 --format json-pretty
+syo doc tree --notebook 20260501000000-nb00001                                # 顶层文档
+syo doc tree --notebook 20260501000000-nb00001 --hpath /Projects --depth all
+syo doc tree --id 20260501090000-doc0001 --depth 2 --format json-pretty
 
 # 文档文件树变更 —— 支持 --id 或 (--notebook + --hpath) 二选一。
 # 不接受 `.sy` 存储路径，CLI 会在内部完成解析。
-siyuan doc rename --id 20260501090000-doc0001 --title "Q3 Plan"
-siyuan doc rename --notebook 20260501000000-nb00001 --hpath "/Projects/Plan" --title "Q3 Plan"
-siyuan doc remove --id 20260501090000-doc0001
-siyuan doc remove --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
+syo doc rename --id 20260501090000-doc0001 --title "Q3 Plan"
+syo doc rename --notebook 20260501000000-nb00001 --hpath "/Projects/Plan" --title "Q3 Plan"
+syo doc remove --id 20260501090000-doc0001
+syo doc remove --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
 # `doc move`：源地址 --from-ids 与 (--notebook --from-hpaths) 二选一，目的地用 hpath。
-siyuan doc move --from-ids 20260501090000-doc0001 \
+syo doc move --from-ids 20260501090000-doc0001 \
   --to-notebook 20260501000000-nb00002 --to-path /Archive
-siyuan doc move --notebook 20260501000000-nb00001 --from-hpaths /Plan /Notes \
+syo doc move --notebook 20260501000000-nb00001 --from-hpaths /Plan /Notes \
   --to-notebook 20260501000000-nb00002 --to-path /Archive
 
 # 读文档：默认输出 agent-readable markdown，也可输出 JSON
-siyuan doc get --id 20260501090000-doc0001
-siyuan doc get --id 20260501090000-doc0001 --format json-pretty
-siyuan doc get --id 20260501090000-doc0001 --page 2 --page-size 50
+syo doc get --id 20260501090000-doc0001
+syo doc get --id 20260501090000-doc0001 --format json-pretty
+syo doc get --id 20260501090000-doc0001 --page 2 --page-size 50
 
 # 单个块的原始 kramdown
-siyuan block get --id 20260501090000-blk0001
+syo block get --id 20260501090000-blk0001
 
 # 从 markdown 文件创建文档（用 `-` 表示读 stdin）
-siyuan doc create \
+syo doc create \
   --notebook 20260501000000-nb00001 \
   --hpath "/Projects/New Page" \
   --markdown-file ./page.md
 
 # 块写入
-siyuan block update   --id <block-id> --markdown-file ./new.md
-siyuan block insert  --position after_block --anchor <block-id> --markdown-file ./snippet.md
-siyuan block move     --id <block-id> --position append_child --anchor <container-id>
-siyuan block delete   --id <block-id>
-# 注意：block delete 拒绝文档根块（type='d'），请使用 `siyuan doc remove` 删除文档。
+syo block update   --id <block-id> --markdown-file ./new.md
+syo block insert  --position after_block --anchor <block-id> --markdown-file ./snippet.md
+syo block move     --id <block-id> --position append_child --anchor <container-id>
+syo block delete   --id <block-id>
+# 注意：block delete 拒绝文档根块（type='d'），请使用 `syo doc remove` 删除文档。
 
 # 块属性（自定义键必须 `custom-...`；空值表示删除某个键）
-siyuan attrs set --id <block-id> --attr custom-status=done --attr custom-owner=alice
+syo attrs set --id <block-id> --attr custom-status=done --attr custom-owner=alice
 
 # Tag / 搜索
-siyuan tag ls
-siyuan tag search --tag project
-siyuan search text   --query "load_doc" --limit 20
-siyuan search blocks --type h --contains "Roadmap"
+syo tag ls
+syo tag search --tag project
+syo search text   --query "load_doc" --limit 20
+syo search blocks --type h --contains "Roadmap"
 
 # 原生 SQL 逃生通道（只读；调用方自行转义单引号）
-siyuan sql --stmt "SELECT id, hpath FROM blocks WHERE type = 'd' LIMIT 5"
+syo sql --stmt "SELECT id, hpath FROM blocks WHERE type = 'd' LIMIT 5"
 
 # 引用关系图（BFS，最多 N 跳，500 节点 / 1000 边封顶）
-siyuan graph backlinks    --id <block-id>
-siyuan graph outgoing     --id <block-id>
-siyuan graph neighborhood --id <block-id> --depth 2 --direction both
+syo graph backlinks    --id <block-id>
+syo graph outgoing     --id <block-id>
+syo graph neighborhood --id <block-id> --depth 2 --direction both
 
 # Asset
-siyuan asset upload    --file ./diagram.png
-siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
+syo asset upload    --file ./diagram.png
+syo asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 ```
 
 ### 输出格式
@@ -155,7 +155,7 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 ## MCP server 使用
 
-`siyuan serve-mcp` 通过 **stdio** 走 JSON-RPC，可接入任何兼容 MCP 的客户端（Claude Desktop、Claude Code、自研 host 等），只需把 SiYuan 的环境变量注入进程即可。
+`syo serve-mcp` 通过 **stdio** 走 JSON-RPC，可接入任何兼容 MCP 的客户端（Claude Desktop、Claude Code、自研 host 等），只需把 SiYuan 的环境变量注入进程即可。
 
 ### Claude Desktop / Claude Code
 
@@ -163,7 +163,7 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 {
   "mcpServers": {
     "siyuan": {
-      "command": "/abs/path/to/siyuan",
+      "command": "/abs/path/to/syo",
       "args": ["serve-mcp"],
       "env": {
         "SIYUAN_BASE_URL": "http://127.0.0.1:6806",
@@ -256,7 +256,7 @@ crates/
   siyuan-client/   # 基于 reqwest 的 typed 内核 HTTP 包装
   siyuan-model/    # DocBundle、load_doc、章节、分页、图 BFS、tag、doc-meta 解析
   siyuan-render/   # agent-md + 标准 JSON 渲染器
-  siyuan-cli/      # `siyuan` 二进制（clap），既提供 CLI 也提供 `serve-mcp`
+  siyuan-cli/      # `syo` 二进制（clap），既提供 CLI 也提供 `serve-mcp`
   siyuan-mcp/      # 库 crate；被 siyuan-cli 的 `serve-mcp` 子命令消费
   siyuan-testkit/  # 用 Podman 起一次性 SiYuan 实例
 docs/

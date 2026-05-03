@@ -7,21 +7,21 @@ use siyuan_types::BlockId;
 
 /// Permanently delete a block and all of its children.
 ///
-/// Sibling commands: `siyuan block update` with empty content clears a block
-/// in place but keeps it; `siyuan doc remove` deletes an entire document
+/// Sibling commands: `syo block update` with empty content clears a block
+/// in place but keeps it; `syo doc remove` deletes an entire document
 /// (use it instead when the target is a document root and you also want to
 /// drop the `.sy` file). This command removes the block and its subtree
 /// irreversibly.
 ///
 /// Inputs:
 ///   --id (required): block id to delete. Document root blocks (type='d')
-///     are REJECTED — use `siyuan doc remove --id <id>` instead. All other
+///     are REJECTED — use `syo doc remove --id <id>` instead. All other
 ///     block types are accepted.
 ///
 /// Prints `ok` on success.
 ///
-/// SiYuan indexes mutations asynchronously; SQL-based reads (siyuan sql,
-/// siyuan search text, siyuan tag search) may show stale data for ~100-500 ms
+/// SiYuan indexes mutations asynchronously; SQL-based reads (syo sql,
+/// syo search text, syo tag search) may show stale data for ~100-500 ms
 /// after this call. The kernel is immediately consistent — only the SQL
 /// index lags.
 ///
@@ -55,7 +55,7 @@ pub async fn run(client: &SiyuanClient, args: DeleteBlockArgs) -> Result<()> {
     if rows.first().map(|r| r.ty.as_str()) == Some("d") {
         bail!(
             "{} is a document root block. delete-block cannot delete entire documents.\n\
-             Use `siyuan doc remove --id {}` instead.",
+             Use `syo doc remove --id {}` instead.",
             id.as_str(),
             id.as_str()
         );

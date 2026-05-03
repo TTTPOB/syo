@@ -6,7 +6,7 @@ use siyuan_types::NotebookId;
 
 #[derive(ClapArgs, Debug)]
 pub struct Args {
-    /// Notebook id (from `siyuan notebook ls`).
+    /// Notebook id (from `syo notebook ls`).
     #[arg(long)]
     pub id: String,
 }

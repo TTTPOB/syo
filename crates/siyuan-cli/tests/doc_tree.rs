@@ -1,4 +1,4 @@
-//! Integration tests for `siyuan doc tree`.
+//! Integration tests for `syo doc tree`.
 //!
 //! Run with: `cargo test -p siyuan-cli --test doc_tree -- --ignored --test-threads=1`
 //!
@@ -25,7 +25,7 @@ use siyuan_testkit::SiyuanContainer;
 use siyuan_types::{BlockId, NotebookId};
 
 fn binary_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_siyuan"))
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_syo"))
 }
 
 fn run_cli(container: &SiyuanContainer, args: &[&str]) -> std::process::Output {
@@ -38,7 +38,7 @@ fn run_cli(container: &SiyuanContainer, args: &[&str]) -> std::process::Output {
         ])
         .args(args)
         .output()
-        .expect("spawn siyuan binary")
+        .expect("spawn syo binary")
 }
 
 /// Local mirror of `siyuan_model::doc_tree::TreeNode` with `Deserialize`.
@@ -152,7 +152,7 @@ fn doc_tree_depth_zero_rejected_by_clap() {
             "0",
         ])
         .output()
-        .expect("spawn siyuan");
+        .expect("spawn syo");
     assert!(
         !out.status.success(),
         "doc tree --depth 0 must error at clap parse time, but the CLI succeeded"
@@ -178,7 +178,7 @@ fn doc_tree_id_and_notebook_are_mutually_exclusive() {
             "20260501000000-nb00001",
         ])
         .output()
-        .expect("spawn siyuan");
+        .expect("spawn syo");
     assert!(
         !out.status.success(),
         "doc tree --id + --notebook must error at clap parse time"

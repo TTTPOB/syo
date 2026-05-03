@@ -1,6 +1,6 @@
-# siyuan-cli
+# Siyuan Operations CLI
 
-An agent-friendly harness for [SiYuan](https://github.com/siyuan-note/siyuan), built around its kernel HTTP API. Ships **one binary** (`siyuan`) on top of a typed Rust client. The same binary serves a CLI for human/script use and an MCP (Model Context Protocol) server for LLM agents — invoked as `siyuan serve-mcp`.
+An agent-friendly harness for [SiYuan](https://github.com/siyuan-note/siyuan), built around its kernel HTTP API. Ships **one binary** (`syo`) on top of a typed Rust client. The same binary serves a CLI for human/script use and an MCP (Model Context Protocol) server for LLM agents — invoked as `syo serve-mcp`.
 
 Library crates (`siyuan-types`, `siyuan-client`, `siyuan-model`, `siyuan-render`) are reusable independently of the binary.
 
@@ -23,8 +23,8 @@ The kernel itself is the source of truth — there is no local cache, snapshot t
 
 ```sh
 cargo build --release
-# binary lands in target/release/siyuan
-./target/release/siyuan --help
+# binary lands in target/release/syo
+./target/release/syo --help
 ```
 
 For local hacking `cargo run -p siyuan-cli -- <args>` works too.
@@ -46,82 +46,82 @@ Smoke test:
 
 ```sh
 export SIYUAN_TOKEN=...your-token...
-siyuan status
+syo status
 # prints the kernel version, e.g. 3.1.x
 ```
 
-The CLI is organised as flat commands plus a few subcommand groups. Run `siyuan --help` (and `siyuan <cmd> --help`) for the full list — quick tour:
+The CLI is organised as flat commands plus a few subcommand groups. Run `syo --help` (and `syo <cmd> --help`) for the full list — quick tour:
 
 ```sh
 # Notebooks
-siyuan notebook ls
-siyuan notebook create --name "Inbox"
+syo notebook ls
+syo notebook create --name "Inbox"
 # (notebook open/close are not exposed; use the SiYuan UI if you need them)
 
 # Resolve a document — accepts EITHER --id OR (--notebook + --hpath)
-siyuan doc resolve --id 20260501090000-doc0001
-siyuan doc resolve --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
+syo doc resolve --id 20260501090000-doc0001
+syo doc resolve --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
 # Output is a JSON array of { id, hpath, notebook_id, notebook_name, title, storage_path }
 
 # List a notebook/folder subtree as a tree
 # (--depth defaults to 1; pass an integer or `all`. --format defaults to agent-md.)
-siyuan doc tree --notebook 20260501000000-nb00001                                # top-level docs
-siyuan doc tree --notebook 20260501000000-nb00001 --hpath /Projects --depth all
-siyuan doc tree --id 20260501090000-doc0001 --depth 2 --format json-pretty
+syo doc tree --notebook 20260501000000-nb00001                                # top-level docs
+syo doc tree --notebook 20260501000000-nb00001 --hpath /Projects --depth all
+syo doc tree --id 20260501090000-doc0001 --depth 2 --format json-pretty
 
 # Doc filetree mutations — accept EITHER --id OR (--notebook + --hpath).
 # Storage `.sy` paths are NOT accepted; the CLI resolves them internally.
-siyuan doc rename --id 20260501090000-doc0001 --title "Q3 Plan"
-siyuan doc rename --notebook 20260501000000-nb00001 --hpath "/Projects/Plan" --title "Q3 Plan"
-siyuan doc remove --id 20260501090000-doc0001
-siyuan doc remove --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
+syo doc rename --id 20260501090000-doc0001 --title "Q3 Plan"
+syo doc rename --notebook 20260501000000-nb00001 --hpath "/Projects/Plan" --title "Q3 Plan"
+syo doc remove --id 20260501090000-doc0001
+syo doc remove --notebook 20260501000000-nb00001 --hpath "/Projects/Plan"
 # `doc move`: source is --from-ids XOR (--notebook --from-hpaths); destination is hpath form.
-siyuan doc move --from-ids 20260501090000-doc0001 \
+syo doc move --from-ids 20260501090000-doc0001 \
   --to-notebook 20260501000000-nb00002 --to-path /Archive
-siyuan doc move --notebook 20260501000000-nb00001 --from-hpaths /Plan /Notes \
+syo doc move --notebook 20260501000000-nb00001 --from-hpaths /Plan /Notes \
   --to-notebook 20260501000000-nb00002 --to-path /Archive
 
 # Read a doc as agent-readable markdown (default), or as JSON
-siyuan doc get --id 20260501090000-doc0001
-siyuan doc get --id 20260501090000-doc0001 --format json-pretty
-siyuan doc get --id 20260501090000-doc0001 --page 2 --page-size 50
+syo doc get --id 20260501090000-doc0001
+syo doc get --id 20260501090000-doc0001 --format json-pretty
+syo doc get --id 20260501090000-doc0001 --page 2 --page-size 50
 
 # Read a single block's raw kramdown
-siyuan block get --id 20260501090000-blk0001
+syo block get --id 20260501090000-blk0001
 
 # Create a doc from a markdown file (or stdin via `-`)
-siyuan doc create \
+syo doc create \
   --notebook 20260501000000-nb00001 \
   --hpath "/Projects/New Page" \
   --markdown-file ./page.md
 
 # Block writes
-siyuan block update   --id <block-id> --markdown-file ./new.md
-siyuan block insert  --position after_block --anchor <block-id> --markdown-file ./snippet.md
-siyuan block move     --id <block-id> --position append_child --anchor <container-id>
-siyuan block delete   --id <block-id>
-# Note: document root blocks (type='d') are rejected by block delete; use `siyuan doc remove` to delete a document.
+syo block update   --id <block-id> --markdown-file ./new.md
+syo block insert  --position after_block --anchor <block-id> --markdown-file ./snippet.md
+syo block move     --id <block-id> --position append_child --anchor <container-id>
+syo block delete   --id <block-id>
+# Note: document root blocks (type='d') are rejected by block delete; use `syo doc remove` to delete a document.
 
 # Attributes (custom keys must be `custom-...`; empty value clears a key)
-siyuan attrs set --id <block-id> --attr custom-status=done --attr custom-owner=alice
+syo attrs set --id <block-id> --attr custom-status=done --attr custom-owner=alice
 
 # Tags & search
-siyuan tag ls
-siyuan tag search --tag project
-siyuan search text   --query "load_doc" --limit 20
-siyuan search blocks --type h --contains "Roadmap"
+syo tag ls
+syo tag search --tag project
+syo search text   --query "load_doc" --limit 20
+syo search blocks --type h --contains "Roadmap"
 
 # Raw SQL escape hatch (read-only; caller escapes single quotes)
-siyuan sql --stmt "SELECT id, hpath FROM blocks WHERE type = 'd' LIMIT 5"
+syo sql --stmt "SELECT id, hpath FROM blocks WHERE type = 'd' LIMIT 5"
 
 # Link graph (BFS up to N hops, capped at 500 nodes / 1000 edges)
-siyuan graph backlinks    --id <block-id>
-siyuan graph outgoing     --id <block-id>
-siyuan graph neighborhood --id <block-id> --depth 2 --direction both
+syo graph backlinks    --id <block-id>
+syo graph outgoing     --id <block-id>
+syo graph neighborhood --id <block-id> --depth 2 --direction both
 
 # Assets
-siyuan asset upload    --file ./diagram.png
-siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
+syo asset upload    --file ./diagram.png
+syo asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 ```
 
 ### Output formats
@@ -155,7 +155,7 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 
 ## MCP server usage
 
-`siyuan serve-mcp` speaks JSON-RPC over **stdio**. Wire it into any MCP-aware client (Claude Desktop, Claude Code, custom hosts) by spawning the binary with the SiYuan env injected.
+`syo serve-mcp` speaks JSON-RPC over **stdio**. Wire it into any MCP-aware client (Claude Desktop, Claude Code, custom hosts) by spawning the binary with the SiYuan env injected.
 
 ### Claude Desktop / Claude Code
 
@@ -163,7 +163,7 @@ siyuan asset reference --path assets/diagram-20260501-abc.png --alt "Diagram"
 {
   "mcpServers": {
     "siyuan": {
-      "command": "/abs/path/to/siyuan",
+      "command": "/abs/path/to/syo",
       "args": ["serve-mcp"],
       "env": {
         "SIYUAN_BASE_URL": "http://127.0.0.1:6806",
@@ -258,7 +258,7 @@ crates/
   siyuan-client/   # typed reqwest wrapper over the kernel HTTP API
   siyuan-model/    # DocBundle, load_doc, sectioning, pagination, graph BFS, tags, doc-meta resolve
   siyuan-render/   # agent-md + canonical JSON renderers
-  siyuan-cli/      # `siyuan` binary (clap) — provides both CLI and `serve-mcp`
+  siyuan-cli/      # `syo` binary (clap) — provides both CLI and `serve-mcp`
   siyuan-mcp/      # library crate consumed by siyuan-cli's `serve-mcp` subcommand
   siyuan-testkit/  # Podman-driven disposable SiYuan instances
 docs/

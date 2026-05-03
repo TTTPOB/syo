@@ -8,9 +8,9 @@ use siyuan_types::{BlockId, BlockType, Position};
 
 /// Insert a new markdown block (or blocks) at a position relative to an anchor.
 ///
-/// Sibling commands: `siyuan block move` moves an EXISTING block (keeps id);
-/// `siyuan block update` overwrites a block in place; `siyuan doc create`
-/// mints a whole new document. Use `siyuan block insert` only to add NEW
+/// Sibling commands: `syo block move` moves an EXISTING block (keeps id);
+/// `syo block update` overwrites a block in place; `syo doc create`
+/// mints a whole new document. Use `syo block insert` only to add NEW
 /// blocks inside an existing document.
 ///
 /// Inputs:
@@ -49,8 +49,8 @@ use siyuan_types::{BlockId, BlockType, Position};
 /// section detector to locate the section's last block. Anchor MUST be a
 /// heading block (`type = 'h'`) for *_section kinds, or the call errors.
 ///
-/// SiYuan indexes mutations asynchronously; SQL-based reads (siyuan sql,
-/// siyuan search text, siyuan tag search) may show stale data for ~100-500 ms
+/// SiYuan indexes mutations asynchronously; SQL-based reads (syo sql,
+/// syo search text, syo tag search) may show stale data for ~100-500 ms
 /// after this call. The kernel is immediately consistent — only the SQL
 /// index lags.
 ///

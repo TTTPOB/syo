@@ -7,12 +7,12 @@ use siyuan_types::NotebookId;
 
 /// Create a new document in a notebook from GFM markdown.
 ///
-/// Sibling commands: `siyuan block update` replaces an existing block;
-/// `siyuan block insert` appends/inserts blocks under an existing document.
+/// Sibling commands: `syo block update` replaces an existing block;
+/// `syo block insert` appends/inserts blocks under an existing document.
 /// Only use create-doc to mint a NEW document.
 ///
 /// Inputs:
-///   --notebook (required): notebook id from `siyuan notebook ls`.
+///   --notebook (required): notebook id from `syo notebook ls`.
 ///   --hpath (required): human path inside the notebook, e.g.
 ///     `/Projects/Plan`. Must start with `/`. Intermediate folders are
 ///     auto-created. NOT to be confused with the on-disk `.sy` storage
@@ -25,8 +25,8 @@ use siyuan_types::NotebookId;
 ///
 /// Prints the new document's root block id to stdout.
 ///
-/// SiYuan indexes mutations asynchronously; SQL-based reads (siyuan sql,
-/// siyuan search text, siyuan tag search) may show stale data for ~100-500 ms
+/// SiYuan indexes mutations asynchronously; SQL-based reads (syo sql,
+/// syo search text, syo tag search) may show stale data for ~100-500 ms
 /// after this call. The kernel is immediately consistent — only the SQL
 /// index lags.
 ///
@@ -36,7 +36,7 @@ use siyuan_types::NotebookId;
 #[derive(Args, Debug)]
 #[command(verbatim_doc_comment)]
 pub struct CreateDocArgs {
-    /// Notebook id (from `siyuan notebook ls`).
+    /// Notebook id (from `syo notebook ls`).
     #[arg(long)]
     pub notebook: String,
 

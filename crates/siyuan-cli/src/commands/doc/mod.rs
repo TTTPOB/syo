@@ -30,7 +30,7 @@ pub use tree::TreeArgs;
 pub enum DocCmd {
     /// Look up document metadata by id OR by (notebook + hpath).
     ///
-    /// Sibling commands: `siyuan doc get` returns rendered document content;
+    /// Sibling commands: `syo doc get` returns rendered document content;
     /// this command returns only metadata and is the canonical hpath<->id
     /// translator. Provide exactly one input mode: `--id`, or `--notebook`
     /// plus `--hpath`.

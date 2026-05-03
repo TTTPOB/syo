@@ -6,10 +6,10 @@ use siyuan_types::BlockId;
 
 /// Replace the full markdown content of an existing block.
 ///
-/// Sibling commands: `siyuan block insert` adds NEW blocks at a position
-/// relative to an anchor; `siyuan block delete` removes a block; this
+/// Sibling commands: `syo block insert` adds NEW blocks at a position
+/// relative to an anchor; `syo block delete` removes a block; this
 /// command is for in-place full overwrite of the markdown body. Partial
-/// edits are NOT supported — read with `siyuan block get` first if you need
+/// edits are NOT supported — read with `syo block get` first if you need
 /// to preserve part of the existing content.
 ///
 /// Inputs:
@@ -19,8 +19,8 @@ use siyuan_types::BlockId;
 ///
 /// Prints `ok` on success.
 ///
-/// SiYuan indexes mutations asynchronously; SQL-based reads (siyuan sql,
-/// siyuan search text, siyuan tag search) may show stale data for ~100-500 ms
+/// SiYuan indexes mutations asynchronously; SQL-based reads (syo sql,
+/// syo search text, syo tag search) may show stale data for ~100-500 ms
 /// after this call. The kernel is immediately consistent — only the SQL
 /// index lags.
 ///

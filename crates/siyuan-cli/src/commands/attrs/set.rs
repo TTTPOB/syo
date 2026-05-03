@@ -8,10 +8,10 @@ use siyuan_types::BlockId;
 
 /// Set one or more attributes on a block (partial update).
 ///
-/// Sibling commands: `siyuan doc set-icon` and `siyuan doc set-sort` are
+/// Sibling commands: `syo doc set-icon` and `syo doc set-sort` are
 /// thin wrappers that set the `icon` / `sort` attribute respectively;
 /// reach for them when that is all you need. There is no `get-attrs` CLI —
-/// to read existing attributes use `siyuan block get --format json` (its
+/// to read existing attributes use `syo block get --format json` (its
 /// JSON output includes `attrs`).
 ///
 /// Inputs:
@@ -25,8 +25,8 @@ use siyuan_types::BlockId;
 ///
 /// Prints `ok` on success.
 ///
-/// SiYuan indexes mutations asynchronously; SQL-based reads (siyuan sql,
-/// siyuan search text, siyuan tag search) may show stale data for ~100-500 ms
+/// SiYuan indexes mutations asynchronously; SQL-based reads (syo sql,
+/// syo search text, syo tag search) may show stale data for ~100-500 ms
 /// after this call. The kernel is immediately consistent — only the SQL
 /// index lags.
 ///

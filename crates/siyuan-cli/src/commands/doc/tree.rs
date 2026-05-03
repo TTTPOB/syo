@@ -8,7 +8,7 @@ use siyuan_types::{BlockId, NotebookId};
 
 use crate::output::OutputFormat;
 
-/// Arguments for `siyuan doc tree`.
+/// Arguments for `syo doc tree`.
 ///
 /// Same id-XOR-(notebook+hpath) shape as `doc resolve`. `--hpath` defaults
 /// to `/` when in `--notebook` mode (virtual-root behaviour). `--depth`

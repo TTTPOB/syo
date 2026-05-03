@@ -15,7 +15,7 @@ use crate::config::Config;
 /// a Claude Code-style agent harness.
 ///
 /// Inputs:
-///   --base-url, --token (global, inherited): see top-level `siyuan --help`.
+///   --base-url, --token (global, inherited): see top-level `syo --help`.
 ///     Unlike other subcommands, serve-mcp tolerates a missing token — it
 ///     boots, logs a warning, and defers auth failures to per-tool kernel
 ///     calls.

@@ -9,7 +9,7 @@
 - `crates/siyuan-client`：SiYuan kernel HTTP API 的 typed client。这里负责请求/响应封装、API endpoint 和 SQL 字符串转义。
 - `crates/siyuan-model`：面向业务语义的模型层，组合 client 调用并提供文档加载、分页、文档树、标签、关系图等能力。
 - `crates/siyuan-render`：把模型层数据渲染成 agent-md 或 JSON bundle。
-- `crates/siyuan-cli`：`siyuan` 二进制入口，包含 CLI 命令、输出格式和 MCP stdio 启动入口。
+- `crates/siyuan-cli`：`syo` 二进制入口，包含 CLI 命令、输出格式和 MCP stdio 启动入口。
 - `crates/siyuan-mcp`：MCP server、tool registry 和 MCP tool 实现。
 - `crates/siyuan-testkit`：基于 Podman 的一次性 SiYuan kernel 测试容器和集成测试工具。
 

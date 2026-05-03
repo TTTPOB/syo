@@ -13,7 +13,7 @@ use self::upload::UploadArgs;
 pub enum AssetCmd {
     /// Upload a local file as a SiYuan asset.
     ///
-    /// Sibling commands: `siyuan asset reference` formats a markdown
+    /// Sibling commands: `syo asset reference` formats a markdown
     /// embed for an already-uploaded path; this command performs the
     /// upload and prints the kernel-relative path. Pipe one into the
     /// other if you want both steps.
@@ -34,7 +34,7 @@ pub enum AssetCmd {
     Upload(UploadArgs),
     /// Print the markdown snippet for embedding an already-uploaded asset.
     ///
-    /// Sibling commands: `siyuan asset upload` performs the upload step;
+    /// Sibling commands: `syo asset upload` performs the upload step;
     /// this is purely a formatter — it does NOT call the kernel. There
     /// is no anchor concept here: the snippet is unconditionally an
     /// image-style markdown reference (`![alt](path)`); for non-image
@@ -42,7 +42,7 @@ pub enum AssetCmd {
     ///
     /// Inputs:
     ///   --path (required): kernel-relative asset path (the value
-    ///     printed by `siyuan asset upload`, e.g. `assets/foo.png`).
+    ///     printed by `syo asset upload`, e.g. `assets/foo.png`).
     ///   --alt (optional, default empty): alt text. When empty, the
     ///     filename component of `--path` is used as alt text.
     ///

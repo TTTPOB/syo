@@ -1,4 +1,4 @@
-/// End-to-end smoke test: spawn `siyuan serve-mcp`, perform the MCP
+/// End-to-end smoke test: spawn `syo serve-mcp`, perform the MCP
 /// initialize + tools/list handshake over stdio, and verify the responses.
 ///
 /// We point --base-url at port 1 (refused), which is fine because no actual
@@ -10,9 +10,9 @@ use std::{
 
 use serde_json::{Value, json};
 
-/// Path to the compiled `siyuan` binary (cargo sets CARGO_BIN_EXE_siyuan in tests).
+/// Path to the compiled `syo` binary (cargo sets CARGO_BIN_EXE_syo in tests).
 fn binary_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_siyuan"))
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_syo"))
 }
 
 /// Send one JSON-RPC line to the child's stdin and read one response line.
@@ -41,7 +41,7 @@ fn mcp_initialize_and_tools_list() {
         // Redirect stderr so tracing output doesn't clutter the test runner.
         .stderr(Stdio::null())
         .spawn()
-        .expect("failed to spawn siyuan serve-mcp");
+        .expect("failed to spawn syo serve-mcp");
 
     let stdin = child.stdin.as_mut().unwrap();
     let mut stdout = BufReader::new(child.stdout.as_mut().unwrap());

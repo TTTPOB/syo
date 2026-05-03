@@ -6,8 +6,8 @@ use siyuan_model::sql_guard;
 
 /// Run a single read-only SQL statement against the SiYuan SQLite store.
 ///
-/// Sibling commands: prefer `siyuan search text`, `siyuan search blocks`,
-/// `siyuan tag search`, or `siyuan graph neighborhood` when they cover the
+/// Sibling commands: prefer `syo search text`, `syo search blocks`,
+/// `syo tag search`, or `syo graph neighborhood` when they cover the
 /// use case. Reach for sql ONLY when those do not (joins, aggregates, or
 /// access to internal tables like `refs`, `attributes`, `spans`).
 ///

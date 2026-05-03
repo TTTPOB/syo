@@ -11,9 +11,9 @@ pub mod text;
 pub enum SearchCmd {
     /// Full-text search across all blocks (LIKE `%query%` on `markdown`).
     ///
-    /// Sibling commands: `siyuan search blocks` filters by type+content
-    /// (uses the `content` column instead of `markdown`); `siyuan tag
-    /// search` is exact tag match; `siyuan sql` is the raw escape hatch
+    /// Sibling commands: `syo search blocks` filters by type+content
+    /// (uses the `content` column instead of `markdown`); `syo tag
+    /// search` is exact tag match; `syo sql` is the raw escape hatch
     /// for arbitrary queries.
     ///
     /// Inputs:
@@ -39,10 +39,10 @@ pub enum SearchCmd {
     Text(text::Args),
     /// Filter blocks by type and/or content substring.
     ///
-    /// Sibling commands: `siyuan search text` searches the `markdown`
+    /// Sibling commands: `syo search text` searches the `markdown`
     /// column (includes inline syntax markers); this command searches
     /// `content` (visible text) and adds an exact-match `type` filter.
-    /// Use `siyuan sql` for joins or projections this command does not
+    /// Use `syo sql` for joins or projections this command does not
     /// expose.
     ///
     /// Inputs:

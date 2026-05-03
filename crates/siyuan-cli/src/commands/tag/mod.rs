@@ -10,8 +10,8 @@ pub mod search;
 pub enum TagCmd {
     /// List all distinct tags used anywhere in the workspace.
     ///
-    /// Sibling commands: `siyuan tag search` finds blocks tagged with one
-    /// specific tag; `siyuan search blocks --type t` lists tag blocks
+    /// Sibling commands: `syo tag search` finds blocks tagged with one
+    /// specific tag; `syo search blocks --type t` lists tag blocks
     /// directly. Output of this command is one tag per line, WITHOUT the
     /// surrounding `#` characters.
     ///
@@ -32,8 +32,8 @@ pub enum TagCmd {
     Ls(ls::Args),
     /// Find all blocks that carry a specific tag.
     ///
-    /// Sibling commands: `siyuan tag ls` enumerates available tags;
-    /// `siyuan search text` does free-text search instead of tag-exact
+    /// Sibling commands: `syo tag ls` enumerates available tags;
+    /// `syo search text` does free-text search instead of tag-exact
     /// match.
     ///
     /// Inputs:

@@ -7,9 +7,9 @@ use siyuan_types::position::PositionKind;
 
 /// Move an existing block to a new position within the document tree.
 ///
-/// Sibling commands: `siyuan block insert` adds NEW blocks (different
-/// ids); `siyuan doc move` moves whole documents on disk (`.sy` files).
-/// `siyuan block move` keeps the block's id and all its children — only its
+/// Sibling commands: `syo block insert` adds NEW blocks (different
+/// ids); `syo doc move` moves whole documents on disk (`.sy` files).
+/// `syo block move` keeps the block's id and all its children — only its
 /// parent and sibling order change.
 ///
 /// Inputs:
@@ -40,8 +40,8 @@ use siyuan_types::position::PositionKind;
 /// The block keeps its existing id and all its children. Prints `ok` on
 /// success.
 ///
-/// SiYuan indexes mutations asynchronously; SQL-based reads (siyuan sql,
-/// siyuan search text, siyuan tag search) may show stale position data for
+/// SiYuan indexes mutations asynchronously; SQL-based reads (syo sql,
+/// syo search text, syo tag search) may show stale position data for
 /// ~100-500 ms after this call. The kernel is immediately consistent — only
 /// the SQL index lags.
 ///

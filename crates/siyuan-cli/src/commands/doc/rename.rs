@@ -6,7 +6,7 @@ use siyuan_model::doc_meta::resolve_one_storage;
 
 use super::lookup::build_single_doc_lookup;
 
-/// Arguments for `siyuan doc rename`.
+/// Arguments for `syo doc rename`.
 #[derive(Args, Debug)]
 #[command(group(
     ArgGroup::new("rename_lookup")

@@ -16,10 +16,10 @@ pub enum NotebookCmd {
     /// status (`open  ` or `closed`), notebook id, name. Closed notebooks
     /// are listed too — they cannot be reopened from this CLI (open/close
     /// is a UI-only action), but their ids are still useful for
-    /// `siyuan doc resolve` queries against the closed corpus, which may
+    /// `syo doc resolve` queries against the closed corpus, which may
     /// or may not return data depending on kernel version.
     ///
-    /// Sibling commands: `siyuan doc resolve` looks up a single document
+    /// Sibling commands: `syo doc resolve` looks up a single document
     /// by id or hpath; this command enumerates whole notebooks.
     ///
     /// Inputs:
@@ -35,7 +35,7 @@ pub enum NotebookCmd {
     Ls(ls::Args),
     /// Create a new notebook with the given display name.
     ///
-    /// Sibling commands: `siyuan notebook rename` only changes the name
+    /// Sibling commands: `syo notebook rename` only changes the name
     /// of an existing notebook. There is no programmatic open/close —
     /// the user opens or closes notebooks in the SiYuan UI.
     ///
@@ -46,13 +46,13 @@ pub enum NotebookCmd {
     /// Prints the new notebook id to stdout.
     ///
     /// Some kernel versions create the notebook in a CLOSED state. The
-    /// id is usable immediately for `siyuan doc resolve` (which queries
-    /// the kernel directly), but reads via `siyuan sql` /
-    /// `siyuan search text` may return empty until the user opens the
+    /// id is usable immediately for `syo doc resolve` (which queries
+    /// the kernel directly), but reads via `syo sql` /
+    /// `syo search text` may return empty until the user opens the
     /// notebook in the SiYuan UI.
     ///
     /// SiYuan indexes mutations asynchronously; SQL-based reads
-    /// (siyuan sql, siyuan search text, siyuan tag search) may show stale
+    /// (syo sql, syo search text, syo tag search) may show stale
     /// data for ~100-500 ms after this call. The kernel is immediately
     /// consistent — only the SQL index lags.
     ///
@@ -63,9 +63,9 @@ pub enum NotebookCmd {
     Create(create::Args),
     /// Rename an existing notebook.
     ///
-    /// Sibling commands: `siyuan notebook create` mints a new notebook;
-    /// `siyuan notebook remove` destroys one and all its documents.
-    /// `siyuan notebook rename` changes the display name only — the
+    /// Sibling commands: `syo notebook create` mints a new notebook;
+    /// `syo notebook remove` destroys one and all its documents.
+    /// `syo notebook rename` changes the display name only — the
     /// on-disk folder and the notebook id remain stable, so storage
     /// paths inside it are unaffected.
     ///
@@ -73,13 +73,13 @@ pub enum NotebookCmd {
     /// Storage paths and the notebook id remain stable.
     ///
     /// Inputs:
-    ///   --id (required): notebook id from `siyuan notebook ls`.
+    ///   --id (required): notebook id from `syo notebook ls`.
     ///   --name (required): new display name.
     ///
     /// Prints `ok` on success.
     ///
     /// SiYuan indexes mutations asynchronously; SQL-based reads
-    /// (siyuan sql, siyuan search text, siyuan tag search) may show stale
+    /// (syo sql, syo search text, syo tag search) may show stale
     /// data for ~100-500 ms after this call. The kernel is immediately
     /// consistent — only the SQL index lags.
     ///
@@ -90,9 +90,9 @@ pub enum NotebookCmd {
     Rename(rename::Args),
     /// Permanently remove a notebook AND every document it contains.
     ///
-    /// Sibling commands: `siyuan doc remove` removes a single document
+    /// Sibling commands: `syo doc remove` removes a single document
     /// by storage path; this destroys the whole notebook and is
-    /// irreversible. Verify the notebook id from `siyuan notebook ls`
+    /// irreversible. Verify the notebook id from `syo notebook ls`
     /// before calling.
     ///
     /// Inputs:
@@ -101,7 +101,7 @@ pub enum NotebookCmd {
     /// Prints `ok` on success.
     ///
     /// SiYuan indexes mutations asynchronously; SQL-based reads
-    /// (siyuan sql, siyuan search text, siyuan tag search) may show stale
+    /// (syo sql, syo search text, syo tag search) may show stale
     /// data for ~100-500 ms after this call. The kernel is immediately
     /// consistent — only the SQL index lags.
     ///

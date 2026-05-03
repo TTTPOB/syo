@@ -5,7 +5,7 @@ mod output;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "siyuan", version, about = "Agent harness for SiYuan")]
+#[command(name = "syo", version, about = "Agent harness for SiYuan")]
 struct Cli {
     /// Base URL of the SiYuan kernel HTTP API.
     ///

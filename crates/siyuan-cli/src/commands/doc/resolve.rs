@@ -8,7 +8,7 @@ use crate::output::OutputFormat;
 
 use super::lookup::build_single_doc_lookup;
 
-/// Arguments for `siyuan doc resolve`.
+/// Arguments for `syo doc resolve`.
 #[derive(Args, Debug)]
 #[command(group(
     ArgGroup::new("doc_lookup")

@@ -10,9 +10,9 @@ use crate::output::OutputFormat;
 
 /// Fetch the raw kramdown source of a single block plus its attributes.
 ///
-/// Sibling commands: `siyuan doc get` returns the rendered document tree —
+/// Sibling commands: `syo doc get` returns the rendered document tree —
 /// use this only when you need the storage syntax of ONE block (e.g. to
-/// inspect attributes embedded in kramdown braces). `siyuan search text`
+/// inspect attributes embedded in kramdown braces). `syo search text`
 /// finds candidate ids when you do not have one yet.
 ///
 /// Inputs:

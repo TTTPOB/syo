@@ -8,6 +8,15 @@ use crate::output::OutputFormat;
 use super::lookup::build_single_doc_lookup;
 
 /// Arguments for `syo doc resolve`.
+///
+/// Note: the first `/`-delimited segment of an hpath is NOT a notebook
+/// name — it is a top-level document title INSIDE the target notebook.
+/// (SiYuan has no folder concept — every path segment is a document.)
+/// The notebook is always supplied separately via `--notebook`.
+/// Example: notebook `expnote`, hpath `/year2026/month12` means
+/// `expnote:/year2026/month12`. Even when notebook `hello`, hpath
+/// `/hello/world`, the first segment is still a document title:
+/// `hello[notebook]:/hello/world`.
 #[derive(Args, Debug)]
 #[command(group(
     ArgGroup::new("doc_lookup")

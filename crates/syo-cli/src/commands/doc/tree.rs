@@ -13,6 +13,15 @@ use crate::output::OutputFormat;
 /// Same id-XOR-(notebook+hpath) shape as `doc resolve`. `--hpath` defaults
 /// to `/` when in `--notebook` mode (virtual-root behaviour). `--depth`
 /// accepts an integer >= 1 or the literal string `all`.
+///
+/// Note: the first `/`-delimited segment of an hpath is NOT a notebook
+/// name — it is a top-level document title INSIDE the target notebook.
+/// (SiYuan has no folder concept — every path segment is a document.)
+/// The notebook is always supplied separately via `--notebook`.
+/// Example: notebook `expnote`, hpath `/year2026/month12` means
+/// `expnote:/year2026/month12`. Even when notebook `hello`, hpath
+/// `/hello/world`, the first segment is still a document title:
+/// `hello[notebook]:/hello/world`.
 #[derive(Args, Debug)]
 #[command(group(
     ArgGroup::new("tree_lookup")

@@ -73,7 +73,7 @@ pub async fn run(client: &SiyuanClient, args: CreateDocArgs) -> Result<()> {
         }
     }
 
-    let markdown = super::read_markdown_input(&args.markdown_file)?;
+    let markdown = super::super::read_markdown_input(&args.markdown_file)?;
     let id = client
         .create_doc_with_md(&notebook, &args.hpath, &markdown)
         .await?;

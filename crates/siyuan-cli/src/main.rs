@@ -3,7 +3,6 @@ mod config;
 mod output;
 
 use clap::{Parser, Subcommand};
-use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(name = "siyuan", version, about = "Agent harness for SiYuan")]
@@ -99,9 +98,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.cmd {
         Cmd::Status => {
-            let v = client.system_version().await?;
-            info!(%v, "siyuan ok");
-            println!("{v}");
+            commands::status::run(&client).await?;
         }
         Cmd::Block { cmd } => commands::block::run(&client, cmd).await?,
         Cmd::Notebook { cmd } => commands::notebook::run(&client, cmd).await?,

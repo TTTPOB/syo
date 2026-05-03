@@ -2,7 +2,9 @@ use anyhow::Result;
 use clap::Subcommand;
 use siyuan_client::SiyuanClient;
 
-use super::set_attrs::SetAttrsArgs;
+pub mod set;
+
+use self::set::SetAttrsArgs;
 
 #[derive(Subcommand, Debug)]
 pub enum AttrsCmd {
@@ -12,6 +14,6 @@ pub enum AttrsCmd {
 
 pub async fn run(client: &SiyuanClient, cmd: AttrsCmd) -> Result<()> {
     match cmd {
-        AttrsCmd::Set(a) => super::set_attrs::run(client, a).await,
+        AttrsCmd::Set(a) => set::run(client, a).await,
     }
 }

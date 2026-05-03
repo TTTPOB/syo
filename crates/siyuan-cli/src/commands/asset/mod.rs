@@ -1,9 +1,13 @@
-use std::path::PathBuf;
-
 use anyhow::Result;
-use clap::{Args, Subcommand};
+use clap::Subcommand;
 
 use siyuan_client::SiyuanClient;
+
+pub mod reference;
+pub mod upload;
+
+use self::reference::ReferenceArgs;
+use self::upload::UploadArgs;
 
 #[derive(Subcommand, Debug)]
 pub enum AssetCmd {
@@ -49,39 +53,9 @@ pub enum AssetCmd {
     Reference(ReferenceArgs),
 }
 
-#[derive(Args, Debug)]
-pub struct UploadArgs {
-    /// Local file to upload.
-    #[arg(long)]
-    pub file: PathBuf,
-}
-
-#[derive(Args, Debug)]
-pub struct ReferenceArgs {
-    /// Kernel-relative asset path (the value returned by `siyuan asset upload`).
-    #[arg(long)]
-    pub path: String,
-
-    /// Alt text. For images, defaults to the file basename.
-    #[arg(long, default_value = "")]
-    pub alt: String,
-}
-
 pub async fn run(client: &SiyuanClient, cmd: AssetCmd) -> Result<()> {
     match cmd {
-        AssetCmd::Upload(a) => {
-            let path = client.upload_asset(&a.file).await?;
-            println!("{path}");
-        }
-        AssetCmd::Reference(a) => {
-            let alt = if a.alt.is_empty() {
-                a.path.rsplit('/').next().unwrap_or("").to_string()
-            } else {
-                a.alt
-            };
-            // Image-style markdown reference.
-            println!("![{alt}]({})", a.path);
-        }
+        AssetCmd::Upload(a) => upload::run(client, a).await,
+        AssetCmd::Reference(a) => reference::run(a),
     }
-    Ok(())
 }

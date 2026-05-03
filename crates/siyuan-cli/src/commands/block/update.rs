@@ -41,7 +41,7 @@ pub struct UpdateBlockArgs {
 
 pub async fn run(client: &SiyuanClient, args: UpdateBlockArgs) -> Result<()> {
     let id = BlockId::parse(&args.id).context("--id")?;
-    let markdown = super::read_markdown_input(&args.markdown_file)?;
+    let markdown = super::super::read_markdown_input(&args.markdown_file)?;
     client.update_block_markdown(&id, &markdown).await?;
     println!("ok");
     Ok(())

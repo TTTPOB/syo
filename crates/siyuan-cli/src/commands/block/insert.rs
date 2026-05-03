@@ -63,7 +63,7 @@ pub struct InsertBlocksArgs {
     /// Position kind. One of: after_block, before_block, append_child,
     /// prepend_child, append_section, prepend_section, append_doc, prepend_doc.
     /// See command help for the meaning of each.
-    #[arg(long, value_parser = super::parse_position)]
+    #[arg(long, value_parser = super::super::parse_position)]
     pub position: PositionKind,
 
     /// Anchor block id. Interpretation depends on --position (see help).
@@ -77,7 +77,7 @@ pub struct InsertBlocksArgs {
 
 pub async fn run(client: &SiyuanClient, args: InsertBlocksArgs) -> Result<()> {
     let anchor = BlockId::parse(&args.anchor).context("--anchor")?;
-    let markdown = super::read_markdown_input(&args.markdown_file)?;
+    let markdown = super::super::read_markdown_input(&args.markdown_file)?;
     let position = Position::from((args.position, anchor.clone()));
 
     let new_id = match position {

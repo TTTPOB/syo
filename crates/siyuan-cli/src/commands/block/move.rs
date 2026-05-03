@@ -58,7 +58,7 @@ pub struct MoveBlockArgs {
     /// Destination position kind. See command help for supported kinds:
     /// after_block, before_block, append_child, prepend_child,
     /// append_section, prepend_section, append_doc, prepend_doc.
-    #[arg(long, value_parser = super::parse_position)]
+    #[arg(long, value_parser = super::super::parse_position)]
     pub position: PositionKind,
 
     /// Destination anchor. Interpretation depends on --position.
@@ -89,7 +89,7 @@ pub async fn run(client: &SiyuanClient, args: MoveBlockArgs) -> Result<()> {
             client.move_block(&id, None, Some(&anchor)).await?;
         }
         PositionKind::AppendSection => {
-            let section_end = super::insert_blocks::resolve_section_end(client, &anchor).await?;
+            let section_end = super::insert::resolve_section_end(client, &anchor).await?;
             client.move_block(&id, Some(&section_end), None).await?;
         }
         PositionKind::PrependSection => {
@@ -148,7 +148,7 @@ async fn find_previous_sibling(client: &SiyuanClient, anchor: &BlockId) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use super::super::parse_position;
+    use super::super::super::parse_position;
     use siyuan_types::position::PositionKind;
 
     #[test]

@@ -1,21 +1,14 @@
 pub mod asset;
 pub mod attrs;
 pub mod block;
-pub mod create_doc;
-pub mod delete_block;
 pub mod doc;
-mod get_block;
-mod get_doc;
 pub mod graph;
-mod insert_blocks;
-mod move_block;
 pub mod notebook;
 pub mod search;
 pub mod serve_mcp;
-mod set_attrs;
 pub mod sql;
+pub mod status;
 pub mod tag;
-mod update_block;
 
 use anyhow::Result;
 use siyuan_types::position::PositionKind;

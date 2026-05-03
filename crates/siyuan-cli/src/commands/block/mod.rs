@@ -3,11 +3,17 @@ use clap::Subcommand;
 
 use siyuan_client::SiyuanClient;
 
-use super::delete_block::DeleteBlockArgs;
-use super::get_block::GetBlockArgs;
-use super::insert_blocks::InsertBlocksArgs;
-use super::move_block::MoveBlockArgs;
-use super::update_block::UpdateBlockArgs;
+pub mod delete;
+pub mod get;
+pub mod insert;
+pub mod r#move;
+pub mod update;
+
+use self::delete::DeleteBlockArgs;
+use self::get::GetBlockArgs;
+use self::insert::InsertBlocksArgs;
+use self::r#move::MoveBlockArgs;
+use self::update::UpdateBlockArgs;
 
 #[derive(Subcommand, Debug)]
 pub enum BlockCmd {
@@ -25,10 +31,10 @@ pub enum BlockCmd {
 
 pub async fn run(client: &SiyuanClient, cmd: BlockCmd) -> Result<()> {
     match cmd {
-        BlockCmd::Get(a) => super::get_block::run(client, a).await,
-        BlockCmd::Update(a) => super::update_block::run(client, a).await,
-        BlockCmd::Insert(a) => super::insert_blocks::run(client, a).await,
-        BlockCmd::Move(a) => super::move_block::run(client, a).await,
-        BlockCmd::Delete(a) => super::delete_block::run(client, a).await,
+        BlockCmd::Get(a) => get::run(client, a).await,
+        BlockCmd::Update(a) => update::run(client, a).await,
+        BlockCmd::Insert(a) => insert::run(client, a).await,
+        BlockCmd::Move(a) => r#move::run(client, a).await,
+        BlockCmd::Delete(a) => delete::run(client, a).await,
     }
 }

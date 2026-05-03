@@ -1,9 +1,11 @@
-use anyhow::{Context, Result};
-use clap::{Args, Subcommand};
+use anyhow::Result;
+use clap::Subcommand;
 
 use siyuan_client::SiyuanClient;
-use siyuan_model::graph::{Direction, neighborhood};
-use siyuan_types::BlockId;
+
+pub mod backlinks;
+pub mod neighborhood;
+pub mod outgoing;
 
 #[derive(Subcommand, Debug)]
 pub enum GraphCmd {
@@ -23,7 +25,7 @@ pub enum GraphCmd {
     ///   in:  --id 20260501090000-blk0001
     ///   out: {"nodes":[...],"edges":[...],"truncated":false}
     #[command(verbatim_doc_comment)]
-    Backlinks(IdArgs),
+    Backlinks(backlinks::Args),
     /// List blocks referenced BY the given block (depth=1, outgoing).
     ///
     /// Sibling commands: `siyuan graph backlinks` is the dual;
@@ -38,7 +40,7 @@ pub enum GraphCmd {
     ///   in:  --id 20260501090000-blk0001
     ///   out: {"nodes":[...],"edges":[...],"truncated":false}
     #[command(verbatim_doc_comment)]
-    Outgoing(IdArgs),
+    Outgoing(outgoing::Args),
     /// Walk the link graph around a block to a configurable depth.
     ///
     /// Sibling commands: `siyuan graph backlinks` and
@@ -65,51 +67,13 @@ pub enum GraphCmd {
     ///   in:  --id 20260501090000-blk0001 --depth 2 --direction both
     ///   out: {"nodes":[...],"edges":[...],"truncated":false}
     #[command(verbatim_doc_comment)]
-    Neighborhood(NeighborhoodArgs),
-}
-
-#[derive(Args, Debug)]
-pub struct IdArgs {
-    /// Center block id.
-    #[arg(long)]
-    pub id: String,
-}
-
-#[derive(Args, Debug)]
-pub struct NeighborhoodArgs {
-    /// Center block id.
-    #[arg(long)]
-    pub id: String,
-    /// Hop count. Default 2, capped at 8.
-    #[arg(long, default_value_t = 2)]
-    pub depth: usize,
-    /// Direction: `in`/`incoming`, `out`/`outgoing`, or `both` (default).
-    #[arg(long, default_value = "both")]
-    pub direction: String,
+    Neighborhood(neighborhood::Args),
 }
 
 pub async fn run(client: &SiyuanClient, cmd: GraphCmd) -> Result<()> {
     match cmd {
-        GraphCmd::Backlinks(a) => {
-            let id = BlockId::parse(&a.id).context("--id")?;
-            let g = neighborhood(client, &id, 1, Direction::Incoming).await?;
-            println!("{}", serde_json::to_string_pretty(&g)?);
-        }
-        GraphCmd::Outgoing(a) => {
-            let id = BlockId::parse(&a.id).context("--id")?;
-            let g = neighborhood(client, &id, 1, Direction::Outgoing).await?;
-            println!("{}", serde_json::to_string_pretty(&g)?);
-        }
-        GraphCmd::Neighborhood(a) => {
-            let id = BlockId::parse(&a.id).context("--id")?;
-            let dir = match a.direction.as_str() {
-                "in" | "incoming" => Direction::Incoming,
-                "out" | "outgoing" => Direction::Outgoing,
-                _ => Direction::Both,
-            };
-            let g = neighborhood(client, &id, a.depth, dir).await?;
-            println!("{}", serde_json::to_string_pretty(&g)?);
-        }
+        GraphCmd::Backlinks(a) => backlinks::run(client, a).await,
+        GraphCmd::Outgoing(a) => outgoing::run(client, a).await,
+        GraphCmd::Neighborhood(a) => neighborhood::run(client, a).await,
     }
-    Ok(())
 }

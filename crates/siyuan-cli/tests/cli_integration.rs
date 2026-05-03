@@ -377,13 +377,13 @@ async fn create_doc_rejects_duplicate_hpath() {
         .expect("create first doc");
 
     // Try creating again at the same hpath without --force
-    let args = siyuan_cli::commands::create_doc::CreateDocArgs {
+    let args = siyuan_cli::commands::doc::CreateDocArgs {
         notebook: f.notebook_id.to_string(),
         hpath: "/ConflictTest".to_string(),
         markdown_file: "-".to_string(),
         force: false,
     };
-    let result = siyuan_cli::commands::create_doc::run(&f.client, args).await;
+    let result = siyuan_cli::commands::doc::create::run(&f.client, args).await;
 
     match result {
         Err(e) => {
@@ -410,13 +410,13 @@ async fn create_doc_force_overrides_hpath_conflict() {
         .expect("create first doc");
 
     // Try creating again at the same hpath WITH --force
-    let args = siyuan_cli::commands::create_doc::CreateDocArgs {
+    let args = siyuan_cli::commands::doc::CreateDocArgs {
         notebook: f.notebook_id.to_string(),
         hpath: "/ForceTest".to_string(),
         markdown_file: "-".to_string(),
         force: true,
     };
-    let result = siyuan_cli::commands::create_doc::run(&f.client, args).await;
+    let result = siyuan_cli::commands::doc::create::run(&f.client, args).await;
 
     // --force should skip the conflict check, but the kernel may still reject
     // duplicate hpaths or may allow overwriting. We just verify it doesn't

@@ -1,7 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Args;
 
 use siyuan_client::SiyuanClient;
+use siyuan_model::doc_meta::{DocLookup, resolve};
 use siyuan_types::NotebookId;
 
 /// Create a new document in a notebook from GFM markdown.
@@ -44,10 +45,32 @@ pub struct CreateDocArgs {
     /// Path to a markdown file. Use `-` for stdin.
     #[arg(long)]
     pub markdown_file: String,
+
+    /// Skip the hpath-conflict check.
+    #[arg(long)]
+    pub force: bool,
 }
 
 pub async fn run(client: &SiyuanClient, args: CreateDocArgs) -> Result<()> {
     let notebook = NotebookId::parse(&args.notebook).context("--notebook")?;
+
+    // Check for hpath conflicts unless --force
+    if !args.force {
+        let lookup = DocLookup::ByHpath {
+            notebook: notebook.clone(),
+            hpath: args.hpath.clone(),
+        };
+        let existing = resolve(client, lookup).await?;
+        if !existing.is_empty() {
+            let existing_id = &existing[0].id;
+            bail!(
+                "hpath {} already exists (id: {}). Use --force to overwrite.",
+                args.hpath,
+                existing_id
+            );
+        }
+    }
+
     let markdown = super::read_markdown_input(&args.markdown_file)?;
     let id = client
         .create_doc_with_md(&notebook, &args.hpath, &markdown)

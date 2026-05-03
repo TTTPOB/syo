@@ -1,8 +1,8 @@
 pub mod asset;
 pub mod attrs;
 pub mod block;
-mod create_doc;
-mod delete_block;
+pub mod create_doc;
+pub mod delete_block;
 pub mod doc;
 mod get_block;
 mod get_doc;

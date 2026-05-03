@@ -359,3 +359,73 @@ async fn doc_move_rejects_missing_target_folder() {
         Ok(_) => panic!("should have returned an error for missing target folder"),
     }
 }
+
+// ---------------------------------------------------------------------------
+// FIX 3: create-doc rejects duplicate hpath
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore]
+async fn create_doc_rejects_duplicate_hpath() {
+    let f = boot_with_seed().await.expect("boot");
+
+    // Create a doc at /ConflictTest
+    let _id = f
+        .client
+        .create_doc_with_md(&f.notebook_id, "/ConflictTest", "# First")
+        .await
+        .expect("create first doc");
+
+    // Try creating again at the same hpath without --force
+    let args = siyuan_cli::commands::create_doc::CreateDocArgs {
+        notebook: f.notebook_id.to_string(),
+        hpath: "/ConflictTest".to_string(),
+        markdown_file: "-".to_string(),
+        force: false,
+    };
+    let result = siyuan_cli::commands::create_doc::run(&f.client, args).await;
+
+    match result {
+        Err(e) => {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("already exists"),
+                "error should say 'already exists': {msg}"
+            );
+        }
+        Ok(_) => panic!("should have returned an error for duplicate hpath"),
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn create_doc_force_overrides_hpath_conflict() {
+    let f = boot_with_seed().await.expect("boot");
+
+    // Create a doc at /ForceTest
+    let _first = f
+        .client
+        .create_doc_with_md(&f.notebook_id, "/ForceTest", "# First")
+        .await
+        .expect("create first doc");
+
+    // Try creating again at the same hpath WITH --force
+    let args = siyuan_cli::commands::create_doc::CreateDocArgs {
+        notebook: f.notebook_id.to_string(),
+        hpath: "/ForceTest".to_string(),
+        markdown_file: "-".to_string(),
+        force: true,
+    };
+    let result = siyuan_cli::commands::create_doc::run(&f.client, args).await;
+
+    // --force should skip the conflict check, but the kernel may still reject
+    // duplicate hpaths or may allow overwriting. We just verify it doesn't
+    // fail with an hpath-conflict error from our own check.
+    if let Err(e) = &result {
+        let msg = e.to_string();
+        assert!(
+            !msg.contains("already exists"),
+            "with --force, our conflict check should be skipped, but got: {msg}"
+        );
+    }
+}

@@ -738,3 +738,55 @@ async fn set_block_attrs_unicode() {
         "unicode value should round-trip unchanged through get_block_attrs"
     );
 }
+
+// ---------------------------------------------------------------------------
+// FIX 2: delete-block rejects document root, allows non-document blocks
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore]
+async fn delete_block_rejects_document_root() {
+    let f = boot_with_seed().await.expect("boot");
+
+    // Try to delete the document root block via delete_block — must be rejected.
+    let args = siyuan_cli::commands::delete_block::DeleteBlockArgs {
+        id: f.doc_id.to_string(),
+    };
+    let result = siyuan_cli::commands::delete_block::run(&f.client, args).await;
+
+    match result {
+        Err(e) => {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("document root"),
+                "error should mention 'document root': {msg}"
+            );
+            assert!(
+                msg.contains("doc remove"),
+                "error should suggest 'doc remove': {msg}"
+            );
+        }
+        Ok(_) => panic!("should have rejected deletion of a document root block"),
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn delete_block_allows_non_document_blocks() {
+    let f = boot_with_seed().await.expect("boot");
+
+    let blocks = load_all(&f).await.expect("initial load");
+
+    // Find a paragraph block (not a document root)
+    let para = blocks
+        .iter()
+        .find(|b| b.markdown == "A target paragraph.")
+        .expect("seed contains 'A target paragraph.'");
+
+    let args = siyuan_cli::commands::delete_block::DeleteBlockArgs {
+        id: para.id.to_string(),
+    };
+    let result = siyuan_cli::commands::delete_block::run(&f.client, args).await;
+
+    assert!(result.is_ok(), "should allow deletion of a paragraph block");
+}

@@ -70,11 +70,8 @@ enum Cmd {
         #[command(subcommand)]
         cmd: commands::graph::GraphCmd,
     },
-    /// Search blocks by full-text or by type/contains predicates.
-    Search {
-        #[command(subcommand)]
-        cmd: commands::search::SearchCmd,
-    },
+    /// Filter blocks by type and/or content substring.
+    Search(commands::search::SearchArgs),
     Sql(commands::sql::SqlArgs),
     ServeMcp(commands::serve_mcp::ServeMcpArgs),
 }
@@ -107,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Tag { cmd } => commands::tag::run(&client, cmd).await?,
         Cmd::Asset { cmd } => commands::asset::run(&client, cmd).await?,
         Cmd::Graph { cmd } => commands::graph::run(&client, cmd).await?,
-        Cmd::Search { cmd } => commands::search::run(&client, cmd).await?,
+        Cmd::Search(a) => commands::search::run(&client, a).await?,
         Cmd::Sql(a) => commands::sql::run(&client, a).await?,
         Cmd::ServeMcp(_) => unreachable!("serve-mcp dispatched above"),
     }

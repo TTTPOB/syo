@@ -35,14 +35,20 @@ pub async fn search_text(client: &SiyuanClient, args: Value) -> Result<Value, Mc
     // Cap user-supplied limit via syo-core which caps at MAX_SEARCH_LIMIT internally.
     let limit = optional_u64(&map, "limit").unwrap_or(50) as usize;
 
-    let output =
-        syo_core::search::fulltext(client, syo_core::search::FulltextInput { query, limit })
-            .await
-            .map_err(anyhow_to_mcp)?;
+    let output = syo_core::search::search(
+        client,
+        syo_core::search::SearchInput {
+            block_type: String::new(),
+            contains: query,
+            limit,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
         json!({ "hits": output.hits }),
         "Results are SQL LIKE substring matches (case-insensitive on most SQLite builds). \
-         The query searches block markdown content. Results may lag recent mutations by \
+         The query searches block content (visible text). Results may lag recent mutations by \
          ~100–500 ms. If too many results are returned, narrow the query or lower the limit. \
          The `limit` argument is capped server-side at 1000.",
     ))
@@ -54,9 +60,9 @@ pub async fn search_blocks(client: &SiyuanClient, args: Value) -> Result<Value, 
     let contains = optional_string(&map, "contains").unwrap_or_default();
     let limit = optional_u64(&map, "limit").unwrap_or(50) as usize;
 
-    let output = syo_core::search::blocks(
+    let output = syo_core::search::search(
         client,
-        syo_core::search::BlocksInput {
+        syo_core::search::SearchInput {
             block_type,
             contains,
             limit,

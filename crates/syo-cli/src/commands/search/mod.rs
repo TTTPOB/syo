@@ -6,7 +6,7 @@ use siyuan_client::SiyuanClient;
 use crate::output::OutputFormat;
 
 mod hit;
-use hit::{Hit, emit_hits};
+use hit::{Hit, HitSet, emit_hits};
 
 /// Filter blocks by type and/or content substring.
 ///
@@ -75,5 +75,12 @@ pub async fn run(client: &SiyuanClient, args: SearchArgs) -> Result<()> {
             markdown: h.markdown,
         })
         .collect();
-    emit_hits(hits, args.format)
+    emit_hits(
+        HitSet {
+            rows: hits,
+            limit: result.limit,
+            has_more: result.has_more,
+        },
+        args.format,
+    )
 }

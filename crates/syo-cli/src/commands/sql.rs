@@ -65,14 +65,22 @@ use siyuan_client::SiyuanClient;
 pub struct SqlArgs {
     /// Single read-only SQL statement. Validated locally as `Query` /
     /// `WITH ... Query` / `VALUES` / `EXPLAIN <Query>`; everything else
-    /// is rejected before any kernel round trip.
+    /// is rejected before any kernel round trip. SiYuan applies its
+    /// search-result limit (64 by default) to SELECT statements that omit
+    /// LIMIT, so add an explicit LIMIT/OFFSET when you need more rows.
     #[arg(long)]
     pub stmt: String,
 }
 
 pub async fn run(client: &SiyuanClient, args: SqlArgs) -> Result<()> {
-    let rows = syo_core::sql::raw(client, syo_core::sql::SqlInput { stmt: args.stmt }).await?;
-    println!("{}", serde_json::to_string_pretty(&rows)?);
+    let output = syo_core::sql::raw(client, syo_core::sql::SqlInput { stmt: args.stmt }).await?;
+    println!("{}", serde_json::to_string_pretty(&output.rows)?);
+    if output.has_more {
+        eprintln!(
+            "Hint: more SQL rows exist. Add LIMIT/OFFSET to the original query; this call returned the first {} rows.",
+            output.limit
+        );
+    }
     Ok(())
 }
 

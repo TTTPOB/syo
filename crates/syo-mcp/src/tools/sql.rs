@@ -11,15 +11,35 @@ pub async fn raw_sql(client: &SiyuanClient, args: Value) -> Result<Value, McpErr
     let map = ensure_object(args)?;
     let stmt = required_string(&map, "stmt")?;
 
-    let rows = syo_core::sql::raw(client, syo_core::sql::SqlInput { stmt })
+    let output = syo_core::sql::raw(client, syo_core::sql::SqlInput { stmt })
         .await
         .map_err(anyhow_to_mcp)?;
-    Ok(with_hint(
-        json!({ "rows": rows }),
+    let hint = if output.has_more {
+        "Power tool: results are raw rows from the SiYuan SQLite database. This response is \
+         truncated: more SQL rows exist. Add LIMIT/OFFSET to the original query and call again \
+         to continue. Some columns may be unstable internal fields. Results reflect the SQL \
+         index which may lag mutations by ~100–500 ms. The statement AST is validated locally \
+         and writes are rejected before any round trip."
+    } else if output.probe_applied {
+        "Power tool: results are raw rows from the SiYuan SQLite database. No additional rows \
+         were detected beyond this response. Some columns may be unstable internal fields. \
+         Results reflect the SQL index which may lag mutations by ~100–500 ms. The statement \
+         AST is validated locally and writes are rejected before any round trip."
+    } else {
         "Power tool: results are raw rows from the SiYuan SQLite database. Some columns may be \
          unstable internal fields. Results reflect the SQL index which may lag mutations by \
          ~100–500 ms. The kernel does not enforce SQL-level read-only — this server validates \
-         the statement AST locally and rejects writes before any round trip.",
+         the statement AST locally and rejects writes before any round trip. Explicit LIMIT/FETCH \
+         was present, so no extra more-results probe was applied."
+    };
+    Ok(with_hint(
+        json!({
+            "rows": output.rows,
+            "limit": output.limit,
+            "has_more": output.has_more,
+            "more_results_probe_applied": output.probe_applied,
+        }),
+        hint,
     ))
 }
 
@@ -39,11 +59,21 @@ pub async fn search(client: &SiyuanClient, args: Value) -> Result<Value, McpErro
     )
     .await
     .map_err(anyhow_to_mcp)?;
+    let hint = if output.has_more {
+        "Results are SQL-filtered by block type (=) and/or content (LIKE). This response hit \
+         the requested limit and more hits exist; call again with a larger `limit` to retrieve \
+         more. Results may lag recent mutations by ~100–500 ms."
+    } else {
+        "Results are SQL-filtered by block type (=) and/or content (LIKE). No additional hits \
+         were detected beyond this response. Results may lag recent mutations by ~100–500 ms."
+    };
     Ok(with_hint(
-        json!({ "hits": output.hits }),
-        "Results are SQL-filtered by block type (=) and/or content (LIKE). When both \
-         `type` and `contains` are empty, all blocks are returned up to `limit`. \
-         Results may lag recent mutations by ~100–500 ms.",
+        json!({
+            "hits": output.hits,
+            "limit": output.limit,
+            "has_more": output.has_more,
+        }),
+        hint,
     ))
 }
 

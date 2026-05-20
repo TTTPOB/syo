@@ -1771,6 +1771,7 @@ dependencies = [
  "siyuan-model",
  "siyuan-render",
  "siyuan-types",
+ "sqlparser",
 ]
 
 [[package]]

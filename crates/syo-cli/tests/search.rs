@@ -6,7 +6,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{boot_with_seed, cleanup_fixture, wait_for};
+use common::{boot_with_seed, wait_for};
 use serde::Deserialize;
 
 // ---------------------------------------------------------------------------
@@ -20,6 +20,114 @@ struct Hit {
     block_type: String,
     #[serde(default)]
     markdown: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CountRow {
+    n: i64,
+}
+
+async fn seed_sql_limit_probe_doc(f: &common::Fixture) -> String {
+    let mut md = String::from("# SQL Limit Probe\n\n");
+    for i in 1..=90 {
+        md.push_str(&format!("syo-limit-probe-{i:03}\n\n"));
+    }
+
+    let doc_id = f
+        .client
+        .create_doc_with_md(&f.notebook_id, "/SqlLimitProbe", &md)
+        .await
+        .expect("create SQL limit probe doc");
+
+    let client = &f.client;
+    wait_for(
+        || async {
+            let rows: Vec<CountRow> = client
+                .sql_typed(&format!(
+                    "SELECT COUNT(*) AS n FROM blocks \
+                     WHERE root_id = '{}' AND content LIKE 'syo-limit-probe-%'",
+                    doc_id.as_str()
+                ))
+                .await?;
+            if rows.first().map(|r| r.n).unwrap_or(0) >= 90 {
+                Ok(Some(()))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for SQL limit probe doc to be indexed");
+
+    doc_id.to_string()
+}
+
+#[tokio::test]
+#[ignore]
+async fn raw_sql_without_limit_uses_kernel_search_limit() {
+    let f = boot_with_seed().await.expect("boot");
+    let doc_id = seed_sql_limit_probe_doc(&f).await;
+
+    let base = format!(
+        "SELECT id, type, markdown FROM blocks \
+         WHERE root_id = '{}' AND content LIKE 'syo-limit-probe-%' \
+         ORDER BY content",
+        doc_id
+    );
+
+    let implicit: Vec<Hit> = f.client.sql_typed(&base).await.expect("implicit limit SQL");
+    assert_eq!(
+        implicit.len(),
+        64,
+        "SiYuan /api/query/sql should apply Conf.Search.Limit to SELECT statements without LIMIT"
+    );
+
+    let explicit: Vec<Hit> = f
+        .client
+        .sql_typed(&format!("{base} LIMIT 80"))
+        .await
+        .expect("explicit limit SQL");
+    assert_eq!(
+        explicit.len(),
+        80,
+        "an explicit LIMIT should override the kernel's default search limit"
+    );
+
+    let second_page: Vec<Hit> = f
+        .client
+        .sql_typed(&format!("{base} LIMIT 20 OFFSET 64"))
+        .await
+        .expect("explicit offset SQL");
+    assert_eq!(
+        second_page.len(),
+        20,
+        "explicit LIMIT/OFFSET should fetch rows beyond the implicit 64-row page"
+    );
+    assert!(
+        second_page
+            .first()
+            .map(|hit| hit.markdown.contains("syo-limit-probe-065"))
+            .unwrap_or(false),
+        "OFFSET 64 should start at the 65th seeded paragraph; got {second_page:?}"
+    );
+
+    let guarded = syo_core::sql::raw(&f.client, syo_core::sql::SqlInput { stmt: base })
+        .await
+        .expect("guarded raw SQL");
+    assert_eq!(
+        guarded.rows.len(),
+        64,
+        "guarded raw SQL should return the first page after probing for one extra row"
+    );
+    assert!(
+        guarded.has_more,
+        "guarded raw SQL should mark has_more when the probe finds row 65"
+    );
+    assert!(
+        guarded.probe_applied,
+        "guarded raw SQL should probe unlimited top-level SELECT queries"
+    );
 }
 
 #[tokio::test]

@@ -36,6 +36,8 @@ pub struct SearchInput {
 #[derive(Debug)]
 pub struct SearchOutput {
     pub hits: Vec<SearchHit>,
+    pub limit: usize,
+    pub has_more: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -64,12 +66,20 @@ pub async fn search(client: &SiyuanClient, input: SearchInput) -> Result<SearchO
     };
     let limit_cap: usize = MAX_SEARCH_LIMIT as usize;
     let limit = input.limit.min(limit_cap);
-    let stmt = format!("SELECT id, type, markdown FROM blocks WHERE {where_clause} LIMIT {limit}");
+    let probe_limit = limit.saturating_add(1);
+    let stmt =
+        format!("SELECT id, type, markdown FROM blocks WHERE {where_clause} LIMIT {probe_limit}");
     if let Err(e) = sql_guard::validate_read_only(&stmt) {
         bail!("{e}");
     }
-    let hits: Vec<SearchHit> = client.sql_typed(&stmt).await?;
-    Ok(SearchOutput { hits })
+    let mut hits: Vec<SearchHit> = client.sql_typed(&stmt).await?;
+    let has_more = hits.len() > limit;
+    hits.truncate(limit);
+    Ok(SearchOutput {
+        hits,
+        limit,
+        has_more,
+    })
 }
 
 #[cfg(test)]
@@ -103,7 +113,11 @@ mod tests {
         };
         _assert_debug(&si);
 
-        let so = SearchOutput { hits: vec![] };
+        let so = SearchOutput {
+            hits: vec![],
+            limit: 10,
+            has_more: false,
+        };
         _assert_debug(&so);
     }
 }

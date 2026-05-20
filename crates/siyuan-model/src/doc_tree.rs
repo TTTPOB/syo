@@ -28,6 +28,7 @@ use crate::doc_meta::{DocLookup, resolve as resolve_doc_meta};
 /// Maximum depth interpreted as "all". Chosen to be deeper than any
 /// realistic SiYuan workspace nesting; serialized to JSON via `Depth::All`.
 const ALL_DEPTH_SENTINEL: u32 = u32::MAX;
+const INTERNAL_SQL_LIMIT: usize = 100_000;
 
 /// Tree-traversal depth budget.
 ///
@@ -202,8 +203,10 @@ async fn fetch_rows(
             "SELECT id, hpath, path, sort, created, updated, ial \
              FROM blocks \
              WHERE box = '{}' AND type = 'd' \
-             ORDER BY path",
-            notebook.as_str()
+             ORDER BY path \
+             LIMIT {}",
+            notebook.as_str(),
+            INTERNAL_SQL_LIMIT
         )
     } else {
         let prefix = strip_sy_suffix(root_path);
@@ -212,10 +215,12 @@ async fn fetch_rows(
              FROM blocks \
              WHERE box = '{}' AND type = 'd' \
                AND (path = '{}' OR path LIKE '{}/%') \
-             ORDER BY path",
+             ORDER BY path \
+             LIMIT {}",
             notebook.as_str(),
             root_path,
-            prefix
+            prefix,
+            INTERNAL_SQL_LIMIT
         )
     };
     client.sql_typed(&stmt).await

@@ -12,6 +12,12 @@ pub(super) struct Hit {
     pub markdown: String,
 }
 
+pub(super) struct HitSet {
+    pub rows: Vec<Hit>,
+    pub limit: usize,
+    pub has_more: bool,
+}
+
 /// Serializable view of a search hit for `--format json`.
 ///
 /// Field is named `markdown_preview` (not `markdown`) because the value is
@@ -26,11 +32,21 @@ struct HitView {
     markdown_preview: String,
 }
 
-pub(super) fn emit_hits(rows: Vec<Hit>, format: OutputFormat) -> Result<()> {
+pub(super) fn emit_hits(result: HitSet, format: OutputFormat) -> Result<()> {
+    let HitSet {
+        rows,
+        limit,
+        has_more,
+    } = result;
     match format {
         OutputFormat::AgentMd => {
             for r in rows {
                 println!("{}\t{}\t{}", r.id, r.block_type, oneline(&r.markdown));
+            }
+            if has_more {
+                eprintln!(
+                    "Hint: more search hits exist. Re-run with --limit greater than {limit}."
+                );
             }
         }
         OutputFormat::Json | OutputFormat::JsonPretty => {
@@ -43,9 +59,17 @@ pub(super) fn emit_hits(rows: Vec<Hit>, format: OutputFormat) -> Result<()> {
                 })
                 .collect();
             let s = if format == OutputFormat::JsonPretty {
-                serde_json::to_string_pretty(&views)?
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "hits": views,
+                    "limit": limit,
+                    "has_more": has_more,
+                }))?
             } else {
-                serde_json::to_string(&views)?
+                serde_json::to_string(&serde_json::json!({
+                    "hits": views,
+                    "limit": limit,
+                    "has_more": has_more,
+                }))?
             };
             println!("{s}");
         }

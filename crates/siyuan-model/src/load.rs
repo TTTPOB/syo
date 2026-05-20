@@ -11,6 +11,8 @@ use crate::container::populate_structural_children;
 use crate::pagination::{PageRequest, paginate};
 use crate::section::populate_section_children;
 
+const INTERNAL_SQL_LIMIT: usize = 100_000;
+
 #[derive(Debug, Deserialize)]
 struct BlockRow {
     id: String,
@@ -112,8 +114,10 @@ pub async fn load_doc(
                   type, subtype, ial, sort, created, updated, hash
            FROM blocks
            WHERE root_id = '{}'
-           ORDER BY sort, id"#,
-        doc_id.as_str()
+           ORDER BY sort, id
+           LIMIT {}"#,
+        doc_id.as_str(),
+        INTERNAL_SQL_LIMIT
     );
     let rows: Vec<BlockRow> = client.sql_typed(&stmt).await.context("load doc blocks")?;
 

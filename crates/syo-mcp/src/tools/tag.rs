@@ -38,10 +38,21 @@ pub async fn search_by_tag(client: &SiyuanClient, args: Value) -> Result<Value, 
             .map_err(anyhow_to_mcp)?;
     let hits_json = serde_json::to_value(output.hits)
         .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+    let hint = if output.has_more {
+        "Results are eventually consistent with the SQL index. This response hit the requested \
+         limit and more tagged blocks exist; call again with a larger `limit` to retrieve more. \
+         The `limit` argument is capped server-side at 1000."
+    } else {
+        "Results are eventually consistent with the SQL index. No additional tagged blocks were \
+         detected beyond this response. Blocks tagged very recently may not appear yet. The \
+         `limit` argument is capped server-side at 1000."
+    };
     Ok(with_hint(
-        json!({ "hits": hits_json }),
-        "Results are eventually consistent with the SQL index. Blocks tagged very recently may \
-         not appear yet. The `limit` argument is capped server-side at 1000. Use syo_siyuan_doc_get \
-         or syo_siyuan_sql to verify freshly-tagged blocks.",
+        json!({
+            "hits": hits_json,
+            "limit": output.limit,
+            "has_more": output.has_more,
+        }),
+        hint,
     ))
 }

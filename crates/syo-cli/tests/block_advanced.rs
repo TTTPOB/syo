@@ -8,9 +8,9 @@ mod common;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use common::{boot_with_seed, cleanup_fixture, wait_for};
+use common::{boot_with_seed, wait_for};
 use siyuan_model::{load::load_doc, pagination::PageRequest, section::populate_section_children};
-use siyuan_types::BlockType;
+use siyuan_types::{BlockType, PositionKind};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -419,6 +419,252 @@ async fn prepend_to_heading_section() {
 }
 
 // ---------------------------------------------------------------------------
+// Heading section mode: get
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore]
+async fn get_heading_section_is_explicit() {
+    let f = boot_with_seed().await.expect("boot");
+
+    let blocks = load_all(&f).await.expect("initial load");
+    let goals = blocks
+        .iter()
+        .find(|b| b.markdown.starts_with("## Goals"))
+        .expect("Goals heading present")
+        .clone();
+
+    let heading_only = syo_core::block::get(
+        &f.client,
+        syo_core::block::GetBlockInput {
+            id: goals.id.clone(),
+            include_heading_section: false,
+        },
+    )
+    .await
+    .expect("get heading only");
+
+    let meta = heading_only.meta.expect("heading metadata is present");
+    assert!(!meta.heading_section_included);
+    assert!(
+        meta.section_child_count >= 2,
+        "seeded Goals section should have body blocks"
+    );
+    assert!(heading_only.section_markdown.is_none());
+    assert!(heading_only.kramdown.contains("Goals"));
+    assert!(
+        !heading_only
+            .kramdown
+            .contains("This is the first paragraph.")
+    );
+
+    let with_section = syo_core::block::get(
+        &f.client,
+        syo_core::block::GetBlockInput {
+            id: goals.id.clone(),
+            include_heading_section: true,
+        },
+    )
+    .await
+    .expect("get heading section");
+
+    let meta = with_section.meta.expect("heading metadata is present");
+    assert!(meta.heading_section_included);
+    let section = with_section
+        .section_markdown
+        .expect("section markdown is included");
+    assert!(section.contains("## Goals"));
+    assert!(section.contains("This is the first paragraph."));
+    assert!(section.contains("This paragraph references later content."));
+    assert!(
+        !section.contains("## Targets"),
+        "section rendering must stop before the next heading"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Heading section mode: insert child aliases
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore]
+async fn insert_with_heading_section_maps_child_positions_to_section() {
+    let f = boot_with_seed().await.expect("boot");
+
+    let mut blocks = load_all(&f).await.expect("initial load");
+    populate_section_children(&mut blocks);
+    let goals = blocks
+        .iter()
+        .find(|b| b.markdown.starts_with("## Goals"))
+        .expect("Goals heading present")
+        .clone();
+
+    let head_marker = "INCLUDE_SECTION_HEAD_UNIQUE_XQ7";
+    let tail_marker = "INCLUDE_SECTION_TAIL_UNIQUE_XQ8";
+
+    let head_id = syo_core::block::insert(
+        &f.client,
+        syo_core::block::InsertBlockInput {
+            markdown: head_marker.to_string(),
+            position: PositionKind::PrependChild,
+            anchor: goals.id.clone(),
+            include_heading_section: true,
+        },
+    )
+    .await
+    .expect("prepend child through heading section")
+    .id;
+
+    let tail_id = syo_core::block::insert(
+        &f.client,
+        syo_core::block::InsertBlockInput {
+            markdown: tail_marker.to_string(),
+            position: PositionKind::AppendChild,
+            anchor: goals.id.clone(),
+            include_heading_section: true,
+        },
+    )
+    .await
+    .expect("append child through heading section")
+    .id;
+
+    let client = &f.client;
+    let doc_id = &f.doc_id;
+    let goals_id = goals.id.clone();
+    let section_children = wait_for(
+        || async {
+            let b = load_doc(
+                client,
+                doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 200,
+                },
+            )
+            .await?;
+            let mut blks = b.blocks.clone();
+            populate_section_children(&mut blks);
+            let h = blks
+                .iter()
+                .find(|blk| blk.id == goals_id)
+                .expect("Goals heading still present");
+            if h.section_children.contains(&head_id) && h.section_children.contains(&tail_id) {
+                Ok(Some(h.section_children.clone()))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for section child aliases");
+
+    assert_eq!(
+        section_children.first(),
+        Some(&head_id),
+        "prepend child with include_heading_section should prepend to the section"
+    );
+    assert_eq!(
+        section_children.last(),
+        Some(&tail_id),
+        "append child with include_heading_section should append to the section"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Heading section mode: update
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore]
+async fn update_heading_section_replaces_body_without_crossing_next_heading() {
+    let f = boot_with_seed().await.expect("boot");
+
+    let blocks = load_all(&f).await.expect("initial load");
+    let goals = blocks
+        .iter()
+        .find(|b| b.markdown.starts_with("## Goals"))
+        .expect("Goals heading present")
+        .clone();
+
+    syo_core::block::update(
+        &f.client,
+        syo_core::block::UpdateBlockInput {
+            id: goals.id.clone(),
+            markdown: "## Goals Updated\n\nReplacement section paragraph.\n\nSecond replacement paragraph."
+                .to_string(),
+            include_heading_section: true,
+        },
+    )
+    .await
+    .expect("update heading section");
+
+    let client = &f.client;
+    let doc_id = &f.doc_id;
+    let goals_id = goals.id.clone();
+    wait_for(
+        || async {
+            let b = load_doc(
+                client,
+                doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 200,
+                },
+            )
+            .await?;
+            let Some(updated_heading) = b.blocks.iter().find(|blk| blk.id == goals_id) else {
+                return Ok(None);
+            };
+            let has_replacement = b
+                .blocks
+                .iter()
+                .any(|blk| blk.markdown == "Replacement section paragraph.");
+            if updated_heading.markdown.starts_with("## Goals Updated") && has_replacement {
+                Ok(Some(b.blocks))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for heading section update");
+
+    let section = syo_core::block::get(
+        &f.client,
+        syo_core::block::GetBlockInput {
+            id: goals.id.clone(),
+            include_heading_section: true,
+        },
+    )
+    .await
+    .expect("get updated heading section")
+    .section_markdown
+    .expect("updated section markdown");
+
+    assert!(section.contains("## Goals Updated"));
+    assert!(section.contains("Replacement section paragraph."));
+    assert!(section.contains("Second replacement paragraph."));
+    assert!(!section.contains("This is the first paragraph."));
+    assert!(!section.contains("## Targets"));
+
+    let blocks = load_all(&f).await.expect("reload after update");
+    assert!(
+        blocks
+            .iter()
+            .any(|blk| blk.markdown.starts_with("## Targets")),
+        "next heading should survive a section update"
+    );
+    assert!(
+        blocks
+            .iter()
+            .any(|blk| blk.markdown == "A target paragraph."),
+        "next section body should survive a section update"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Move block to different parent
 // ---------------------------------------------------------------------------
 
@@ -607,6 +853,73 @@ async fn delete_heading_cascades_section() {
     )
     .await
     .expect("timed out waiting for Empty Section heading deletion to appear in SQL index");
+}
+
+#[tokio::test]
+#[ignore]
+async fn delete_heading_section_removes_non_empty_section() {
+    let f = boot_with_seed().await.expect("boot");
+
+    let blocks = load_all(&f).await.expect("initial load");
+    let goals = blocks
+        .iter()
+        .find(|b| b.markdown.starts_with("## Goals"))
+        .expect("Goals heading present")
+        .clone();
+    let goals_id = goals.id.clone();
+
+    syo_core::block::delete(
+        &f.client,
+        syo_core::block::DeleteBlockInput {
+            id: goals.id,
+            include_heading_section: true,
+        },
+    )
+    .await
+    .expect("delete non-empty heading section");
+
+    let client = &f.client;
+    let doc_id = &f.doc_id;
+    let blocks = wait_for(
+        || async {
+            let b = load_doc(
+                client,
+                doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 200,
+                },
+            )
+            .await?;
+            if !b.blocks.iter().any(|blk| blk.id == goals_id) {
+                Ok(Some(b.blocks))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for heading section deletion");
+
+    assert!(
+        !blocks
+            .iter()
+            .any(|blk| blk.markdown == "This is the first paragraph."),
+        "section child should be deleted with the heading"
+    );
+    assert!(
+        blocks
+            .iter()
+            .any(|blk| blk.markdown.starts_with("## Targets")),
+        "next heading should survive heading section deletion"
+    );
+    assert!(
+        blocks
+            .iter()
+            .any(|blk| blk.markdown == "A target paragraph."),
+        "next section body should survive heading section deletion"
+    );
 }
 
 // ---------------------------------------------------------------------------

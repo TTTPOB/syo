@@ -13,10 +13,16 @@ use siyuan_types::BlockId;
 /// drop the `.sy` file). This command removes the block and its subtree
 /// irreversibly.
 ///
+/// Heading blocks are not real containers. By default, deleting a heading
+/// deletes that block via the kernel. Pass `--include-heading-section` to
+/// explicitly delete the heading plus its section children.
+///
 /// Inputs:
 ///   --id (required): block id to delete. Document root blocks (type='d')
 ///     are REJECTED — use `syo doc remove --id <id>` instead. All other
 ///     block types are accepted.
+///   --include-heading-section: only valid for heading blocks. Delete the
+///     heading and its section children.
 ///
 /// Prints `ok` on success.
 ///
@@ -34,6 +40,10 @@ pub struct DeleteBlockArgs {
     /// Block id to delete.
     #[arg(long)]
     pub id: String,
+
+    /// Delete the whole heading section when --id is a heading block.
+    #[arg(long)]
+    pub include_heading_section: bool,
 }
 
 pub async fn run(client: &SiyuanClient, args: DeleteBlockArgs) -> Result<()> {
@@ -61,7 +71,14 @@ pub async fn run(client: &SiyuanClient, args: DeleteBlockArgs) -> Result<()> {
         );
     }
 
-    syo_core::block::delete(client, syo_core::block::DeleteBlockInput { id }).await?;
+    syo_core::block::delete(
+        client,
+        syo_core::block::DeleteBlockInput {
+            id,
+            include_heading_section: args.include_heading_section,
+        },
+    )
+    .await?;
     println!("ok");
     Ok(())
 }

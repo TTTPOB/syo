@@ -5,7 +5,7 @@ use siyuan_client::SiyuanClient;
 use siyuan_types::BlockId;
 use siyuan_types::position::PositionKind;
 
-use super::util::{anyhow_to_mcp, ensure_object, required_string, with_hint};
+use super::util::{anyhow_to_mcp, ensure_object, optional_bool, required_string, with_hint};
 
 fn parse_block_id(s: &str) -> Result<BlockId, McpError> {
     BlockId::parse(s).map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))
@@ -23,11 +23,27 @@ pub async fn block_get(client: &SiyuanClient, args: Value) -> Result<Value, McpE
     let id_str = required_string(&map, "id")?;
     let id = BlockId::parse(&id_str)
         .map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))?;
+    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
 
-    let output = syo_core::block::get(client, &id)
-        .await
-        .map_err(anyhow_to_mcp)?;
-    Ok(json!({ "id": output.id, "kramdown": output.kramdown }))
+    let output = syo_core::block::get(
+        client,
+        syo_core::block::GetBlockInput {
+            id,
+            include_heading_section,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
+    let mut payload = json!({ "id": output.id, "kramdown": output.kramdown });
+    if let Some(meta) = output.meta {
+        payload["meta"] = serde_json::to_value(meta).map_err(|e| {
+            McpError::internal_error(format!("serialize heading metadata failed: {e}"), None)
+        })?;
+    }
+    if let Some(section_markdown) = output.section_markdown {
+        payload["section_markdown"] = json!(section_markdown);
+    }
+    Ok(payload)
 }
 
 // ---- block_update ----
@@ -36,10 +52,18 @@ pub async fn block_update(client: &SiyuanClient, args: Value) -> Result<Value, M
     let map = ensure_object(args)?;
     let id = parse_block_id(&required_string(&map, "id")?)?;
     let markdown = required_string(&map, "markdown")?;
+    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
 
-    syo_core::block::update(client, syo_core::block::UpdateBlockInput { id, markdown })
-        .await
-        .map_err(anyhow_to_mcp)?;
+    syo_core::block::update(
+        client,
+        syo_core::block::UpdateBlockInput {
+            id,
+            markdown,
+            include_heading_section,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
         "Mutation completed at the kernel. SQL-indexed reads (syo_siyuan_doc_get, syo_siyuan_sql) may \
@@ -55,6 +79,7 @@ pub async fn block_insert(client: &SiyuanClient, args: Value) -> Result<Value, M
     let markdown = required_string(&map, "markdown")?;
     let position_str = required_string(&map, "position")?;
     let anchor_str = required_string(&map, "anchor")?;
+    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
 
     let kind = parse_position_kind(&position_str)?;
     let anchor = parse_block_id(&anchor_str)?;
@@ -65,6 +90,7 @@ pub async fn block_insert(client: &SiyuanClient, args: Value) -> Result<Value, M
             markdown,
             position: kind,
             anchor,
+            include_heading_section,
         },
     )
     .await
@@ -85,6 +111,7 @@ pub async fn block_move(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
     let id = parse_block_id(&required_string(&map, "id")?)?;
     let position_str = required_string(&map, "position")?;
     let anchor_str = required_string(&map, "anchor")?;
+    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
 
     let kind = parse_position_kind(&position_str)?;
     let anchor = parse_block_id(&anchor_str)?;
@@ -95,6 +122,7 @@ pub async fn block_move(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
             id,
             position: kind,
             anchor,
+            include_heading_section,
         },
     )
     .await
@@ -111,10 +139,17 @@ pub async fn block_move(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
 pub async fn block_delete(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let id = parse_block_id(&required_string(&map, "id")?)?;
+    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
 
-    syo_core::block::delete(client, syo_core::block::DeleteBlockInput { id })
-        .await
-        .map_err(anyhow_to_mcp)?;
+    syo_core::block::delete(
+        client,
+        syo_core::block::DeleteBlockInput {
+            id,
+            include_heading_section,
+        },
+    )
+    .await
+    .map_err(anyhow_to_mcp)?;
     Ok(with_hint(
         json!({ "ok": true }),
         "Block permanently deleted at the kernel. SQL-indexed reads (syo_siyuan_doc_get, syo_siyuan_sql) \
@@ -154,6 +189,22 @@ mod tests {
         assert!(parse_position_kind("invalid_kind").is_err());
         assert!(parse_position_kind("AfterBlock").is_err());
         assert!(parse_position_kind("").is_err());
+    }
+
+    #[tokio::test]
+    async fn block_get_rejects_non_boolean_include_heading_section() {
+        let client = dummy_client();
+        let args = json!({
+            "id": "20260501090000-blk0001",
+            "include_heading_section": "true",
+        });
+        let result = block_get(&client, args).await;
+        if let Err(e) = result {
+            assert!(
+                !e.message.contains("include_heading_section"),
+                "non-boolean include_heading_section should be treated as absent for compatibility"
+            );
+        }
     }
 
     // --- block_move tests ---

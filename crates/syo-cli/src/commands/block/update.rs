@@ -12,10 +12,19 @@ use siyuan_types::BlockId;
 /// edits are NOT supported — read with `syo block get` first if you need
 /// to preserve part of the existing content.
 ///
+/// Real SiYuan container blocks (lists, list items, blockquotes, superblocks)
+/// are replaced as subtrees by the kernel: children absent from the new
+/// markdown are removed. Heading blocks are not real containers; by default
+/// only the heading block is updated. Pass `--include-heading-section` to
+/// replace the full heading section. In that mode the input markdown must
+/// start with the replacement heading, followed by the new section body.
+///
 /// Inputs:
 ///   --id (required): block id to overwrite.
 ///   --markdown-file (required): path to a markdown file, or `-` to read
 ///     from stdin. The content replaces the entire block body.
+///   --include-heading-section: only valid for heading blocks. Replace the
+///     heading and its section children as one explicit section operation.
 ///
 /// Prints `ok` on success.
 ///
@@ -37,12 +46,24 @@ pub struct UpdateBlockArgs {
     /// Markdown file replacing the block body. Use `-` for stdin.
     #[arg(long)]
     pub markdown_file: String,
+
+    /// Replace the whole heading section when --id is a heading block.
+    #[arg(long)]
+    pub include_heading_section: bool,
 }
 
 pub async fn run(client: &SiyuanClient, args: UpdateBlockArgs) -> Result<()> {
     let id = BlockId::parse(&args.id).context("--id")?;
     let markdown = super::super::read_markdown_input(&args.markdown_file)?;
-    syo_core::block::update(client, syo_core::block::UpdateBlockInput { id, markdown }).await?;
+    syo_core::block::update(
+        client,
+        syo_core::block::UpdateBlockInput {
+            id,
+            markdown,
+            include_heading_section: args.include_heading_section,
+        },
+    )
+    .await?;
     println!("ok");
     Ok(())
 }

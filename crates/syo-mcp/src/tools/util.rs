@@ -48,6 +48,10 @@ pub fn optional_u64(map: &Map<String, Value>, key: &str) -> Option<u64> {
     map.get(key).and_then(|v| v.as_u64())
 }
 
+pub fn optional_bool(map: &Map<String, Value>, key: &str) -> Option<bool> {
+    map.get(key).and_then(|v| v.as_bool())
+}
+
 pub fn string_array(map: &Map<String, Value>, key: &str) -> Result<Vec<String>, McpError> {
     match map.get(key) {
         None => Err(McpError::invalid_params(format!("missing `{key}`"), None)),

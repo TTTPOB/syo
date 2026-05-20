@@ -15,13 +15,20 @@ use crate::output::OutputFormat;
 /// inspect attributes embedded in kramdown braces). `syo search text`
 /// finds candidate ids when you do not have one yet.
 ///
+/// Heading blocks are section owners, not real SiYuan containers. By default
+/// this command returns only the heading block itself and annotates whether a
+/// section was omitted. Pass `--include-heading-section` to include the full
+/// heading section before editing or replacing that section.
+///
 /// Inputs:
 ///   --id (required): block id (14-digit timestamp + 7-char suffix). Any
 ///     block id is accepted — paragraph, heading, list item, document root,
 ///     etc. If the id does not exist, the kernel returns NotFound.
 ///   --format (default agent-md): one of `agent-md` (an HTML-comment header
 ///     plus the kramdown body), `json`, or `json-pretty`. JSON outputs an
-///     object with `id`, `kramdown`, and `attrs`.
+///     object with `id`, `kramdown`, `attrs`, and heading `meta` when relevant.
+///   --include-heading-section: only valid for heading blocks. Include the
+///     recursively annotated heading section in `section_markdown`.
 ///
 /// Example:
 ///   in:  --id 20260501090000-doc0001 --format json
@@ -36,6 +43,10 @@ pub struct GetBlockArgs {
     /// Output format: `agent-md` (default), `json`, or `json-pretty`.
     #[arg(long, value_enum, default_value_t = OutputFormat::AgentMd)]
     pub format: OutputFormat,
+
+    /// Include the full heading section when --id is a heading block.
+    #[arg(long)]
+    pub include_heading_section: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -43,11 +54,22 @@ struct BlockView {
     id: String,
     kramdown: String,
     attrs: std::collections::BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    meta: Option<syo_core::block::HeadingSectionMeta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    section_markdown: Option<String>,
 }
 
 pub async fn run(client: &SiyuanClient, args: GetBlockArgs) -> Result<()> {
     let id = BlockId::parse(args.id).context("--id is not a valid block id")?;
-    let kr = syo_core::block::get(client, &id).await?;
+    let kr = syo_core::block::get(
+        client,
+        syo_core::block::GetBlockInput {
+            id: id.clone(),
+            include_heading_section: args.include_heading_section,
+        },
+    )
+    .await?;
     let attrs = match client.get_block_attrs(&id).await {
         Ok(a) => a,
         Err(e) => {
@@ -58,11 +80,13 @@ pub async fn run(client: &SiyuanClient, args: GetBlockArgs) -> Result<()> {
 
     let view = BlockView {
         id: kr.id.to_string(),
-        kramdown: kr.kramdown,
+        kramdown: kr.kramdown.clone(),
         attrs,
+        meta: kr.meta.clone(),
+        section_markdown: kr.section_markdown.clone(),
     };
     let s = match args.format {
-        OutputFormat::AgentMd => format!("<!-- sy:block id={} -->\n{}", view.id, view.kramdown),
+        OutputFormat::AgentMd => syo_core::block::render_block_get_agent_md(&kr),
         OutputFormat::Json => serde_json::to_string(&view)?,
         OutputFormat::JsonPretty => serde_json::to_string_pretty(&view)?,
     };

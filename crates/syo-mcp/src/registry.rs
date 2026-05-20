@@ -132,12 +132,17 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              ids when you do not have one yet.\n\
              \n\
              Inputs: `id` (required) is any block id (paragraph, heading, list item, \
-             document root, etc.). NotFound is returned if the id does not exist.\n\
+             document root, etc.). `include_heading_section` (optional boolean, default false) \
+             is only valid for heading ids and returns the recursively annotated heading \
+             section in `section_markdown`. Headings are section owners, not real SiYuan \
+             containers; without this flag the response returns only the heading block and \
+             `meta` explains omitted section children. NotFound is returned if the id does \
+             not exist.\n\
              \n\
              Example:\n\
                in:  { \"id\": \"20260501090000-doc0001\" }\n\
                out: { \"id\": \"20260501090000-doc0001\", \"kramdown\": \"# Heading\\n\\nBody\\n\" }",
-            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string","description":"Block id"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string","description":"Block id"},"include_heading_section":{"type":"boolean","default":false,"description":"For heading ids, include the full heading section and metadata"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::block::block_get(&c, args).await }
@@ -200,7 +205,12 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Inputs: `id` (required) is the block id to overwrite (use `syo_siyuan_doc_get` or \
              `syo_siyuan_search` to find it). `markdown` (required) is GFM markdown that \
-             replaces the entire block body.\n\
+             replaces the entire block body. Real container blocks (list, list item, \
+             blockquote, superblock) are replaced as subtrees by the kernel; children absent \
+             from `markdown` are removed. Headings are not real containers, so by default only \
+             the heading block is updated. Set `include_heading_section=true` to replace the \
+             full heading section; in that mode `markdown` must start with the replacement \
+             heading followed by the new section body.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
              syo_siyuan_search, syo_siyuan_tag_search) may show stale data for ~100-500 ms \
@@ -210,7 +220,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Example:\n\
                in:  { \"id\": \"20260501090000-blk0001\", \"markdown\": \"Updated body.\\n\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["id","markdown"],"properties":{"id":{"type":"string"},"markdown":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["id","markdown"],"properties":{"id":{"type":"string"},"markdown":{"type":"string"},"include_heading_section":{"type":"boolean","default":false,"description":"For heading ids, replace the heading and its section children"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::block::block_update(&c, args).await }
@@ -249,6 +259,9 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
                prepend_doc       new block is the FIRST block of document anchor\n\
                                  (anchor MUST be a doc root id)\n\
              `anchor` (required) is a block id whose role depends on `position`. \
+             `include_heading_section` (optional boolean) lets append_child/prepend_child \
+             treat a heading anchor as a virtual section container, equivalent to \
+             append_section/prepend_section. \
              Existing blocks keep their ids and children — only sibling order changes. \
              The kernel returns the new block's id; the response envelope surfaces it \
              as `data.id`.\n\
@@ -261,7 +274,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Example:\n\
                in:  { \"markdown\": \"New paragraph.\\n\", \"position\": \"after_block\", \"anchor\": \"20260501090000-blk0001\" }\n\
                out: { \"data\": { \"id\": \"20260501090500-blk0099\" }, \"_hint\": \"Block inserted at the kernel. ...\" }",
-            r#"{"type":"object","required":["markdown","position","anchor"],"properties":{"markdown":{"type":"string"},"position":{"type":"string","enum":["after_block","before_block","append_child","prepend_child","append_section","prepend_section","append_doc","prepend_doc"]},"anchor":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["markdown","position","anchor"],"properties":{"markdown":{"type":"string"},"position":{"type":"string","enum":["after_block","before_block","append_child","prepend_child","append_section","prepend_section","append_doc","prepend_doc"]},"anchor":{"type":"string"},"include_heading_section":{"type":"boolean","default":false,"description":"For heading anchors, map child positions to heading section positions"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::block::block_insert(&c, args).await }
@@ -291,7 +304,10 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
                prepend_section   moved block is inserted immediately AFTER the heading\n\
                append_doc        moved block becomes the LAST block of document anchor\n\
                prepend_doc       moved block becomes the FIRST block of document anchor\n\
-             `anchor` (required) is the anchor block id whose role depends on `position`.\n\
+             `anchor` (required) is the anchor block id whose role depends on `position`. \
+             `include_heading_section` (optional boolean) lets append_child/prepend_child \
+             treat a heading anchor as a virtual section container, equivalent to \
+             append_section/prepend_section.\n\
              \n\
              The moved block keeps its id and entire subtree intact.\n\
              \n\
@@ -303,7 +319,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Example:\n\
                in:  { \"id\": \"20260501090000-blk0001\", \"position\": \"after_block\", \"anchor\": \"20260501090000-blk0002\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["id","position","anchor"],"properties":{"id":{"type":"string"},"position":{"type":"string","enum":["after_block","before_block","append_child","prepend_child","append_section","prepend_section","append_doc","prepend_doc"]},"anchor":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["id","position","anchor"],"properties":{"id":{"type":"string"},"position":{"type":"string","enum":["after_block","before_block","append_child","prepend_child","append_section","prepend_section","append_doc","prepend_doc"]},"anchor":{"type":"string"},"include_heading_section":{"type":"boolean","default":false,"description":"For heading anchors, map child positions to heading section positions"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::block::block_move(&c, args).await }
@@ -324,7 +340,9 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              \n\
              Inputs: `id` (required) is the block id to delete. Any block type is accepted, \
              including a document ROOT id (deletes the whole document). The action is \
-             irreversible at the kernel level.\n\
+             irreversible at the kernel level. Headings are not real containers; by default \
+             deleting a heading targets that heading block. Set `include_heading_section=true` \
+             to delete the heading and its section children explicitly.\n\
              \n\
              SiYuan indexes mutations asynchronously; SQL-based reads (syo_siyuan_sql, \
              syo_siyuan_search, syo_siyuan_tag_search) may briefly still return the block for \
@@ -334,7 +352,7 @@ pub(crate) fn build(client: Arc<SiyuanClient>) -> (Vec<Tool>, HashMap<&'static s
              Example:\n\
                in:  { \"id\": \"20260501090000-blk0001\" }\n\
                out: { \"ok\": true }",
-            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string"}},"additionalProperties":true}"#,
+            r#"{"type":"object","required":["id"],"properties":{"id":{"type":"string"},"include_heading_section":{"type":"boolean","default":false,"description":"For heading ids, delete the heading and its section children"}},"additionalProperties":true}"#,
             make_handler(move |_, args| {
                 let c = Arc::clone(&c);
                 async move { tools::block::block_delete(&c, args).await }

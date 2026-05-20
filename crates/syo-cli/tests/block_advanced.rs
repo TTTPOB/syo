@@ -751,6 +751,7 @@ async fn delete_block_rejects_document_root() {
     // Try to delete the document root block via delete_block — must be rejected.
     let args = syo_cli::commands::block::delete::DeleteBlockArgs {
         id: f.doc_id.to_string(),
+        include_heading_section: false,
     };
     let result = syo_cli::commands::block::delete::run(&f.client, args).await;
 
@@ -785,6 +786,7 @@ async fn delete_block_allows_non_document_blocks() {
 
     let args = syo_cli::commands::block::delete::DeleteBlockArgs {
         id: para.id.to_string(),
+        include_heading_section: false,
     };
     let result = syo_cli::commands::block::delete::run(&f.client, args).await;
 

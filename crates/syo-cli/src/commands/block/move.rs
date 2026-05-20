@@ -37,6 +37,10 @@ use siyuan_types::position::PositionKind;
 ///   append_doc        move --id to the END of document --anchor
 ///                     (--anchor = doc root id)
 ///
+/// Headings are section owners, not real containers. Pass
+/// `--include-heading-section` with append_child or prepend_child to treat a
+/// heading anchor as a virtual section container.
+///
 /// The block keeps its existing id and all its children. Prints `ok` on
 /// success.
 ///
@@ -64,6 +68,10 @@ pub struct MoveBlockArgs {
     /// Destination anchor. Interpretation depends on --position.
     #[arg(long)]
     pub anchor: String,
+
+    /// Treat a heading anchor as a virtual section container for child positions.
+    #[arg(long)]
+    pub include_heading_section: bool,
 }
 
 pub async fn run(client: &SiyuanClient, args: MoveBlockArgs) -> Result<()> {
@@ -75,6 +83,7 @@ pub async fn run(client: &SiyuanClient, args: MoveBlockArgs) -> Result<()> {
             id,
             position: args.position,
             anchor,
+            include_heading_section: args.include_heading_section,
         },
     )
     .await?;

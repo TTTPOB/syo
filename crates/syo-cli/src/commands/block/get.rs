@@ -17,7 +17,7 @@ use crate::output::OutputFormat;
 ///
 /// Heading blocks are section owners, not real SiYuan containers. By default
 /// this command returns only the heading block itself and annotates whether a
-/// section was omitted. Pass `--include-heading-section` to include the full
+/// section was omitted. Pass `--include-heading-children` to include the full
 /// heading section before editing or replacing that section.
 ///
 /// Inputs:
@@ -27,7 +27,7 @@ use crate::output::OutputFormat;
 ///   --format (default agent-md): one of `agent-md` (an HTML-comment header
 ///     plus the kramdown body), `json`, or `json-pretty`. JSON outputs an
 ///     object with `id`, `kramdown`, `attrs`, and heading `meta` when relevant.
-///   --include-heading-section: only valid for heading blocks. Include the
+///   --include-heading-children: only valid for heading blocks. Include the
 ///     recursively annotated heading section in `section_markdown`.
 ///
 /// Example:
@@ -46,7 +46,7 @@ pub struct GetBlockArgs {
 
     /// Include the full heading section when --id is a heading block.
     #[arg(long)]
-    pub include_heading_section: bool,
+    pub include_heading_children: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,7 +66,7 @@ pub async fn run(client: &SiyuanClient, args: GetBlockArgs) -> Result<()> {
         client,
         syo_core::block::GetBlockInput {
             id: id.clone(),
-            include_heading_section: args.include_heading_section,
+            include_heading_children: args.include_heading_children,
         },
     )
     .await?;

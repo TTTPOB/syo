@@ -47,8 +47,6 @@ use siyuan_types::position::PositionKind;
 /// Notes on parsing: append_section walks the document via SQL + the
 /// section detector to locate the section's last block. Anchor MUST be a
 /// heading block (`type = 'h'`) for *_section kinds, or the call errors.
-/// Alternatively, pass `--include-heading-section` with append_child or
-/// prepend_child to treat a heading anchor as a virtual section container.
 ///
 /// SiYuan indexes mutations asynchronously; SQL-based reads (syo sql,
 /// syo search text, syo tag search) may show stale data for ~100-500 ms
@@ -74,10 +72,6 @@ pub struct InsertBlocksArgs {
     /// Markdown file to insert. Use `-` for stdin.
     #[arg(long)]
     pub markdown_file: String,
-
-    /// Treat a heading anchor as a virtual section container for child positions.
-    #[arg(long)]
-    pub include_heading_section: bool,
 }
 
 pub async fn run(client: &SiyuanClient, args: InsertBlocksArgs) -> Result<()> {
@@ -89,7 +83,6 @@ pub async fn run(client: &SiyuanClient, args: InsertBlocksArgs) -> Result<()> {
             markdown,
             position: args.position,
             anchor,
-            include_heading_section: args.include_heading_section,
         },
     )
     .await?;

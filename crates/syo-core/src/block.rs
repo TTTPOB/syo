@@ -33,7 +33,7 @@ pub struct GetBlockOutput {
 pub struct UpdateBlockInput {
     pub id: BlockId,
     pub markdown: String,
-    pub include_heading_section: bool,
+    pub include_heading_children: bool,
 }
 
 /// Input for inserting a new block at a position relative to an anchor.
@@ -42,7 +42,6 @@ pub struct InsertBlockInput {
     pub markdown: String,
     pub position: PositionKind,
     pub anchor: BlockId,
-    pub include_heading_section: bool,
 }
 
 /// Output after inserting a new block.
@@ -55,7 +54,7 @@ pub struct InsertBlockOutput {
 #[derive(Debug)]
 pub struct DeleteBlockInput {
     pub id: BlockId,
-    pub include_heading_section: bool,
+    pub include_heading_children: bool,
 }
 
 /// Input for moving an existing block to a new position.
@@ -64,13 +63,13 @@ pub struct MoveBlockInput {
     pub id: BlockId,
     pub position: PositionKind,
     pub anchor: BlockId,
-    pub include_heading_section: bool,
+    pub include_heading_children: bool,
 }
 
 #[derive(Debug)]
 pub struct GetBlockInput {
     pub id: BlockId,
-    pub include_heading_section: bool,
+    pub include_heading_children: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -84,7 +83,7 @@ pub struct HeadingSectionMeta {
     pub structural_child_count: usize,
     pub section_child_count: usize,
     pub section_descendant_count: usize,
-    pub heading_section_included: bool,
+    pub heading_children_included: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -96,19 +95,19 @@ pub async fn get(client: &SiyuanClient, input: GetBlockInput) -> Result<GetBlock
     let bk = client.get_block_kramdown(&input.id).await?;
     let context = match heading_section_context(client, &input.id).await {
         Ok(context) => Some(context),
-        Err(e) if input.include_heading_section => return Err(e),
+        Err(e) if input.include_heading_children => return Err(e),
         Err(_) => None,
     };
 
     let (meta, section_markdown) = if let Some(context) = context {
-        let meta = context.meta(input.include_heading_section);
+        let meta = context.meta(input.include_heading_children);
         let section_markdown = input
-            .include_heading_section
+            .include_heading_children
             .then(|| render_heading_section_agent_md(&context));
         (Some(meta), section_markdown)
     } else {
-        if input.include_heading_section {
-            bail!("--include-heading-section requires a heading block id");
+        if input.include_heading_children {
+            bail!("--include-heading-children requires a heading block id");
         }
         (None, None)
     };
@@ -123,7 +122,7 @@ pub async fn get(client: &SiyuanClient, input: GetBlockInput) -> Result<GetBlock
 
 /// Update a block's markdown in-place.
 pub async fn update(client: &SiyuanClient, input: UpdateBlockInput) -> Result<()> {
-    if input.include_heading_section {
+    if input.include_heading_children {
         update_heading_section(client, input).await?;
         return Ok(());
     }
@@ -139,12 +138,7 @@ pub async fn update(client: &SiyuanClient, input: UpdateBlockInput) -> Result<()
 /// All 8 position kinds are supported. The anchor's role depends on the
 /// position kind — see [`PositionKind`] for details.
 pub async fn insert(client: &SiyuanClient, input: InsertBlockInput) -> Result<InsertBlockOutput> {
-    let position_kind = if input.include_heading_section {
-        virtual_heading_position(client, input.position, &input.anchor).await?
-    } else {
-        input.position
-    };
-    let position = Position::from((position_kind, input.anchor));
+    let position = Position::from((input.position, input.anchor));
     let new_id = match position {
         Position::AfterBlock { block_id } => {
             client
@@ -194,7 +188,7 @@ pub async fn insert(client: &SiyuanClient, input: InsertBlockInput) -> Result<In
 
 /// Delete a block permanently.
 pub async fn delete(client: &SiyuanClient, input: DeleteBlockInput) -> Result<()> {
-    if input.include_heading_section {
+    if input.include_heading_children {
         let context = heading_section_context(client, &input.id).await?;
         for child in context.section_descendants.iter().rev() {
             client.delete_block(child).await?;
@@ -215,26 +209,43 @@ pub async fn delete(client: &SiyuanClient, input: DeleteBlockInput) -> Result<()
 /// Callers needing strict first-child position should follow up with an
 /// `after_block` targeting the current first child.
 pub async fn move_block(client: &SiyuanClient, input: MoveBlockInput) -> Result<()> {
-    let position = if input.include_heading_section {
-        virtual_heading_position(client, input.position, &input.anchor).await?
-    } else {
-        input.position
-    };
+    if input.include_heading_children {
+        move_heading_with_children(client, input).await?;
+        return Ok(());
+    }
 
+    move_single_block(client, &input.id, input.position, &input.anchor).await
+}
+
+async fn move_heading_with_children(client: &SiyuanClient, input: MoveBlockInput) -> Result<()> {
+    let context = heading_section_context(client, &input.id).await?;
+    let child_groups = heading_child_groups(&context);
+
+    move_single_block(client, &context.heading.id, input.position, &input.anchor).await?;
+    for (parent, children) in child_groups {
+        for child in children {
+            client.move_block(&child, None, Some(&parent)).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn move_single_block(
+    client: &SiyuanClient,
+    id: &BlockId,
+    position: PositionKind,
+    anchor: &BlockId,
+) -> Result<()> {
     match position {
         PositionKind::AfterBlock => {
-            client
-                .move_block(&input.id, Some(&input.anchor), None)
-                .await?;
+            client.move_block(id, Some(anchor), None).await?;
         }
         PositionKind::BeforeBlock => {
-            let prev_id = find_previous_sibling(client, &input.anchor).await?;
-            client.move_block(&input.id, Some(&prev_id), None).await?;
+            let prev_id = find_previous_sibling(client, anchor).await?;
+            client.move_block(id, Some(&prev_id), None).await?;
         }
         PositionKind::AppendChild | PositionKind::AppendDoc => {
-            client
-                .move_block(&input.id, None, Some(&input.anchor))
-                .await?;
+            client.move_block(id, None, Some(anchor)).await?;
         }
         PositionKind::PrependChild | PositionKind::PrependDoc => {
             // move_block with parent_id and no previous_id places the moved
@@ -242,21 +253,15 @@ pub async fn move_block(client: &SiyuanClient, input: MoveBlockInput) -> Result<
             // a separate "prepend" call — practically the position is the
             // same; callers wanting strict first-child semantics should
             // follow up with an after_block of the original first child.
-            client
-                .move_block(&input.id, None, Some(&input.anchor))
-                .await?;
+            client.move_block(id, None, Some(anchor)).await?;
         }
         PositionKind::AppendSection => {
-            let section_end = resolve_section_end(client, &input.anchor).await?;
-            client
-                .move_block(&input.id, Some(&section_end), None)
-                .await?;
+            let section_end = resolve_section_end(client, anchor).await?;
+            client.move_block(id, Some(&section_end), None).await?;
         }
         PositionKind::PrependSection => {
             // Right after the heading itself.
-            client
-                .move_block(&input.id, Some(&input.anchor), None)
-                .await?;
+            client.move_block(id, Some(anchor), None).await?;
         }
     }
     Ok(())
@@ -406,7 +411,7 @@ impl HeadingSectionContext {
             structural_child_count: self.heading.structural_children.len(),
             section_child_count: self.section_children.len(),
             section_descendant_count: self.section_descendants.len(),
-            heading_section_included: included,
+            heading_children_included: included,
         }
     }
 }
@@ -424,21 +429,13 @@ async fn block_info(client: &SiyuanClient, id: &BlockId) -> Result<BlockInfoRow>
         .ok_or_else(|| anyhow::anyhow!("block not found"))
 }
 
-async fn ensure_heading(client: &SiyuanClient, id: &BlockId) -> Result<()> {
-    let info = block_info(client, id).await?;
-    if info.ty != "h" {
-        bail!("--include-heading-section requires a heading block id");
-    }
-    Ok(())
-}
-
 async fn heading_section_context(
     client: &SiyuanClient,
     heading_id: &BlockId,
 ) -> Result<HeadingSectionContext> {
     let info = block_info(client, heading_id).await?;
     if info.ty != "h" {
-        bail!("--include-heading-section requires a heading block id");
+        bail!("--include-heading-children requires a heading block id");
     }
 
     let root_id = BlockId::parse(&info.root_id).context("parsing root id")?;
@@ -475,6 +472,28 @@ async fn heading_section_context(
         section_descendants,
         blocks,
     })
+}
+
+fn heading_child_groups(context: &HeadingSectionContext) -> Vec<(BlockId, Vec<BlockId>)> {
+    let by_id: HashMap<String, BlockNode> = context
+        .blocks
+        .iter()
+        .map(|b| (b.id.as_str().to_string(), b.clone()))
+        .collect();
+    let mut out = vec![(context.heading.id.clone(), context.section_children.clone())];
+    let mut stack: Vec<BlockId> = context.section_children.iter().rev().cloned().collect();
+    while let Some(id) = stack.pop() {
+        let Some(node) = by_id.get(id.as_str()) else {
+            continue;
+        };
+        if node.block_type == BlockType::Heading {
+            out.push((node.id.clone(), node.section_children.clone()));
+            for child in node.section_children.iter().rev() {
+                stack.push(child.clone());
+            }
+        }
+    }
+    out
 }
 
 fn collect_section_descendants(
@@ -516,7 +535,7 @@ pub fn render_block_get_agent_md(output: &GetBlockOutput) -> String {
     if let Some(meta) = &output.meta {
         let _ = writeln!(
             out,
-            "<!-- sy:block id={} type={} role={} structural_children={} section_children={} section_descendants={} heading_section_included=false hint=\"heading section omitted; pass --include-heading-section to include it\" -->",
+            "<!-- sy:block id={} type={} role={} structural_children={} section_children={} section_descendants={} heading_children_included=false hint=\"heading section omitted; pass --include-heading-children to include it\" -->",
             output.id,
             meta.block_type,
             meta.role,
@@ -578,24 +597,6 @@ fn role_label(role: BlockRole) -> &'static str {
         BlockRole::Container => "container",
         BlockRole::HeadingSectionOwner => "heading_section_owner",
         BlockRole::Leaf => "leaf",
-    }
-}
-
-async fn virtual_heading_position(
-    client: &SiyuanClient,
-    position: PositionKind,
-    anchor: &BlockId,
-) -> Result<PositionKind> {
-    match position {
-        PositionKind::AppendChild => {
-            ensure_heading(client, anchor).await?;
-            Ok(PositionKind::AppendSection)
-        }
-        PositionKind::PrependChild => {
-            ensure_heading(client, anchor).await?;
-            Ok(PositionKind::PrependSection)
-        }
-        _ => Ok(position),
     }
 }
 
@@ -722,7 +723,7 @@ mod tests {
         let ubi = UpdateBlockInput {
             id: BlockId::parse("20260501093000-abc1234").unwrap(),
             markdown: "## hi".into(),
-            include_heading_section: false,
+            include_heading_children: false,
         };
         _assert_debug(&ubi);
 
@@ -730,7 +731,6 @@ mod tests {
             markdown: "## hi".into(),
             position: PositionKind::AfterBlock,
             anchor: BlockId::parse("20260501093000-abc1234").unwrap(),
-            include_heading_section: false,
         };
         _assert_debug(&ibi);
 
@@ -741,7 +741,7 @@ mod tests {
 
         let dbi = DeleteBlockInput {
             id: BlockId::parse("20260501093000-abc1234").unwrap(),
-            include_heading_section: false,
+            include_heading_children: false,
         };
         _assert_debug(&dbi);
 
@@ -749,7 +749,7 @@ mod tests {
             id: BlockId::parse("20260501093000-abc1234").unwrap(),
             position: PositionKind::AfterBlock,
             anchor: BlockId::parse("20260501093000-abc1234").unwrap(),
-            include_heading_section: false,
+            include_heading_children: false,
         };
         _assert_debug(&mbi);
     }
@@ -763,7 +763,7 @@ mod tests {
             id: BlockId::parse("20260501093000-blk0001").unwrap(),
             position: PositionKind::AfterBlock,
             anchor: BlockId::parse("20260501093000-blk0002").unwrap(),
-            include_heading_section: false,
+            include_heading_children: false,
         };
     }
 
@@ -838,15 +838,15 @@ mod tests {
                 structural_child_count: 0,
                 section_child_count: 1,
                 section_descendant_count: 1,
-                heading_section_included: false,
+                heading_children_included: false,
             }),
             section_markdown: None,
         };
 
         let md = render_block_get_agent_md(&output);
-        assert!(md.contains("heading_section_included=false"));
+        assert!(md.contains("heading_children_included=false"));
         assert!(md.contains("section_children=1"));
-        assert!(md.contains("--include-heading-section"));
+        assert!(md.contains("--include-heading-children"));
         assert!(md.contains("## Title"));
     }
 }

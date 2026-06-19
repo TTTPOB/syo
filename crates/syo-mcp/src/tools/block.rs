@@ -23,13 +23,13 @@ pub async fn block_get(client: &SiyuanClient, args: Value) -> Result<Value, McpE
     let id_str = required_string(&map, "id")?;
     let id = BlockId::parse(&id_str)
         .map_err(|e| McpError::invalid_params(format!("invalid block id: {e}"), None))?;
-    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
+    let include_heading_children = optional_bool(&map, "include_heading_children").unwrap_or(false);
 
     let output = syo_core::block::get(
         client,
         syo_core::block::GetBlockInput {
             id,
-            include_heading_section,
+            include_heading_children,
         },
     )
     .await
@@ -52,14 +52,14 @@ pub async fn block_update(client: &SiyuanClient, args: Value) -> Result<Value, M
     let map = ensure_object(args)?;
     let id = parse_block_id(&required_string(&map, "id")?)?;
     let markdown = required_string(&map, "markdown")?;
-    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
+    let include_heading_children = optional_bool(&map, "include_heading_children").unwrap_or(false);
 
     syo_core::block::update(
         client,
         syo_core::block::UpdateBlockInput {
             id,
             markdown,
-            include_heading_section,
+            include_heading_children,
         },
     )
     .await
@@ -79,7 +79,6 @@ pub async fn block_insert(client: &SiyuanClient, args: Value) -> Result<Value, M
     let markdown = required_string(&map, "markdown")?;
     let position_str = required_string(&map, "position")?;
     let anchor_str = required_string(&map, "anchor")?;
-    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
 
     let kind = parse_position_kind(&position_str)?;
     let anchor = parse_block_id(&anchor_str)?;
@@ -90,7 +89,6 @@ pub async fn block_insert(client: &SiyuanClient, args: Value) -> Result<Value, M
             markdown,
             position: kind,
             anchor,
-            include_heading_section,
         },
     )
     .await
@@ -111,7 +109,7 @@ pub async fn block_move(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
     let id = parse_block_id(&required_string(&map, "id")?)?;
     let position_str = required_string(&map, "position")?;
     let anchor_str = required_string(&map, "anchor")?;
-    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
+    let include_heading_children = optional_bool(&map, "include_heading_children").unwrap_or(false);
 
     let kind = parse_position_kind(&position_str)?;
     let anchor = parse_block_id(&anchor_str)?;
@@ -122,7 +120,7 @@ pub async fn block_move(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
             id,
             position: kind,
             anchor,
-            include_heading_section,
+            include_heading_children,
         },
     )
     .await
@@ -139,13 +137,13 @@ pub async fn block_move(client: &SiyuanClient, args: Value) -> Result<Value, Mcp
 pub async fn block_delete(client: &SiyuanClient, args: Value) -> Result<Value, McpError> {
     let map = ensure_object(args)?;
     let id = parse_block_id(&required_string(&map, "id")?)?;
-    let include_heading_section = optional_bool(&map, "include_heading_section").unwrap_or(false);
+    let include_heading_children = optional_bool(&map, "include_heading_children").unwrap_or(false);
 
     syo_core::block::delete(
         client,
         syo_core::block::DeleteBlockInput {
             id,
-            include_heading_section,
+            include_heading_children,
         },
     )
     .await
@@ -192,17 +190,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn block_get_rejects_non_boolean_include_heading_section() {
+    async fn block_get_rejects_non_boolean_include_heading_children() {
         let client = dummy_client();
         let args = json!({
             "id": "20260501090000-blk0001",
-            "include_heading_section": "true",
+            "include_heading_children": "true",
         });
         let result = block_get(&client, args).await;
         if let Err(e) = result {
             assert!(
-                !e.message.contains("include_heading_section"),
-                "non-boolean include_heading_section should be treated as absent for compatibility"
+                !e.message.contains("include_heading_children"),
+                "non-boolean include_heading_children should be treated as absent for compatibility"
             );
         }
     }

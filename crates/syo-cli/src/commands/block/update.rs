@@ -15,7 +15,7 @@ use siyuan_types::BlockId;
 /// Real SiYuan container blocks (lists, list items, blockquotes, superblocks)
 /// are replaced as subtrees by the kernel: children absent from the new
 /// markdown are removed. Heading blocks are not real containers; by default
-/// only the heading block is updated. Pass `--include-heading-section` to
+/// only the heading block is updated. Pass `--include-heading-children` to
 /// replace the full heading section. In that mode the input markdown must
 /// start with the replacement heading, followed by the new section body.
 ///
@@ -23,7 +23,7 @@ use siyuan_types::BlockId;
 ///   --id (required): block id to overwrite.
 ///   --markdown-file (required): path to a markdown file, or `-` to read
 ///     from stdin. The content replaces the entire block body.
-///   --include-heading-section: only valid for heading blocks. Replace the
+///   --include-heading-children: only valid for heading blocks. Replace the
 ///     heading and its section children as one explicit section operation.
 ///
 /// Prints `ok` on success.
@@ -49,7 +49,7 @@ pub struct UpdateBlockArgs {
 
     /// Replace the whole heading section when --id is a heading block.
     #[arg(long)]
-    pub include_heading_section: bool,
+    pub include_heading_children: bool,
 }
 
 pub async fn run(client: &SiyuanClient, args: UpdateBlockArgs) -> Result<()> {
@@ -60,7 +60,7 @@ pub async fn run(client: &SiyuanClient, args: UpdateBlockArgs) -> Result<()> {
         syo_core::block::UpdateBlockInput {
             id,
             markdown,
-            include_heading_section: args.include_heading_section,
+            include_heading_children: args.include_heading_children,
         },
     )
     .await?;

@@ -438,14 +438,14 @@ async fn get_heading_section_is_explicit() {
         &f.client,
         syo_core::block::GetBlockInput {
             id: goals.id.clone(),
-            include_heading_section: false,
+            include_heading_children: false,
         },
     )
     .await
     .expect("get heading only");
 
     let meta = heading_only.meta.expect("heading metadata is present");
-    assert!(!meta.heading_section_included);
+    assert!(!meta.heading_children_included);
     assert!(
         meta.section_child_count >= 2,
         "seeded Goals section should have body blocks"
@@ -462,14 +462,14 @@ async fn get_heading_section_is_explicit() {
         &f.client,
         syo_core::block::GetBlockInput {
             id: goals.id.clone(),
-            include_heading_section: true,
+            include_heading_children: true,
         },
     )
     .await
     .expect("get heading section");
 
     let meta = with_section.meta.expect("heading metadata is present");
-    assert!(meta.heading_section_included);
+    assert!(meta.heading_children_included);
     let section = with_section
         .section_markdown
         .expect("section markdown is included");
@@ -483,12 +483,12 @@ async fn get_heading_section_is_explicit() {
 }
 
 // ---------------------------------------------------------------------------
-// Heading section mode: insert child aliases
+// Heading section mode: insert explicit section positions
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[ignore]
-async fn insert_with_heading_section_maps_child_positions_to_section() {
+async fn insert_with_section_positions_targets_heading_section() {
     let f = boot_with_seed().await.expect("boot");
 
     let mut blocks = load_all(&f).await.expect("initial load");
@@ -506,26 +506,24 @@ async fn insert_with_heading_section_maps_child_positions_to_section() {
         &f.client,
         syo_core::block::InsertBlockInput {
             markdown: head_marker.to_string(),
-            position: PositionKind::PrependChild,
+            position: PositionKind::PrependSection,
             anchor: goals.id.clone(),
-            include_heading_section: true,
         },
     )
     .await
-    .expect("prepend child through heading section")
+    .expect("prepend to heading section")
     .id;
 
     let tail_id = syo_core::block::insert(
         &f.client,
         syo_core::block::InsertBlockInput {
             markdown: tail_marker.to_string(),
-            position: PositionKind::AppendChild,
+            position: PositionKind::AppendSection,
             anchor: goals.id.clone(),
-            include_heading_section: true,
         },
     )
     .await
-    .expect("append child through heading section")
+    .expect("append to heading section")
     .id;
 
     let client = &f.client;
@@ -562,13 +560,92 @@ async fn insert_with_heading_section_maps_child_positions_to_section() {
     assert_eq!(
         section_children.first(),
         Some(&head_id),
-        "prepend child with include_heading_section should prepend to the section"
+        "prepend_section should prepend to the section"
     );
     assert_eq!(
         section_children.last(),
         Some(&tail_id),
-        "append child with include_heading_section should append to the section"
+        "append_section should append to the section"
     );
+}
+
+#[tokio::test]
+#[ignore]
+async fn move_heading_with_children_keeps_section_together() {
+    let f = boot_with_seed().await.expect("boot");
+
+    let mut blocks = load_all(&f).await.expect("initial load");
+    populate_section_children(&mut blocks);
+    let goals = blocks
+        .iter()
+        .find(|b| b.markdown.starts_with("## Goals"))
+        .expect("Goals heading present")
+        .clone();
+    let targets = blocks
+        .iter()
+        .find(|b| b.markdown.starts_with("## Targets"))
+        .expect("Targets heading present")
+        .clone();
+    let goals_children = goals.section_children.clone();
+    assert!(
+        goals_children.len() >= 2,
+        "Goals heading should have seeded section children"
+    );
+
+    syo_core::block::move_block(
+        &f.client,
+        syo_core::block::MoveBlockInput {
+            id: goals.id.clone(),
+            position: PositionKind::AfterBlock,
+            anchor: targets.id.clone(),
+            include_heading_children: true,
+        },
+    )
+    .await
+    .expect("move heading with children");
+
+    let client = &f.client;
+    let doc_id = &f.doc_id;
+    let goals_id = goals.id.clone();
+    let targets_id = targets.id.clone();
+    let moved_children = wait_for(
+        || async {
+            let b = load_doc(
+                client,
+                doc_id,
+                PageRequest {
+                    page: 1,
+                    page_size: 200,
+                },
+            )
+            .await?;
+            let ids: Vec<_> = b.blocks.iter().map(|blk| blk.id.clone()).collect();
+            let Some(targets_idx) = ids.iter().position(|id| id == &targets_id) else {
+                return Ok(None);
+            };
+            let Some(goals_idx) = ids.iter().position(|id| id == &goals_id) else {
+                return Ok(None);
+            };
+            if goals_idx <= targets_idx {
+                return Ok(None);
+            }
+            let mut blks = b.blocks.clone();
+            populate_section_children(&mut blks);
+            let Some(goals_after_move) = blks.iter().find(|blk| blk.id == goals_id) else {
+                return Ok(None);
+            };
+            if goals_after_move.section_children == goals_children {
+                Ok(Some(goals_after_move.section_children.clone()))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for heading and children to move together");
+
+    assert_eq!(moved_children, goals_children);
 }
 
 // ---------------------------------------------------------------------------
@@ -593,7 +670,7 @@ async fn update_heading_section_replaces_body_without_crossing_next_heading() {
             id: goals.id.clone(),
             markdown: "## Goals Updated\n\nReplacement section paragraph.\n\nSecond replacement paragraph."
                 .to_string(),
-            include_heading_section: true,
+            include_heading_children: true,
         },
     )
     .await
@@ -635,7 +712,7 @@ async fn update_heading_section_replaces_body_without_crossing_next_heading() {
         &f.client,
         syo_core::block::GetBlockInput {
             id: goals.id.clone(),
-            include_heading_section: true,
+            include_heading_children: true,
         },
     )
     .await
@@ -872,7 +949,7 @@ async fn delete_heading_section_removes_non_empty_section() {
         &f.client,
         syo_core::block::DeleteBlockInput {
             id: goals.id,
-            include_heading_section: true,
+            include_heading_children: true,
         },
     )
     .await
@@ -1064,7 +1141,7 @@ async fn delete_block_rejects_document_root() {
     // Try to delete the document root block via delete_block — must be rejected.
     let args = syo_cli::commands::block::delete::DeleteBlockArgs {
         id: f.doc_id.to_string(),
-        include_heading_section: false,
+        include_heading_children: false,
     };
     let result = syo_cli::commands::block::delete::run(&f.client, args).await;
 
@@ -1099,7 +1176,7 @@ async fn delete_block_allows_non_document_blocks() {
 
     let args = syo_cli::commands::block::delete::DeleteBlockArgs {
         id: para.id.to_string(),
-        include_heading_section: false,
+        include_heading_children: false,
     };
     let result = syo_cli::commands::block::delete::run(&f.client, args).await;
 

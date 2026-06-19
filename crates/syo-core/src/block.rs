@@ -3,6 +3,7 @@ use std::fmt::Write;
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+use tokio::time::{Duration, Instant, sleep};
 
 use siyuan_client::SiyuanClient;
 use siyuan_model::load::load_doc;
@@ -218,14 +219,35 @@ pub async fn move_block(client: &SiyuanClient, input: MoveBlockInput) -> Result<
 }
 
 async fn move_heading_with_children(client: &SiyuanClient, input: MoveBlockInput) -> Result<()> {
+    let target_info = block_info(client, &input.anchor).await?;
+    let target_root_id = BlockId::parse(&target_info.root_id).context("parsing target root id")?;
     let context = heading_section_context(client, &input.id).await?;
+    let source_root_id = context.heading.root_id.clone();
     let child_groups = heading_child_groups(&context);
 
     move_single_block(client, &context.heading.id, input.position, &input.anchor).await?;
+    if source_root_id != target_root_id {
+        wait_for_block_root(client, &context.heading.id, &target_root_id).await?;
+    }
     for (parent, children) in child_groups {
+        let mut previous = parent.clone();
         for child in children {
-            client.move_block(&child, None, Some(&parent)).await?;
+            client
+                .move_block(&child, Some(&previous), Some(&parent))
+                .await?;
+            if source_root_id != target_root_id {
+                wait_for_block_root(client, &child, &target_root_id).await?;
+            }
+            previous = child;
         }
+    }
+
+    let mut roots = vec![source_root_id];
+    if !roots.contains(&target_root_id) {
+        roots.push(target_root_id);
+    }
+    for root_id in roots {
+        reflow_heading_ownership(client, &root_id).await?;
     }
     Ok(())
 }
@@ -393,6 +415,14 @@ struct BlockInfoRow {
 }
 
 #[derive(Debug, Clone)]
+struct OutlineBlock {
+    id: BlockId,
+    parent_id: Option<BlockId>,
+    block_type: BlockType,
+    heading_level: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
 struct HeadingSectionContext {
     heading: BlockNode,
     section_children: Vec<BlockId>,
@@ -427,6 +457,28 @@ async fn block_info(client: &SiyuanClient, id: &BlockId) -> Result<BlockInfoRow>
     rows.into_iter()
         .next()
         .ok_or_else(|| anyhow::anyhow!("block not found"))
+}
+
+async fn wait_for_block_root(
+    client: &SiyuanClient,
+    id: &BlockId,
+    expected_root: &BlockId,
+) -> Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let info = block_info(client, id).await?;
+        if info.root_id == expected_root.as_str() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            bail!(
+                "timed out waiting for block {} to move to document {}",
+                id,
+                expected_root
+            );
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
 }
 
 async fn heading_section_context(
@@ -494,6 +546,132 @@ fn heading_child_groups(context: &HeadingSectionContext) -> Vec<(BlockId, Vec<Bl
         }
     }
     out
+}
+
+async fn reflow_heading_ownership(client: &SiyuanClient, root_id: &BlockId) -> Result<()> {
+    let blocks = load_outline_blocks(client, root_id).await?;
+    let by_id: HashMap<String, OutlineBlock> = blocks
+        .iter()
+        .map(|b| (b.id.as_str().to_string(), b.clone()))
+        .collect();
+    let mut heading_stack: Vec<(usize, BlockId)> = Vec::new();
+    let mut previous: Option<BlockId> = None;
+
+    for block in blocks {
+        if block.block_type == BlockType::Document {
+            previous = Some(block.id);
+            continue;
+        }
+        if is_inside_structural_container(&block, &by_id, root_id) {
+            continue;
+        }
+
+        let desired_parent = if block.block_type == BlockType::Heading {
+            let level = block.heading_level.unwrap_or(6);
+            while heading_stack
+                .last()
+                .is_some_and(|(parent_level, _)| *parent_level >= level)
+            {
+                heading_stack.pop();
+            }
+            let parent = heading_stack
+                .last()
+                .map(|(_, id)| id.clone())
+                .unwrap_or_else(|| root_id.clone());
+            heading_stack.push((level, block.id.clone()));
+            parent
+        } else {
+            heading_stack
+                .last()
+                .map(|(_, id)| id.clone())
+                .unwrap_or_else(|| root_id.clone())
+        };
+
+        if block.parent_id.as_ref() != Some(&desired_parent) {
+            let previous_id = previous.as_ref().filter(|id| *id != root_id);
+            client
+                .move_block(&block.id, previous_id, Some(&desired_parent))
+                .await?;
+        }
+        previous = Some(block.id);
+    }
+
+    Ok(())
+}
+
+async fn load_outline_blocks(
+    client: &SiyuanClient,
+    root_id: &BlockId,
+) -> Result<Vec<OutlineBlock>> {
+    let bundle = load_doc(
+        client,
+        root_id,
+        PageRequest {
+            page: 1,
+            page_size: 100_000,
+        },
+    )
+    .await
+    .context("load outline blocks")?;
+
+    Ok(bundle
+        .blocks
+        .into_iter()
+        .map(|block| {
+            let heading_level = (block.block_type == BlockType::Heading)
+                .then(|| heading_level(block.subtype.as_deref().unwrap_or(""), &block.markdown))
+                .flatten();
+            OutlineBlock {
+                id: block.id,
+                parent_id: block.parent_id,
+                block_type: block.block_type,
+                heading_level,
+            }
+        })
+        .collect())
+}
+
+fn is_inside_structural_container(
+    block: &OutlineBlock,
+    by_id: &HashMap<String, OutlineBlock>,
+    root_id: &BlockId,
+) -> bool {
+    let mut current = block.parent_id.as_ref();
+    let mut seen = HashSet::new();
+
+    while let Some(parent_id) = current {
+        if parent_id == root_id {
+            return false;
+        }
+        if !seen.insert(parent_id.as_str().to_string()) {
+            return true;
+        }
+
+        let Some(parent) = by_id.get(parent_id.as_str()) else {
+            return false;
+        };
+        if !matches!(parent.block_type, BlockType::Document | BlockType::Heading) {
+            return true;
+        }
+        current = parent.parent_id.as_ref();
+    }
+
+    false
+}
+
+fn heading_level(subtype: &str, markdown: &str) -> Option<usize> {
+    if let Some(level) = subtype
+        .strip_prefix('h')
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .filter(|level| (1..=6).contains(level))
+    {
+        return Some(level);
+    }
+
+    let line = markdown.lines().find(|line| !line.trim().is_empty())?;
+    let trimmed = line.trim_start();
+    let level = trimmed.bytes().take_while(|b| *b == b'#').count();
+    (1..=6).contains(&level).then_some(level)
 }
 
 fn collect_section_descendants(

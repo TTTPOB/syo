@@ -1772,6 +1772,7 @@ dependencies = [
  "siyuan-render",
  "siyuan-types",
  "sqlparser",
+ "tokio",
 ]
 
 [[package]]

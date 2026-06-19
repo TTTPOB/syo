@@ -8,9 +8,10 @@ mod common;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use common::{boot_with_seed, wait_for};
+use common::{boot_with_seed, wait_for, wait_for_doc_indexed};
+use siyuan_client::SiyuanClient;
 use siyuan_model::{load::load_doc, pagination::PageRequest, section::populate_section_children};
-use siyuan_types::{BlockType, PositionKind};
+use siyuan_types::{BlockId, BlockNode, BlockType, PositionKind};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,6 +29,45 @@ async fn load_all(f: &common::Fixture) -> anyhow::Result<Vec<siyuan_types::Block
     )
     .await?;
     Ok(bundle.blocks)
+}
+
+async fn load_doc_blocks(
+    client: &SiyuanClient,
+    doc_id: &BlockId,
+) -> anyhow::Result<Vec<BlockNode>> {
+    let bundle = load_doc(
+        client,
+        doc_id,
+        PageRequest {
+            page: 1,
+            page_size: 200,
+        },
+    )
+    .await?;
+    Ok(bundle.blocks)
+}
+
+fn find_block<'a>(blocks: &'a [BlockNode], markdown: &str) -> Option<&'a BlockNode> {
+    blocks.iter().find(|block| block.markdown == markdown)
+}
+
+fn find_heading<'a>(blocks: &'a [BlockNode], prefix: &str) -> Option<&'a BlockNode> {
+    blocks
+        .iter()
+        .find(|block| block.markdown.starts_with(prefix))
+}
+
+fn child_markdowns(blocks: &[BlockNode], heading: &BlockNode) -> Vec<String> {
+    heading
+        .section_children
+        .iter()
+        .filter_map(|id| {
+            blocks
+                .iter()
+                .find(|block| block.id == *id)
+                .map(|block| block.markdown.clone())
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -586,9 +626,9 @@ async fn move_heading_with_children_keeps_section_together() {
         .find(|b| b.markdown.starts_with("## Targets"))
         .expect("Targets heading present")
         .clone();
-    let goals_children = goals.section_children.clone();
+    let goals_child_markdowns = child_markdowns(&blocks, &goals);
     assert!(
-        goals_children.len() >= 2,
+        goals_child_markdowns.len() >= 2,
         "Goals heading should have seeded section children"
     );
 
@@ -608,18 +648,10 @@ async fn move_heading_with_children_keeps_section_together() {
     let doc_id = &f.doc_id;
     let goals_id = goals.id.clone();
     let targets_id = targets.id.clone();
-    let moved_children = wait_for(
+    let moved_child_markdowns = wait_for(
         || async {
-            let b = load_doc(
-                client,
-                doc_id,
-                PageRequest {
-                    page: 1,
-                    page_size: 200,
-                },
-            )
-            .await?;
-            let ids: Vec<_> = b.blocks.iter().map(|blk| blk.id.clone()).collect();
+            let b = load_doc_blocks(client, doc_id).await?;
+            let ids: Vec<_> = b.iter().map(|blk| blk.id.clone()).collect();
             let Some(targets_idx) = ids.iter().position(|id| id == &targets_id) else {
                 return Ok(None);
             };
@@ -629,13 +661,17 @@ async fn move_heading_with_children_keeps_section_together() {
             if goals_idx <= targets_idx {
                 return Ok(None);
             }
-            let mut blks = b.blocks.clone();
+            let mut blks = b.clone();
             populate_section_children(&mut blks);
             let Some(goals_after_move) = blks.iter().find(|blk| blk.id == goals_id) else {
                 return Ok(None);
             };
-            if goals_after_move.section_children == goals_children {
-                Ok(Some(goals_after_move.section_children.clone()))
+            let moved_child_markdowns = child_markdowns(&blks, goals_after_move);
+            if moved_child_markdowns
+                .iter()
+                .any(|markdown| markdown == "A target paragraph.")
+            {
+                Ok(Some(moved_child_markdowns))
             } else {
                 Ok(None)
             }
@@ -645,7 +681,291 @@ async fn move_heading_with_children_keeps_section_together() {
     .await
     .expect("timed out waiting for heading and children to move together");
 
-    assert_eq!(moved_children, goals_children);
+    assert!(
+        goals_child_markdowns
+            .iter()
+            .all(|markdown| moved_child_markdowns.contains(markdown)),
+        "moved heading should retain its original section children; got {moved_child_markdowns:?}"
+    );
+    assert!(
+        moved_child_markdowns
+            .iter()
+            .any(|markdown| markdown == "A target paragraph."),
+        "same-level move after Targets should naturally absorb the old Targets body"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn move_heading_with_children_reflows_target_outline_by_level() {
+    let f = boot_with_seed().await.expect("boot");
+    let markdown = "\
+# Outline Move Target
+
+## Orig
+
+### Existing child
+
+Existing child body.
+
+### New heading moved from elsewhere
+
+#### New heading children
+
+New child body.
+";
+    let doc_id = f
+        .client
+        .create_doc_with_md(&f.notebook_id, "/Outline-Move-By-Level", markdown)
+        .await
+        .expect("create custom doc");
+    wait_for_doc_indexed(&f.client, &doc_id, 7)
+        .await
+        .expect("custom doc indexed");
+
+    let mut blocks = load_doc_blocks(&f.client, &doc_id)
+        .await
+        .expect("initial custom load");
+    populate_section_children(&mut blocks);
+    let orig = find_heading(&blocks, "## Orig")
+        .expect("orig heading")
+        .clone();
+    let moved = find_heading(&blocks, "### New heading moved from elsewhere")
+        .expect("moved heading")
+        .clone();
+    let moved_child = find_heading(&blocks, "#### New heading children")
+        .expect("moved child heading")
+        .clone();
+    let existing = find_heading(&blocks, "### Existing child")
+        .expect("existing heading")
+        .clone();
+
+    syo_core::block::move_block(
+        &f.client,
+        syo_core::block::MoveBlockInput {
+            id: moved.id.clone(),
+            position: PositionKind::AfterBlock,
+            anchor: orig.id.clone(),
+            include_heading_children: true,
+        },
+    )
+    .await
+    .expect("move lower-level heading into target section");
+
+    let moved_id = moved.id.clone();
+    let moved_child_id = moved_child.id.clone();
+    let existing_id = existing.id.clone();
+    let final_blocks = wait_for(
+        || async {
+            let mut blocks = load_doc_blocks(&f.client, &doc_id).await?;
+            populate_section_children(&mut blocks);
+            let Some(orig_after) = blocks.iter().find(|block| block.id == orig.id) else {
+                return Ok(None);
+            };
+            let Some(moved_after) = blocks.iter().find(|block| block.id == moved_id) else {
+                return Ok(None);
+            };
+            let Some(moved_child_after) = blocks.iter().find(|block| block.id == moved_child_id)
+            else {
+                return Ok(None);
+            };
+            let Some(existing_after) = blocks.iter().find(|block| block.id == existing_id) else {
+                return Ok(None);
+            };
+            if orig_after.section_children.contains(&moved_id)
+                && orig_after.section_children.contains(&existing_id)
+                && moved_after.section_children.contains(&moved_child_id)
+                && !moved_after.section_children.contains(&existing_id)
+                && moved_child_after.parent_id.as_ref() == Some(&moved_id)
+                && existing_after.parent_id.as_ref() == Some(&orig.id)
+            {
+                Ok(Some(blocks))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for outline-level reflow");
+
+    let orig_after = final_blocks
+        .iter()
+        .find(|block| block.id == orig.id)
+        .expect("orig after move");
+    assert_eq!(
+        child_markdowns(&final_blocks, orig_after),
+        vec![
+            "### New heading moved from elsewhere".to_string(),
+            "### Existing child".to_string()
+        ],
+        "same-level ### headings should remain siblings under ## Orig"
+    );
+}
+
+#[tokio::test]
+#[ignore]
+async fn move_heading_with_children_reflows_source_and_target_docs() {
+    let f = boot_with_seed().await.expect("boot");
+    let source_md = "\
+# Source Outline
+
+## Source parent
+
+### Moving
+
+Moving body.
+
+#### Moving child
+
+Moving child body.
+
+### Source sibling
+
+Source sibling body.
+";
+    let target_md = "\
+# Target Outline
+
+## Target anchor
+
+Target body before move.
+
+### Target child
+
+Target child body.
+";
+    let source_doc = f
+        .client
+        .create_doc_with_md(&f.notebook_id, "/Outline-Move-Source", source_md)
+        .await
+        .expect("create source doc");
+    let target_doc = f
+        .client
+        .create_doc_with_md(&f.notebook_id, "/Outline-Move-Target", target_md)
+        .await
+        .expect("create target doc");
+    wait_for_doc_indexed(&f.client, &source_doc, 7)
+        .await
+        .expect("source indexed");
+    wait_for_doc_indexed(&f.client, &target_doc, 5)
+        .await
+        .expect("target indexed");
+
+    let mut source_blocks = load_doc_blocks(&f.client, &source_doc)
+        .await
+        .expect("source load");
+    populate_section_children(&mut source_blocks);
+    let mut target_blocks = load_doc_blocks(&f.client, &target_doc)
+        .await
+        .expect("target load");
+    populate_section_children(&mut target_blocks);
+
+    let moving = find_heading(&source_blocks, "### Moving")
+        .expect("moving heading")
+        .clone();
+    let moving_child = find_heading(&source_blocks, "#### Moving child")
+        .expect("moving child")
+        .clone();
+    let source_parent = find_heading(&source_blocks, "## Source parent")
+        .expect("source parent")
+        .clone();
+    let source_sibling = find_heading(&source_blocks, "### Source sibling")
+        .expect("source sibling")
+        .clone();
+    let target_anchor = find_heading(&target_blocks, "## Target anchor")
+        .expect("target anchor")
+        .clone();
+    let target_body = find_block(&target_blocks, "Target body before move.")
+        .expect("target body")
+        .clone();
+    let target_child = find_heading(&target_blocks, "### Target child")
+        .expect("target child")
+        .clone();
+
+    syo_core::block::move_block(
+        &f.client,
+        syo_core::block::MoveBlockInput {
+            id: moving.id.clone(),
+            position: PositionKind::AfterBlock,
+            anchor: target_anchor.id.clone(),
+            include_heading_children: true,
+        },
+    )
+    .await
+    .expect("cross-doc heading section move");
+
+    let moving_id = moving.id.clone();
+    let moving_child_id = moving_child.id.clone();
+    let source_parent_id = source_parent.id.clone();
+    let source_sibling_id = source_sibling.id.clone();
+    let target_anchor_id = target_anchor.id.clone();
+    let target_body_id = target_body.id.clone();
+    let target_child_id = target_child.id.clone();
+
+    wait_for(
+        || async {
+            let mut source_after = load_doc_blocks(&f.client, &source_doc).await?;
+            populate_section_children(&mut source_after);
+            let Some(source_parent_after) = source_after
+                .iter()
+                .find(|block| block.id == source_parent_id)
+            else {
+                return Ok(None);
+            };
+            let Some(source_sibling_after) = source_after
+                .iter()
+                .find(|block| block.id == source_sibling_id)
+            else {
+                return Ok(None);
+            };
+            if source_after.iter().any(|block| block.id == moving_id)
+                || !source_parent_after
+                    .section_children
+                    .contains(&source_sibling_id)
+                || source_sibling_after.parent_id.as_ref() != Some(&source_parent_id)
+            {
+                return Ok(None);
+            }
+
+            let mut target_after = load_doc_blocks(&f.client, &target_doc).await?;
+            populate_section_children(&mut target_after);
+            let Some(moving_after) = target_after.iter().find(|block| block.id == moving_id) else {
+                return Ok(None);
+            };
+            let Some(moving_child_after) = target_after
+                .iter()
+                .find(|block| block.id == moving_child_id)
+            else {
+                return Ok(None);
+            };
+            let Some(target_body_after) =
+                target_after.iter().find(|block| block.id == target_body_id)
+            else {
+                return Ok(None);
+            };
+            let Some(target_child_after) = target_after
+                .iter()
+                .find(|block| block.id == target_child_id)
+            else {
+                return Ok(None);
+            };
+            if moving_after.parent_id.as_ref() == Some(&target_anchor_id)
+                && moving_after.section_children.contains(&moving_child_id)
+                && moving_child_after.parent_id.as_ref() == Some(&moving_id)
+                && target_body_after.parent_id.as_ref() == Some(&moving_child_id)
+                && target_child_after.parent_id.as_ref() == Some(&target_anchor_id)
+                && !moving_after.section_children.contains(&target_child_id)
+            {
+                Ok(Some(()))
+            } else {
+                Ok(None)
+            }
+        },
+        Duration::from_secs(10),
+    )
+    .await
+    .expect("timed out waiting for source and target outline reflow");
 }
 
 // ---------------------------------------------------------------------------

@@ -159,10 +159,30 @@ crates/syo-cli/src/commands/
    git commit -m "chore: bump version to <new-version>"
    ```
 
-8. push 前最后确认工作区干净、提交顺序正确：
+8. 给 bump commit 创建 release tag。历史 release 使用 lightweight tag，tag 名必须匹配
+   CI workflow 的 `vX.Y.Z` 形式：
+
+   ```bash
+   git tag v<new-version>
+   ```
+
+   如果 bump commit 后面已经有了其他提交，则显式把 tag 指向 bump commit：
+
+   ```bash
+   git tag v<new-version> <bump-commit>
+   ```
+
+9. push 前最后确认工作区干净、提交顺序正确：
 
    ```bash
    git status --short --branch
    git log --oneline -5
-   git push origin master
+   git tag --points-at <bump-commit>
    ```
+
+10. 推送 branch 和 release tag：
+
+    ```bash
+    git push origin master
+    git push origin v<new-version>
+    ```

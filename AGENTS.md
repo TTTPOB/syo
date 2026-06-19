@@ -98,3 +98,71 @@ crates/syo-cli/src/commands/
 - 默认本地测试：`cargo test -p syo-cli`
 - 真实 SiYuan kernel 集成测试：`cargo test -p syo-cli -- --ignored --test-threads=1`
 - 集成测试通过 `siyuan-testkit` 启动 Podman 容器；需要本机 `podman` 可用。
+
+## 版本 Bump 流程
+
+版本 bump 必须单独提交，不要和功能改动、依赖新增、测试修复混在同一个 commit。
+
+1. 先确认工作区状态和最近提交，确保功能改动已经单独提交：
+
+   ```bash
+   git status --short --branch
+   git log --oneline -5
+   ```
+
+2. 参考上一次 bump 的范围和提交信息：
+
+   ```bash
+   git log --oneline --grep='bump version'
+   git show --stat --oneline <last-bump-commit>
+   ```
+
+3. 更新所有 workspace crate 的 `[package].version` 到目标版本：
+
+   - `crates/siyuan-client/Cargo.toml`
+   - `crates/siyuan-model/Cargo.toml`
+   - `crates/siyuan-render/Cargo.toml`
+   - `crates/siyuan-testkit/Cargo.toml`
+   - `crates/siyuan-types/Cargo.toml`
+   - `crates/syo-cli/Cargo.toml`
+   - `crates/syo-core/Cargo.toml`
+   - `crates/syo-mcp/Cargo.toml`
+
+4. 用 Cargo 刷新 `Cargo.lock`，不要盲目全局替换 lockfile 里的版本号：
+
+   ```bash
+   cargo check --workspace --all-targets
+   ```
+
+5. 检查 diff 只包含预期版本号变化：
+
+   ```bash
+   git diff --stat
+   git diff -- Cargo.lock crates/*/Cargo.toml
+   rg -n '^version = "<old-version>"' crates/*/Cargo.toml Cargo.lock
+   ```
+
+6. 跑发布前验证：
+
+   ```bash
+   cargo fmt --check
+   cargo test -p syo-core
+   cargo test -p syo-mcp
+   cargo test -p syo-cli
+   cargo test -p syo-cli --no-run
+   ```
+
+7. 单独提交 bump：
+
+   ```bash
+   git add Cargo.lock crates/*/Cargo.toml
+   git commit -m "chore: bump version to <new-version>"
+   ```
+
+8. push 前最后确认工作区干净、提交顺序正确：
+
+   ```bash
+   git status --short --branch
+   git log --oneline -5
+   git push origin master
+   ```
